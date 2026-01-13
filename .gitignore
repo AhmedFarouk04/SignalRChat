@@ -1,2 +1,6 @@
+# .NET build outputs
+bin/
+obj/
+
 # Visual Studio
 .vs/
