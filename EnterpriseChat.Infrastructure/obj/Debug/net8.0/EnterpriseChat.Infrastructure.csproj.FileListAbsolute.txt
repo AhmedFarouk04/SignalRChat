@@ -1,0 +1,59 @@
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.deps.json
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.runtimeconfig.json
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Application.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Domain.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Domain.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Application.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.csproj.AssemblyReference.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.AssemblyInfoInputs.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.AssemblyInfo.cs
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.csproj.CoreCompileInputs.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.sourcelink.json
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\Enterpri.A0F1A740.Up2Date
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\refint\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.genruntimeconfig.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\Chat.Infrastructure\obj\Debug\net8.0\ref\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.deps.json
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.runtimeconfig.json
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Application.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Domain.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Domain.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Application.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.csproj.AssemblyReference.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.AssemblyInfoInputs.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.AssemblyInfo.cs
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.csproj.CoreCompileInputs.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\Enterpri.A0F1A740.Up2Date
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\refint\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.genruntimeconfig.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\New folder\EnterpriseChat.Infrastructure\obj\Debug\net8.0\ref\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.deps.json
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.runtimeconfig.json
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Infrastructure.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Application.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Domain.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Domain.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\bin\Debug\net8.0\EnterpriseChat.Application.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.csproj.AssemblyReference.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.AssemblyInfoInputs.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.AssemblyInfo.cs
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.csproj.CoreCompileInputs.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.sourcelink.json
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\Enterpri.A0F1A740.Up2Date
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\refint\EnterpriseChat.Infrastructure.dll
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.pdb
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\EnterpriseChat.Infrastructure.genruntimeconfig.cache
+C:\Users\ahmed\Downloads\My-Github\EnterpriseChat\EnterpriseChat\EnterpriseChat.Infrastructure\obj\Debug\net8.0\ref\EnterpriseChat.Infrastructure.dll

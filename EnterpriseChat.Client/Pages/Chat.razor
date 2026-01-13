@@ -1,0 +1,117 @@
+﻿@page "/chat/{RoomId:guid}"
+@using EnterpriseChat.Client.Models
+@inject ApiClient Api
+@inject ChatHubClient Hub
+
+<h3>Chat</h3>
+
+<div class="online-users">
+    <strong>Online:</strong>
+    @foreach (var id in OnlineUsers)
+    {
+        <span class="badge">@id.ToString()[..6]</span>
+    }
+</div>
+
+<hr />
+
+<div class="messages">
+    @foreach (var msg in messages)
+    {
+        <p>
+            <b>@msg.SenderId.ToString()[..6]</b> :
+            @msg.Content
+
+            <span class="status" title="@GetReadersTooltip(msg)">
+                @if (msg.Status == MessageStatus.Delivered)
+                {
+                    <span class="delivered">✔</span>
+                }
+                else if (msg.Status == MessageStatus.Read)
+                {
+                    <span class="read">✔✔</span>
+                }
+            </span>
+        </p>
+    }
+</div>
+
+<input @bind="content" @oninput="Typing" />
+<button @onclick="Send">Send</button>
+
+@code {
+    [Parameter] public Guid RoomId { get; set; }
+
+    private List<MessageModel> messages = new();
+    private string content = string.Empty;
+
+    private HashSet<Guid> OnlineUsers = new();
+    private readonly Dictionary<Guid, string> _readersCache = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        messages = (await Api.GetMessagesAsync(RoomId)).ToList();
+
+        Hub.MessageDelivered += OnDelivered;
+        Hub.MessageRead += OnRead;
+
+        await Hub.ConnectAsync();
+        await Hub.JoinRoomAsync(RoomId);
+    }
+
+    private void OnDelivered(Guid id)
+    {
+        var msg = messages.FirstOrDefault(m => m.Id == id);
+        if (msg != null)
+            msg.Status = MessageStatus.Delivered;
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnRead(Guid id)
+    {
+        var msg = messages.FirstOrDefault(m => m.Id == id);
+        if (msg != null)
+        {
+            msg.Status = MessageStatus.Read;
+            await Hub.MarkReadAsync(id);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Send()
+    {
+        content = string.Empty;
+    }
+
+    private Task Typing()
+        => Hub.TypingAsync(RoomId);
+
+    private string GetReadersTooltip(MessageModel msg)
+    {
+        if (msg.Status != MessageStatus.Read)
+            return string.Empty;
+
+        if (_readersCache.TryGetValue(msg.Id, out var text))
+            return text;
+
+        _ = LoadReadersAsync(msg.Id);
+        return "Read";
+    }
+
+    private async Task LoadReadersAsync(Guid messageId)
+    {
+        var readers = await Api.GetReadersAsync(messageId);
+
+        var text = string.Join(", ",
+            readers.Select(r => r.UserId.ToString()[..6]));
+
+        _readersCache[messageId] =
+            string.IsNullOrEmpty(text)
+                ? "Read"
+                : $"Read by {text}";
+
+        await InvokeAsync(StateHasChanged);
+    }
+}

@@ -1,0 +1,37 @@
+﻿@page "/rooms"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<h3>Rooms</h3>
+
+@if (rooms == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <ul>
+        @foreach (var room in rooms)
+        {
+            <li @onclick="() => OpenRoom(room.Id)">
+                @room.Name
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private IReadOnlyList<RoomModel>? rooms;
+
+    protected override async Task OnInitializedAsync()
+    {
+        rooms = await Api.GetRoomsAsync();
+    }
+
+    private void OpenRoom(Guid roomId)
+    {
+        Nav.NavigateTo($"/chat/{roomId}");
+    }
+}
+
+

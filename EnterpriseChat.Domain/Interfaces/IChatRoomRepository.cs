@@ -1,0 +1,24 @@
+﻿using EnterpriseChat.Domain.Entities;
+using EnterpriseChat.Domain.ValueObjects;
+
+namespace EnterpriseChat.Domain.Interfaces;
+
+public interface IChatRoomRepository
+{
+    Task AddAsync(ChatRoom room, CancellationToken cancellationToken = default);
+
+    Task<ChatRoom?> GetByIdAsync(
+        RoomId roomId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> ExistsAsync(
+        RoomId roomId,
+        CancellationToken cancellationToken = default);
+
+    Task<ChatRoom?> FindPrivateRoomAsync(
+    UserId a,
+    UserId b,
+    CancellationToken ct = default);
+
+
+}

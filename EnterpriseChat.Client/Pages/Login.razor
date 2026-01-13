@@ -1,0 +1,16 @@
+﻿@inject ITokenService TokenService
+@inject AuthStateProvider AuthProvider
+@inject NavigationManager Nav
+
+<h3>Login</h3>
+
+<button @onclick="DoLogin">Login</button>
+
+@code {
+    private async Task DoLogin()
+    {
+        await TokenService.SetTokenAsync("mock-jwt-token");
+        AuthProvider.Notify();
+        Nav.NavigateTo("/rooms");
+    }
+}

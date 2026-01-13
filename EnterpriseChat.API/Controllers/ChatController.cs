@@ -1,0 +1,245 @@
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Application.Features.Messaging.Commands;
+using EnterpriseChat.Application.Features.Messaging.Handlers;
+using EnterpriseChat.Application.Features.Messaging.Queries;
+using EnterpriseChat.Domain.ValueObjects;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using EnterpriseChat.API.Contracts.Messaging;
+
+namespace EnterpriseChat.API.Controllers;
+[Authorize]
+[ApiController]
+[Route("api/chat")]
+public sealed class ChatController : ControllerBase
+{
+    private readonly SendMessageCommandHandler _sendMessageHandler;
+    private readonly GetMessagesQueryHandler _getMessagesHandler;
+	private readonly GetMessageReadersQueryHandler _getMessageReaders;
+    private readonly CreateGroupChatHandler _createGroupHandler;
+    private readonly AddMemberToGroupHandler _addMemberHandler;
+    private readonly RemoveMemberFromGroupHandler _removeMemberHandler;
+    private readonly GetOrCreatePrivateRoomHandler _getOrCreatePrivateRoomHandler;
+    private readonly BlockUserCommandHandler _blockUserHandler;
+    private readonly MuteRoomCommandHandler _muteRoomHandler;
+    private readonly UnmuteRoomCommandHandler _unmuteRoomHandler;
+    public ChatController(
+	SendMessageCommandHandler sendMessageHandler,
+	GetMessagesQueryHandler getMessagesHandler,
+	GetMessageReadersQueryHandler getMessageReaders,
+    CreateGroupChatHandler createGroupHandler,
+    AddMemberToGroupHandler addMemberHandler,
+    RemoveMemberFromGroupHandler removeMemberHandler,
+    GetOrCreatePrivateRoomHandler getOrCreatePrivateRoomHandler
+       , BlockUserCommandHandler blockUserHandler,
+MuteRoomCommandHandler muteRoomHandler,
+UnmuteRoomCommandHandler unmuteRoomHandler )
+	{
+		_sendMessageHandler = sendMessageHandler;
+		_getMessagesHandler = getMessagesHandler;
+		_getMessageReaders = getMessageReaders;
+        _createGroupHandler = createGroupHandler;
+        _addMemberHandler = addMemberHandler;
+        _removeMemberHandler = removeMemberHandler;
+        _getOrCreatePrivateRoomHandler = getOrCreatePrivateRoomHandler;
+        _blockUserHandler = blockUserHandler;
+        _muteRoomHandler = muteRoomHandler;
+        _unmuteRoomHandler = unmuteRoomHandler;
+    }
+	
+
+    [HttpPost("messages")]
+    [ProducesResponseType(typeof(MessageDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SendMessage(
+        [FromBody] SendMessageRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.RoomId == Guid.Empty)
+            return BadRequest("RoomId is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Content))
+            return BadRequest("Message content is required.");
+
+        var senderId = GetCurrentUserId();
+
+        var command = new SendMessageCommand(
+            new RoomId(request.RoomId),
+            senderId,
+            request.Content
+        );
+
+
+        var result = await _sendMessageHandler.Handle(command, cancellationToken);
+
+        return Ok(result);
+    }
+    [HttpGet("rooms/{roomId}/messages")]
+    [ProducesResponseType(typeof(IReadOnlyList<MessageReadDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMessages(
+    Guid roomId,
+    [FromQuery] int skip = 0,
+    [FromQuery] int take = 50,
+    CancellationToken cancellationToken = default)
+    {
+        if (roomId == Guid.Empty)
+            return BadRequest("RoomId is required.");
+
+        var query = new GetMessagesQuery(
+     new RoomId(roomId),
+     GetCurrentUserId(), // ✅
+     skip,
+     take);
+
+
+        var result = await _getMessagesHandler.Handle(query, cancellationToken);
+        return Ok(result);
+    }
+    private UserId GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst("sub")?.Value;
+
+        if (string.IsNullOrWhiteSpace(userIdClaim))
+            throw new UnauthorizedAccessException("User not authenticated");
+
+        return new UserId(Guid.Parse(userIdClaim));
+    }
+	[HttpGet("messages/{messageId}/readers")]
+	[ProducesResponseType(typeof(IReadOnlyList<MessageReadReceiptDto>), StatusCodes.Status200OK)]
+	public async Task<IActionResult> GetReaders(
+	Guid messageId,
+	CancellationToken cancellationToken)
+	{
+		var query = new GetMessageReadersQuery(
+			MessageId.From(messageId));
+
+		var result = await _getMessageReaders.Handle(
+			query,
+			cancellationToken);
+
+		return Ok(result);
+	}
+    [HttpPost("groups")]
+    public async Task<IActionResult> CreateGroup(
+    [FromBody] CreateGroupRequest request,
+    CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return BadRequest("Group name is required.");
+
+        var creatorId = GetCurrentUserId();
+
+        var members = request.Members
+            .Select(id => new UserId(id))
+            .ToList();
+
+        var command = new CreateGroupChatCommand(
+            request.Name,
+            creatorId,
+            members);
+
+        var room = await _createGroupHandler.Handle(command, cancellationToken);
+
+        return Ok(new
+        {
+            room.Id,
+            room.Name,
+            room.Type
+        });
+    }
+
+
+    [HttpPost("groups/{roomId}/members/{userId}")]
+    public async Task<IActionResult> AddMember(
+    Guid roomId,
+    Guid userId,
+    CancellationToken ct)
+    {
+        await _addMemberHandler.Handle(
+    new AddMemberToGroupCommand(
+        new RoomId(roomId),
+        new UserId(userId),
+        GetCurrentUserId()), // ✅
+    ct);
+
+        return NoContent();
+    }
+    [HttpDelete("groups/{roomId}/members/{userId}")]
+    public async Task<IActionResult> RemoveMember(
+        Guid roomId,
+        Guid userId,
+        CancellationToken ct)
+    {
+        await _addMemberHandler.Handle(
+     new AddMemberToGroupCommand(
+         new RoomId(roomId),
+         new UserId(userId),
+         GetCurrentUserId()), // ✅
+     ct);
+
+        return NoContent();
+    }
+
+
+    [HttpPost("private/{userId}")]
+    public async Task<IActionResult> GetOrCreatePrivateChat(
+    Guid userId,
+    CancellationToken ct)
+    {
+        var me = GetCurrentUserId();
+        var other = new UserId(userId);
+
+        var room = await _getOrCreatePrivateRoomHandler
+            .Handle(me, other, ct);
+
+        return Ok(new
+        {
+            room.Id,
+            room.Type
+        });
+    }
+
+    [HttpPost("block/{userId}")]
+    public async Task<IActionResult> BlockUser(
+    Guid userId,
+    CancellationToken ct)
+    {
+        var me = GetCurrentUserId();
+        var other = new UserId(userId);
+
+        await _blockUserHandler.Handle(
+            new BlockUserCommand(me, other),
+            ct);
+
+        return NoContent();
+    }
+    [HttpPost("mute/{roomId}")]
+    public async Task<IActionResult> MuteRoom(
+        Guid roomId,
+        CancellationToken ct)
+    {
+        await _muteRoomHandler.Handle(
+            new MuteRoomCommand(
+                new RoomId(roomId),
+                GetCurrentUserId()),
+            ct);
+
+        return NoContent();
+    }
+    [HttpDelete("mute/{roomId}")]
+    public async Task<IActionResult> UnmuteRoom(
+        Guid roomId,
+        CancellationToken ct)
+    {
+        await _unmuteRoomHandler.Handle(
+            new UnmuteRoomCommand(
+                new RoomId(roomId),
+                GetCurrentUserId()),
+            ct);
+
+        return NoContent();
+    }
+
+
+
+}
