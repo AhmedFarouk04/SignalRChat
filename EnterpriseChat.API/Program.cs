@@ -21,7 +21,17 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddChatServices(builder.Configuration);
 
 // SignalR
-builder.Services.AddSignalR();
+var redisConnection = builder.Configuration.GetConnectionString("Redis");
+
+var signalRBuilder = builder.Services.AddSignalR();
+
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    signalRBuilder.AddStackExchangeRedis(redisConnection, options =>
+    {
+        options.Configuration.ChannelPrefix = "EnterpriseChat";
+    });
+}
 
 builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
 
@@ -63,8 +73,7 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddInfrastructure();
-
+builder.Services.AddInfrastructure(builder.Configuration);
 
 
 

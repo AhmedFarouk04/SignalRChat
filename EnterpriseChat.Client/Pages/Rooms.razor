@@ -2,19 +2,23 @@
 @inject ApiClient Api
 @inject NavigationManager Nav
 
-<h3>Rooms</h3>
+<h2 class="page-title">Your Rooms</h2>
 
 @if (rooms == null)
 {
-    <p>Loading...</p>
+    <p class="loading">Loading rooms...</p>
+}
+else if (!rooms.Any())
+{
+    <p class="empty">No rooms yet</p>
 }
 else
 {
-    <ul>
+    <ul class="room-list">
         @foreach (var room in rooms)
         {
-            <li @onclick="() => OpenRoom(room.Id)">
-                @room.Name
+            <li @onclick="() => Open(room.Id)">
+                <span class="room-name">@room.Name</span>
             </li>
         }
     </ul>
@@ -28,10 +32,6 @@ else
         rooms = await Api.GetRoomsAsync();
     }
 
-    private void OpenRoom(Guid roomId)
-    {
-        Nav.NavigateTo($"/chat/{roomId}");
-    }
+    private void Open(Guid id)
+        => Nav.NavigateTo($"/chat/{id}");
 }
-
-

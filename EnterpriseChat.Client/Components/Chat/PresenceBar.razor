@@ -1,0 +1,22 @@
+﻿@if (OnlineUsers.Any())
+{
+    <div class="presence-bar">
+        @foreach (var user in OnlineUsers)
+        {
+            <div class="presence-user">
+                <span class="dot online"></span>
+                <span class="name">@user.DisplayName</span>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="presence-bar empty">
+        No one online
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<UserModel> OnlineUsers { get; set; } = [];
+}

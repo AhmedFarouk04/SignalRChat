@@ -1,0 +1,442 @@
+﻿/* =========================================================
+   ENTERPRISE CHAT UI – DESIGN SYSTEM
+   ========================================================= */
+
+/* ---------- CSS VARIABLES ---------- */
+:root {
+    --bg-app: #0f172a;
+    --bg-sidebar: #020617;
+    --bg-panel: #020617;
+    --bg-message: #1e293b;
+    --bg-input: #020617;
+    --text-primary: #e5e7eb;
+    --text-secondary: #94a3b8;
+    --text-accent: #38bdf8;
+    --border-subtle: #1e293b;
+    --accent-main: #38bdf8;
+    --accent-hover: #0ea5e9;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --transition-fast: 0.15s ease;
+}
+
+/* ---------- GLOBAL RESET ---------- */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg-app);
+    color: var(--text-primary);
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+}
+
+/* =========================================================
+   APP LAYOUT
+   ========================================================= */
+
+.app-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ---------- SIDEBAR ---------- */
+.sidebar {
+    width: 240px;
+    background: var(--bg-sidebar);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-subtle);
+}
+
+.sidebar-header h2 {
+    margin: 0 0 24px;
+    font-size: 20px;
+    color: var(--text-accent);
+}
+
+.sidebar-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+    .sidebar-menu li {
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        color: var(--text-primary);
+        transition: background var(--transition-fast);
+    }
+
+        .sidebar-menu li:hover {
+            background: var(--bg-message);
+        }
+
+/* ---------- MAIN AREA ---------- */
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-app);
+}
+
+/* ---------- TOP BAR ---------- */
+.topbar {
+    height: 56px;
+    background: var(--bg-panel);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.room-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+/* ---------- CONTENT ---------- */
+.content {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* =========================================================
+   ROOMS PAGE
+   ========================================================= */
+
+.page-title {
+    margin-bottom: 12px;
+}
+
+.room-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+    .room-list li {
+        padding: 12px;
+        background: var(--bg-message);
+        border-radius: var(--radius-md);
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: background var(--transition-fast);
+    }
+
+        .room-list li:hover {
+            background: #334155;
+        }
+
+.room-name {
+    font-weight: 500;
+}
+
+/* =========================================================
+   CHAT CORE
+   ========================================================= */
+
+.chat-title {
+    margin-bottom: 8px;
+}
+
+/* ---------- PRESENCE ---------- */
+.presence {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+/* ---------- MESSAGE LIST ---------- */
+.message-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 6px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ---------- MESSAGE BUBBLE ---------- */
+.message {
+    max-width: 70%;
+    background: var(--bg-message);
+    padding: 10px 12px;
+    border-radius: var(--radius-lg);
+    margin-bottom: 8px;
+    word-wrap: break-word;
+}
+
+    .message strong {
+        display: block;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 2px;
+    }
+
+/* ---------- TYPING ---------- */
+.typing {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 6px 0;
+    font-style: italic;
+}
+
+/* ---------- INPUT ---------- */
+.chat-input-wrapper {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.chat-input {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    outline: none;
+}
+
+    .chat-input:focus {
+        border-color: var(--accent-main);
+    }
+
+.send-btn {
+    padding: 0 16px;
+    background: var(--accent-main);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    color: black;
+    font-weight: 500;
+    transition: background var(--transition-fast);
+}
+
+    .send-btn:hover {
+        background: var(--accent-hover);
+    }
+
+/* =========================================================
+   MESSAGE STATUS UX
+   ========================================================= */
+
+.message-bubble {
+    max-width: 70%;
+    padding: 10px 12px;
+    border-radius: var(--radius-lg);
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: fadeIn 0.15s ease-in;
+}
+
+    .message-bubble.mine {
+        align-self: flex-end;
+        background: #2563eb;
+        color: white;
+    }
+
+    .message-bubble.theirs {
+        align-self: flex-start;
+        background: var(--bg-message);
+    }
+
+.message-meta {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+.message-bubble.theirs .message-meta {
+    justify-content: flex-start;
+}
+
+.status {
+    font-size: 12px;
+}
+
+    .status.sent {
+        color: #cbd5e1;
+    }
+
+    .status.delivered {
+        color: #cbd5e1;
+    }
+
+    .status.read {
+        color: #38bdf8;
+    }
+
+/* subtle animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(2px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.unread-divider {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 8px 0;
+    position: sticky;
+    top: 0;
+    background: var(--bg-app);
+    padding: 4px 0;
+}
+
+
+
+
+/* =========================================================
+   PRESENCE POLISH
+   ========================================================= */
+
+.presence-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.presence-user {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+    .dot.online {
+        background: #22c55e;
+    }
+
+
+/* =========================================================
+   TYPING INDICATOR
+   ========================================================= */
+
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+    .typing-indicator .dots {
+        display: flex;
+        gap: 3px;
+    }
+
+        .typing-indicator .dots span {
+            width: 4px;
+            height: 4px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            animation: typingBounce 1.4s infinite ease-in-out both;
+        }
+
+            .typing-indicator .dots span:nth-child(1) {
+                animation-delay: 0s;
+            }
+
+            .typing-indicator .dots span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+
+            .typing-indicator .dots span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+
+@keyframes typingBounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+
+    40% {
+        transform: scale(1);
+    }
+}
+
+
+.status {
+    cursor: default;
+    position: relative;
+}
+
+    .status.read {
+        color: #38bdf8;
+    }
+
+
+
+
+/* =========================================================
+   ROOM HEADER (TOPBAR)
+   ========================================================= */
+.room-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.room-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.room-sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.icon-btn {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+    .icon-btn:hover {
+        background: var(--bg-message);
+    }
+
+.room-actions {
+    display: flex;
+    gap: 8px;
+}

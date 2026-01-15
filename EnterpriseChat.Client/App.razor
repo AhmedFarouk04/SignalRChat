@@ -1,11 +1,24 @@
-﻿<Router AppAssembly="@typeof(App).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(EnterpriseChat.Client.Layout.MainLayout)" />
-    </Found>
-    <NotFound>
-        <LayoutView Layout="@typeof(MainLayout)">
-            <p>Sorry, nothing here.</p>
-        </LayoutView>
-    </NotFound>
-</Router>
+﻿@using Microsoft.JSInterop
+@using EnterpriseChat.Client.Extensions
+@inject IJSRuntime JS
 
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" />
+        </Found>
+        <NotFound>
+            <p>Page not found</p>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            ScrollExtensions.Init(JS);
+        }
+    }
+}

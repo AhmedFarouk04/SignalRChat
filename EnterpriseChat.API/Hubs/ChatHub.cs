@@ -15,16 +15,22 @@ public sealed class ChatHub : Hub
     private readonly DeliverMessageCommandHandler _deliverHandler;
     private readonly ReadMessageCommandHandler _readHandler;
     private readonly IChatRoomRepository _roomRepository;
+    private readonly IRoomPresenceService _roomPresence;
+    private readonly ITypingService _typing;
     public ChatHub(
         IPresenceService presence,
         DeliverMessageCommandHandler deliverHandler,
         ReadMessageCommandHandler readHandler,
-        IChatRoomRepository roomRepository)
+        IChatRoomRepository roomRepository,
+        IRoomPresenceService roomPresence,
+        ITypingService typing)
     {
         _presence = presence;
         _deliverHandler = deliverHandler;
         _readHandler = readHandler;
         _roomRepository = roomRepository;
+        _roomPresence = roomPresence;
+        _typing = typing;
     }
 
     public override async Task OnConnectedAsync()
@@ -48,26 +54,46 @@ public sealed class ChatHub : Hub
 
         await _presence.UserDisconnectedAsync(userId, connectionId);
 
+        // ✅ remove user from all opened rooms
+        var affectedRooms = await _roomPresence.RemoveUserFromAllRoomsAsync(userId);
+
+        foreach (var rid in affectedRooms)
+        {
+            var count = await _roomPresence.GetOnlineCountAsync(rid);
+            await Clients.Group(rid.Value.ToString())
+                .SendAsync("RoomPresenceUpdated", rid.Value, count);
+        }
+
         if (!await _presence.IsOnlineAsync(userId))
             await Clients.Others.SendAsync("UserOffline", userId.Value);
 
         await base.OnDisconnectedAsync(exception);
     }
 
+
     public async Task JoinRoom(string roomId)
     {
         var userId = GetUserId();
-        var room = await _roomRepository.GetByIdAsync(new RoomId(Guid.Parse(roomId)));
+        var rid = new RoomId(Guid.Parse(roomId));
+        var room = await _roomRepository.GetByIdAsync(rid);
 
         if (room is null || !room.IsMember(userId))
             throw new HubException("Access denied.");
 
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
 
-        await _deliverHandler.DeliverRoomMessagesAsync(
-            new RoomId(Guid.Parse(roomId)),
-            userId);
+        // Presence per room
+        await _roomPresence.JoinRoomAsync(rid, userId);
+
+        // Broadcast online count داخل الروم
+        var count = await _roomPresence.GetOnlineCountAsync(rid);
+        await Clients.Group(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
+
+        // Deliver pending
+        await _deliverHandler.DeliverRoomMessagesAsync(rid, userId);
     }
+    
+
 
     public async Task Typing(string roomId)
     {
@@ -81,11 +107,51 @@ public sealed class ChatHub : Hub
             .SendAsync("UserTyping", userId.Value);
     }
 
+    public async Task TypingStart(string roomId)
+    {
+        var userId = GetUserId();
+        var rid = new RoomId(Guid.Parse(roomId));
+        var room = await _roomRepository.GetByIdAsync(rid);
 
-    public Task LeaveRoom(string roomId)
-        => Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
+        if (room is null || !room.IsMember(userId))
+            return;
 
-   
+        // TTL: 4 seconds
+        var first = await _typing.StartTypingAsync(rid, userId, TimeSpan.FromSeconds(4));
+
+        // ابعت event فقط لو first time (منع spam)
+        if (first)
+        {
+            await Clients.OthersInGroup(roomId)
+                .SendAsync("TypingStarted", rid.Value, userId.Value);
+        }
+    }
+
+    // اختياري (مش لازم لو هتعتمد على TTL)
+    public async Task TypingStop(string roomId)
+    {
+        var userId = GetUserId();
+        var rid = new RoomId(Guid.Parse(roomId));
+
+        await _typing.StopTypingAsync(rid, userId);
+
+        await Clients.OthersInGroup(roomId)
+            .SendAsync("TypingStopped", rid.Value, userId.Value);
+    }
+    public async Task LeaveRoom(string roomId)
+    {
+        var userId = GetUserId();
+        var rid = new RoomId(Guid.Parse(roomId));
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
+
+        await _roomPresence.LeaveRoomAsync(rid, userId);
+
+        var count = await _roomPresence.GetOnlineCountAsync(rid);
+        await Clients.Group(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
+    }
+
+
 
     public async Task MarkRead(Guid messageId)
     {

@@ -1,0 +1,75 @@
+﻿@using EnterpriseChat.Client.Extensions
+@using EnterpriseChat.Client.Models
+
+<div class="message-list"
+     @ref="listRef"
+     @onscroll="OnScroll">
+
+    @if (showUnreadDivider)
+    {
+        <div class="unread-divider">
+            New messages
+        </div>
+    }
+
+    @foreach (var msg in Messages)
+    {
+        <MessageBubble Message="msg"
+                       CurrentUserId="CurrentUserId" />
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<MessageModel> Messages { get; set; } = [];
+    [Parameter] public Guid CurrentUserId { get; set; }
+
+    private ElementReference listRef;
+
+    private int lastMessageCount = 0;
+    private bool isAtBottom = true;
+    private bool showUnreadDivider = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // أول render → ننزل تحت
+        if (firstRender)
+        {
+            await ScrollToBottom();
+            lastMessageCount = Messages.Count;
+            return;
+        }
+
+        // لو رسالة جديدة وصلت
+        if (Messages.Count > lastMessageCount)
+        {
+            if (isAtBottom)
+            {
+                await ScrollToBottom();
+            }
+            else
+            {
+                showUnreadDivider = true;
+            }
+
+            lastMessageCount = Messages.Count;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await listRef.ScrollToBottomAsync();
+        showUnreadDivider = false;
+    }
+
+    private async Task OnScroll()
+    {
+        isAtBottom = await listRef.IsScrolledToBottomAsync();
+
+        if (isAtBottom)
+        {
+            showUnreadDivider = false;
+            StateHasChanged();
+        }
+    }
+}

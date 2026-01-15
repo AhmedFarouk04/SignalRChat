@@ -1,0 +1,30 @@
+﻿@if (TypingUsers.Any())
+{
+    <div class="typing-indicator">
+        <span class="dots">
+            <span></span><span></span><span></span>
+        </span>
+
+        <span class="text">
+            @TypingText
+        </span>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<UserModel> TypingUsers { get; set; } = [];
+
+    private string TypingText
+    {
+        get
+        {
+            if (TypingUsers.Count == 1)
+                return $"{TypingUsers[0].DisplayName} is typing…";
+
+            if (TypingUsers.Count == 2)
+                return $"{TypingUsers[0].DisplayName}, {TypingUsers[1].DisplayName} are typing…";
+
+            return $"{TypingUsers[0].DisplayName} and others are typing…";
+        }
+    }
+}

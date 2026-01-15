@@ -1,0 +1,28 @@
+﻿<div class="chat-input-wrapper">
+    <input class="chat-input"
+           @bind="text"
+           @oninput="HandleTyping" />
+
+    <button class="send-btn" @onclick="Send">
+        Send
+    </button>
+</div>
+
+@code {
+    private string text = string.Empty;
+
+    [Parameter] public EventCallback<string> OnSend { get; set; }
+    [Parameter] public EventCallback OnUserTyping { get; set; }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        await OnSend.InvokeAsync(text);
+        text = string.Empty;
+    }
+
+    private Task HandleTyping(ChangeEventArgs _)
+        => OnUserTyping.InvokeAsync();
+}

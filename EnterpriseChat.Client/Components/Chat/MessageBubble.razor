@@ -1,0 +1,74 @@
+﻿@using EnterpriseChat.Client.Models
+@inject ApiClient Api
+
+<div class="message-bubble @(IsMine ? "mine" : "theirs")">
+    <div class="message-content">
+        @Message.Content
+    </div>
+
+    <div class="message-meta">
+        <span class="time">@Message.CreatedAt.ToShortTimeString()</span>
+
+        @if (IsMine)
+        {
+            <span class="status @StatusClass"
+                  @onmouseenter="OnHover"
+                  title="@TooltipText">
+                @StatusIcon
+            </span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public MessageModel Message { get; set; } = default!;
+    [Parameter] public Guid CurrentUserId { get; set; }
+
+    private bool IsMine => Message.SenderId == CurrentUserId;
+
+    private string StatusIcon => Message.Status switch
+    {
+        MessageStatus.Sent => "✔",
+        MessageStatus.Delivered => "✔✔",
+        MessageStatus.Read => "✔✔",
+        _ => string.Empty
+    };
+
+    private string StatusClass => Message.Status switch
+    {
+        MessageStatus.Sent => "sent",
+        MessageStatus.Delivered => "delivered",
+        MessageStatus.Read => "read",
+        _ => string.Empty
+    };
+
+    private string TooltipText = string.Empty;
+    private bool _loaded = false;
+
+    private async Task OnHover()
+    {
+        if (Message.Status != MessageStatus.Read || _loaded)
+            return;
+
+        await LoadReadersAsync();
+    }
+
+    private async Task LoadReadersAsync()
+    {
+        var readers = await Api.GetReadersAsync(Message.Id);
+
+        if (readers.Count == 0)
+        {
+            TooltipText = "Read";
+        }
+        else
+        {
+            var names = readers
+                .Select(r => r.UserId.ToString()[..6]); // مؤقتًا
+            TooltipText = $"Read by {string.Join(", ", names)}";
+        }
+
+        _loaded = true;
+        await InvokeAsync(StateHasChanged);
+    }
+}

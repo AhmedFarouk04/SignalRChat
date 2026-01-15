@@ -52,6 +52,21 @@ namespace EnterpriseChat.Client.Services
                 $"api/chat/messages/{messageId}/readers") ?? [];
         }
 
+        public async Task<IReadOnlyList<UserModel>> GetOnlineUsersInRoomAsync(Guid roomId)
+        {
+            await AttachTokenAsync();
+
+            return await _http.GetFromJsonAsync<IReadOnlyList<UserModel>>(
+                $"api/chat/rooms/{roomId}/online-users") ?? [];
+        }
+        public async Task<RoomModel?> GetRoomAsync(Guid roomId)
+        {
+            await AttachTokenAsync();
+            return await _http.GetFromJsonAsync<RoomModel>($"api/chat/rooms/{roomId}");
+        }
+
+
+
     }
 
 }

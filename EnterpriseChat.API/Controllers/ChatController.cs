@@ -241,5 +241,68 @@ UnmuteRoomCommandHandler unmuteRoomHandler )
     }
 
 
+    [HttpGet("rooms/{roomId}/online-users")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOnlineUsersInRoom(Guid roomId)
+    {
+        if (roomId == Guid.Empty)
+            return BadRequest("RoomId is required.");
+
+        // مؤقتًا (UI-focused)
+        // هنرجّع بيانات بسيطة جاهزة للـ UI
+        // بعدين نربطها بالـ PresenceService الحقيقي
+
+        var users = new[]
+        {
+        new { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), DisplayName = "Ahmed" },
+        new { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), DisplayName = "Ali" }
+    };
+
+        return Ok(users);
+    }
+
+
+    [HttpGet("rooms/{roomId}")]
+    public async Task<IActionResult> GetRoom(Guid roomId)
+    {
+        
+
+        return Ok(new
+        {
+            Id = roomId,
+            Name = $"Room {roomId.ToString()[..6]}",
+            Type = "Group"
+        });
+    }
+
+
+    [HttpGet("rooms")]
+    public async Task<IActionResult> GetMyRooms()
+    {
+        var userId = GetCurrentUserId();
+
+        var rooms = new List<RoomListItemDto>
+    {
+        new()
+        {
+            Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            Name = "Backend Team",
+            Type = "Group"
+        },
+        new()
+        {
+            Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            Name = "Ahmed",
+            Type = "Private",
+            OtherUserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            OtherDisplayName = "Ahmed"
+        }
+    };
+
+        return Ok(rooms);
+    }
+
+
+
 
 }

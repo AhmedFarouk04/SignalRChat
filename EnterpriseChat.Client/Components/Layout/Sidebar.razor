@@ -1,0 +1,18 @@
+﻿@inject NavigationManager Nav
+
+<div class="sidebar-header">
+    <h2>EnterpriseChat</h2>
+</div>
+
+<ul class="sidebar-menu">
+    <li @onclick="GoToRooms">
+        💬 Rooms
+    </li>
+</ul>
+
+@code {
+    private void GoToRooms()
+    {
+        Nav.NavigateTo("/rooms");
+    }
+}
