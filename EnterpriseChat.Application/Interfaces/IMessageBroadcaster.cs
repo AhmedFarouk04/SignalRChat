@@ -1,4 +1,5 @@
-﻿using EnterpriseChat.Domain.ValueObjects;
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Domain.ValueObjects;
 
 namespace EnterpriseChat.Application.Interfaces;
 
@@ -11,4 +12,8 @@ public interface IMessageBroadcaster
 	Task MessageReadAsync(
 		MessageId messageId,
 		UserId userId);
+
+    Task BroadcastMessageAsync(
+        MessageDto message,
+        IEnumerable<UserId> recipients);
 }

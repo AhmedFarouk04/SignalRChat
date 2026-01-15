@@ -1,7 +1,8 @@
 ﻿using Microsoft.AspNetCore.Components.Authorization;
 using System.Security.Claims;
-
+using System.IdentityModel.Tokens.Jwt;
 namespace EnterpriseChat.Client.Authentication;
+
 public sealed class AuthStateProvider : AuthenticationStateProvider
 {
     private readonly ITokenService _tokenService;
@@ -15,15 +16,17 @@ public sealed class AuthStateProvider : AuthenticationStateProvider
     {
         var token = await _tokenService.GetTokenAsync();
 
-        if (string.IsNullOrEmpty(token))
+        if (string.IsNullOrWhiteSpace(token))
         {
             return new AuthenticationState(
                 new ClaimsPrincipal(new ClaimsIdentity()));
         }
 
-        // Mock user (مرحلة أولى)
+        var handler = new JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(token);
+
         var identity = new ClaimsIdentity(
-            new[] { new Claim("sub", "11111111-1111-1111-1111-111111111111") },
+            jwt.Claims,
             "jwt");
 
         return new AuthenticationState(

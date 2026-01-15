@@ -9,9 +9,9 @@
     {
         <div class="room-header">
             <div class="room-main">
-                <span class="room-title">@Title</span>
+                <div class="room-title">@Title</div>
 
-                <span class="room-sub">
+                <div class="room-sub">
                     @if (IsPrivate)
                     {
                         <span class="dot online"></span>
@@ -21,7 +21,7 @@
                     {
                         <span>@MembersCount members</span>
                     }
-                </span>
+                </div>
             </div>
 
             <div class="room-actions">
@@ -37,7 +37,9 @@
     [Parameter] public int MembersCount { get; set; }
 
     private bool IsPrivate => Room?.Type == "Private";
-    private string Title => IsPrivate
-        ? (Room?.OtherDisplayName ?? Room?.Name ?? "Private Chat")
-        : (Room?.Name ?? "Group");
+
+    private string Title =>
+        IsPrivate
+            ? Room?.OtherDisplayName ?? "Private Chat"
+            : Room?.Name ?? "Group";
 }

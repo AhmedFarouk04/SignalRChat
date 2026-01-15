@@ -19,7 +19,6 @@ public sealed class ChatHubClient
     public event Action<MessageModel>? MessageReceived;
     public event Action<Guid>? UserOnline;
     public event Action<Guid>? UserOffline;
-    public event Action<Guid>? UserTyping;
     public event Action<IReadOnlyCollection<Guid>>? PresenceSnapshot;
     public event Action<Guid, Guid>? TypingStarted; // (roomId, userId)
     public event Action<Guid, Guid>? TypingStopped;
@@ -68,8 +67,7 @@ public sealed class ChatHubClient
         _connection.On<Guid>("UserOffline",
             id => UserOffline?.Invoke(id));
 
-        _connection.On<Guid>("UserTyping",
-            id => UserTyping?.Invoke(id));
+   
 
         _connection.On<Guid, int>("RoomPresenceUpdated",
     (roomId, count) => RoomPresenceUpdated?.Invoke(roomId, count));

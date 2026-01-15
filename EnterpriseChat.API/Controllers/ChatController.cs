@@ -1,11 +1,13 @@
-﻿using EnterpriseChat.Application.DTOs;
+﻿using EnterpriseChat.API.Contracts.Messaging;
+using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Features.Messaging.Handlers;
 using EnterpriseChat.Application.Features.Messaging.Queries;
+using EnterpriseChat.Application.Interfaces;
+using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using EnterpriseChat.API.Contracts.Messaging;
 
 namespace EnterpriseChat.API.Controllers;
 [Authorize]
@@ -23,6 +25,9 @@ public sealed class ChatController : ControllerBase
     private readonly BlockUserCommandHandler _blockUserHandler;
     private readonly MuteRoomCommandHandler _muteRoomHandler;
     private readonly UnmuteRoomCommandHandler _unmuteRoomHandler;
+
+    private readonly IChatRoomRepository _roomRepository;
+    private readonly IMessageBroadcaster _broadcaster;
     public ChatController(
 	SendMessageCommandHandler sendMessageHandler,
 	GetMessagesQueryHandler getMessagesHandler,
@@ -33,8 +38,11 @@ public sealed class ChatController : ControllerBase
     GetOrCreatePrivateRoomHandler getOrCreatePrivateRoomHandler
        , BlockUserCommandHandler blockUserHandler,
 MuteRoomCommandHandler muteRoomHandler,
-UnmuteRoomCommandHandler unmuteRoomHandler )
-	{
+UnmuteRoomCommandHandler unmuteRoomHandler ,
+ IChatRoomRepository roomRepository,             
+    IMessageBroadcaster broadcaster   )              
+
+    {
 		_sendMessageHandler = sendMessageHandler;
 		_getMessagesHandler = getMessagesHandler;
 		_getMessageReaders = getMessageReaders;
@@ -45,6 +53,8 @@ UnmuteRoomCommandHandler unmuteRoomHandler )
         _blockUserHandler = blockUserHandler;
         _muteRoomHandler = muteRoomHandler;
         _unmuteRoomHandler = unmuteRoomHandler;
+        _roomRepository = roomRepository;               // ✅
+        _broadcaster = broadcaster;
     }
 	
 
@@ -71,6 +81,15 @@ UnmuteRoomCommandHandler unmuteRoomHandler )
 
 
         var result = await _sendMessageHandler.Handle(command, cancellationToken);
+
+        var room = await _roomRepository.GetByIdAsync(
+            new RoomId(request.RoomId), cancellationToken);
+
+        var recipients = room!.Members
+            .Select(m => m.UserId)
+            .Where(x => x != senderId);
+
+        await _broadcaster.BroadcastMessageAsync(result, recipients);
 
         return Ok(result);
     }

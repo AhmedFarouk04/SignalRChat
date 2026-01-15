@@ -1,0 +1,187 @@
+﻿@page "/chat/{RoomId:guid}"
+
+@using EnterpriseChat.Client.Models
+@inject ApiClient Api
+@inject ChatHubClient Hub
+@inject CurrentUserContext CurrentUser
+
+
+<TopBar Room="@room"
+        MembersCount="@onlineUsers.Count" />
+
+@if (room?.Type != "Private")
+{
+    <PresenceBar OnlineUsers="@onlineUsers" />
+}
+
+<MessageList Messages="@messages"
+             CurrentUserId="@currentUserId"
+             OnRetry="RetrySend" />
+
+
+<TypingIndicator TypingUsers="@typingUsers" />
+
+<ChatInput OnSend="Send"
+           OnUserTyping="NotifyTyping" />
+
+@code {
+    [Parameter] public Guid RoomId { get; set; }
+
+    private RoomModel? room;
+    private List<MessageModel> messages = new();
+    private List<UserModel> onlineUsers = new();
+    private List<UserModel> typingUsers = new();
+
+    private Guid currentUserId;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUserId = await CurrentUser.GetUserIdAsync()
+            ?? throw new InvalidOperationException("User not authenticated");
+
+        room = await Api.GetRoomAsync(RoomId);
+        messages = (await Api.GetMessagesAsync(RoomId)).ToList();
+
+        Hub.MessageReceived += OnMessageReceived;
+        Hub.RoomPresenceUpdated += OnRoomPresenceUpdated;
+        Hub.TypingStarted += OnTypingStarted;
+        Hub.TypingStopped += OnTypingStopped;
+
+        await Hub.ConnectAsync();
+        await Hub.JoinRoomAsync(RoomId);
+    }
+
+
+    private async void OnRoomPresenceUpdated(Guid roomId, int _)
+    {
+        if (roomId != RoomId)
+            return;
+
+        var users = await Api.GetOnlineUsersInRoomAsync(RoomId);
+
+        onlineUsers = users
+            .Where(u => u.Id != currentUserId)
+            .Select(u => new UserModel
+            {
+                Id = u.Id,
+                DisplayName = u.DisplayName,
+                IsOnline = true
+            })
+            .ToList();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTypingStarted(Guid roomId, Guid userId)
+    {
+        if (roomId != RoomId || userId == currentUserId)
+            return;
+
+        if (typingUsers.Any(u => u.Id == userId))
+            return;
+
+        var user = onlineUsers.FirstOrDefault(u => u.Id == userId);
+        if (user != null)
+        {
+            typingUsers.Add(user);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnTypingStopped(Guid roomId, Guid userId)
+    {
+        typingUsers.RemoveAll(u => u.Id == userId);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnMessageReceived(MessageModel message)
+    {
+        // لو الرسالة جاية مني وموجودة Pending (نفس content) → replace
+        var existing = messages.FirstOrDefault(m =>
+            m.Status == MessageStatus.Pending &&
+            m.SenderId == message.SenderId &&
+            m.RoomId == message.RoomId &&
+            m.Content == message.Content);
+
+        if (existing != null)
+        {
+            existing.Id = message.Id;
+            existing.Status = MessageStatus.Sent;
+            existing.Error = null;
+        }
+        else
+        {
+            messages.Add(message);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+
+    private async Task Send(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        // 1) Optimistic message
+        var clientId = Guid.NewGuid();
+        var pending = new MessageModel
+        {
+            ClientId = clientId,
+            Id = Guid.Empty,
+            RoomId = RoomId,
+            SenderId = currentUserId,
+            Content = text,
+            CreatedAt = DateTime.UtcNow,
+            Status = MessageStatus.Pending
+        };
+
+        messages.Add(pending);
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            // 2) HTTP send
+            var dto = await Api.SendMessageAsync(RoomId, text);
+
+            // 3) Mark as Sent locally (await reconcile from SignalR too)
+            pending.Id = dto.Id;
+            pending.Status = MessageStatus.Sent;
+            pending.Error = null;
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            pending.Status = MessageStatus.Failed;
+            pending.Error = "Failed to send";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+    private async Task RetrySend(MessageModel msg)
+    {
+        // رجّعها Pending تاني
+        msg.Status = MessageStatus.Pending;
+        msg.Error = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var dto = await Api.SendMessageAsync(RoomId, msg.Content);
+            msg.Id = dto.Id;
+            msg.Status = MessageStatus.Sent;
+        }
+        catch
+        {
+            msg.Status = MessageStatus.Failed;
+            msg.Error = "Failed to send";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+
+    private Task NotifyTyping()
+        => Hub.NotifyTypingAsync(RoomId);
+}

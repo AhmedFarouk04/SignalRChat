@@ -42,7 +42,6 @@ public static class DependencyInjection
         services.AddScoped<IUserBlockRepository, UserBlockRepository>();
         services.AddScoped<IMutedRoomRepository, MutedRoomRepository>();
         services.AddScoped<IRoomAuthorizationService, RoomAuthorizationService>();
-
         // ===============================
         // Command Handlers
         // ===============================

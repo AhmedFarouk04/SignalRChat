@@ -95,17 +95,7 @@ public sealed class ChatHub : Hub
     
 
 
-    public async Task Typing(string roomId)
-    {
-        var userId = GetUserId();
-        var room = await _roomRepository.GetByIdAsync(new RoomId(Guid.Parse(roomId)));
-
-        if (room is null || !room.IsMember(userId))
-            return;
-
-        await Clients.OthersInGroup(roomId)
-            .SendAsync("UserTyping", userId.Value);
-    }
+   
 
     public async Task TypingStart(string roomId)
     {

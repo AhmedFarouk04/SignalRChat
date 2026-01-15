@@ -1,0 +1,22 @@
+﻿@using EnterpriseChat.Client.Models
+
+<li class="room-item"
+    @onclick="() => OnOpen.InvokeAsync(Room.Id)">
+
+    <div class="avatar">
+        <span>@Room.Name[..1].ToUpper()</span>
+    </div>
+
+    <div class="room-content">
+        <div class="room-name">@Room.Name</div>
+        <div class="room-subtitle">Tap to open chat</div>
+    </div>
+</li>
+
+@code {
+    [Parameter, EditorRequired]
+    public RoomModel Room { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public EventCallback<Guid> OnOpen { get; set; }
+}

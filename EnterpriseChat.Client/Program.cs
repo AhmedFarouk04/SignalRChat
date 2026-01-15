@@ -16,6 +16,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
 
 builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<ChatHubClient>();
+builder.Services.AddScoped<CurrentUserContext>();
 
 builder.Services.AddScoped(sp =>
     new HttpClient { BaseAddress = new Uri("https://localhost:5001/") });

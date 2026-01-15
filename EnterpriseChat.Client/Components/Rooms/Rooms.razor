@@ -1,0 +1,38 @@
+﻿@page "/rooms"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<div class="rooms-page">
+    <h2 class="rooms-title">Chats</h2>
+
+    @if (rooms == null)
+    {
+        <div class="rooms-loading">Loading…</div>
+    }
+    else if (!rooms.Any())
+    {
+        <div class="rooms-empty">No conversations yet</div>
+    }
+    else
+    {
+        <ul class="rooms-list">
+            @foreach (var room in rooms)
+            {
+                <RoomListItem Room="room"
+                              OnOpen="Open" />
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<RoomModel>? rooms;
+
+    protected override async Task OnInitializedAsync()
+    {
+        rooms = await Api.GetRoomsAsync();
+    }
+
+    private void Open(Guid roomId)
+        => Nav.NavigateTo($"/chat/{roomId}");
+}

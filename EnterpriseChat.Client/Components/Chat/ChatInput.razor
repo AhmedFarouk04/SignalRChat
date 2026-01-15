@@ -1,7 +1,7 @@
 ﻿<div class="chat-input-wrapper">
     <input class="chat-input"
-           @bind="text"
-           @oninput="HandleTyping" />
+           value="@text"
+           @oninput="OnInput" />
 
     <button class="send-btn" @onclick="Send">
         Send
@@ -14,6 +14,12 @@
     [Parameter] public EventCallback<string> OnSend { get; set; }
     [Parameter] public EventCallback OnUserTyping { get; set; }
 
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        text = e.Value?.ToString() ?? string.Empty;
+        await OnUserTyping.InvokeAsync();
+    }
+
     private async Task Send()
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -22,7 +28,4 @@
         await OnSend.InvokeAsync(text);
         text = string.Empty;
     }
-
-    private Task HandleTyping(ChangeEventArgs _)
-        => OnUserTyping.InvokeAsync();
 }

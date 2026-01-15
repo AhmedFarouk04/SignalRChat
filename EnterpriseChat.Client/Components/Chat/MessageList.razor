@@ -8,20 +8,24 @@
     @if (showUnreadDivider)
     {
         <div class="unread-divider">
-            New messages
+            Unread messages
         </div>
+
     }
 
     @foreach (var msg in Messages)
     {
         <MessageBubble Message="msg"
-                       CurrentUserId="CurrentUserId" />
+                       CurrentUserId="CurrentUserId"
+                       OnRetry="OnRetry" />
+
     }
 </div>
 
 @code {
     [Parameter] public IReadOnlyList<MessageModel> Messages { get; set; } = [];
     [Parameter] public Guid CurrentUserId { get; set; }
+    [Parameter] public EventCallback<MessageModel> OnRetry { get; set; }
 
     private ElementReference listRef;
 

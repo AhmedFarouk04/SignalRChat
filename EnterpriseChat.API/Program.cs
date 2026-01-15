@@ -20,6 +20,8 @@ builder.Services.AddSwaggerGen();
 // Chat Services (Infrastructure + Application)
 builder.Services.AddChatServices(builder.Configuration);
 
+builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
+
 // SignalR
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
 

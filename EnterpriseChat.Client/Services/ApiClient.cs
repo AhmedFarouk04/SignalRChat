@@ -65,6 +65,20 @@ namespace EnterpriseChat.Client.Services
             return await _http.GetFromJsonAsync<RoomModel>($"api/chat/rooms/{roomId}");
         }
 
+        public async Task<MessageDto> SendMessageAsync(Guid roomId, string content)
+        {
+            await AttachTokenAsync();
+
+            var res = await _http.PostAsJsonAsync("api/chat/messages", new
+            {
+                RoomId = roomId,
+                Content = content
+            });
+
+            res.EnsureSuccessStatusCode();
+
+            return (await res.Content.ReadFromJsonAsync<MessageDto>())!;
+        }
 
 
     }
