@@ -34,7 +34,6 @@ public sealed class MessageReceiptConfiguration
         builder.Property(x => x.UpdatedAt)
             .IsRequired();
 
-        //  Important indexes
         builder.HasIndex(x => x.MessageId);
         builder.HasIndex(x => x.UserId);
         builder.HasIndex(x => new { x.UserId, x.Status });

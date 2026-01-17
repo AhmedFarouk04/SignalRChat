@@ -21,14 +21,12 @@ public sealed class RedisTypingService : ITypingService
     {
         var key = Key(roomId.Value, userId.Value);
 
-        // لو الكي موجود -> مجرد renew TTL
         if (await _db.KeyExistsAsync(key))
         {
             await _db.KeyExpireAsync(key, ttl);
             return false;
         }
 
-        // first time -> set + TTL
         await _db.StringSetAsync(key, "1", ttl);
         return true;
     }

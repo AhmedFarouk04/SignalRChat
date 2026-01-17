@@ -25,11 +25,9 @@ public sealed class MarkRoomReadCommandHandler
         MarkRoomReadCommand command,
         CancellationToken ct = default)
     {
-        // 1) Get messages in room
         var messages = await _messageRepo
             .GetByRoomAsync(command.RoomId, 0, 200, ct);
 
-        // 2) Find last visible message
         var lastMessage = messages.FirstOrDefault(m =>
             m.Id == command.LastMessageId);
 
@@ -38,7 +36,6 @@ public sealed class MarkRoomReadCommandHandler
 
         var cutoffTime = lastMessage.CreatedAt;
 
-        // 3) Mark all messages up to cutoff as Read
         foreach (var msg in messages.Where(m => m.CreatedAt <= cutoffTime))
         {
             var receipt = await _receiptRepo.GetAsync(

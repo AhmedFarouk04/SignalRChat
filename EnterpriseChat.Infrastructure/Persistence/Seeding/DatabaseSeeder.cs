@@ -9,7 +9,6 @@ public sealed class DatabaseSeeder
 {
     private readonly ChatDbContext _context;
 
-    // ✅ Seed Users (fixed & reusable)
     private readonly UserId _user1 =
         new(Guid.Parse("11111111-1111-1111-1111-111111111111"));
 

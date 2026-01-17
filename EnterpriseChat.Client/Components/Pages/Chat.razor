@@ -22,7 +22,7 @@
 }
 else
 {
-    @* ===== Removed from group ===== *@
+    @* Removed from group  *@
     @if (isRemoved)
     {
         <div class="chat-error">
@@ -31,7 +31,7 @@ else
     }
     else
     {
-        @* ===== Group members ===== *@
+        @*  Group members  *@
         @if (room.Type == "Group" && groupMembers != null)
         {
             <GroupMembersPanel
@@ -42,13 +42,13 @@ else
                 OnLeave="LeaveGroup" />
         }
 
-        @* ===== Presence ===== *@
+        @*  Presence  *@
         @if (room.Type != "Private")
         {
             <PresenceBar OnlineUsers="@onlineUsers" />
         }
 
-        @* ===== Connection banner ===== *@
+        @*  Connection banner  *@
         @if (isDisconnected)
         {
             <div class="connection-banner">
@@ -56,7 +56,7 @@ else
             </div>
         }
 
-        @* ===== Messages ===== *@
+        @*  Messages  *@
         <MessageList Messages="@messages"
                      CurrentUserId="@currentUserId"
                      OnRetry="RetrySend"
@@ -64,7 +64,7 @@ else
 
         <TypingIndicator TypingUsers="@typingUsers" />
 
-        @* ===== Block / Deleted handling ===== *@
+        @*  Block / Deleted handling  *@
         @if (isOtherDeleted)
         {
             <div class="blocked-banner">
@@ -126,7 +126,7 @@ else
             return;
         }
 
-        // ===== Group members =====
+        //  Group members 
         if (room.Type == "Group")
         {
             var dto = await Api.GetGroupMembersAsync(RoomId);
@@ -144,7 +144,7 @@ else
             };
         }
 
-        // ===== Private chat =====
+        //  Private chat 
         if (room.Type == "Private")
         {
             if (room.OtherUserId == null)
@@ -245,7 +245,7 @@ else
         };
     }
 
-    // ===== Presence =====
+    //  Presence 
     private async void OnRoomPresenceUpdated(Guid roomId, int _)
     {
         if (roomId != RoomId)
@@ -266,7 +266,7 @@ else
         await InvokeAsync(StateHasChanged);
     }
 
-    // ===== Typing =====
+    //  Typing 
     private void OnTypingStarted(Guid roomId, Guid userId)
     {
         if (isBlocked || isOtherDeleted)
@@ -292,7 +292,7 @@ else
         InvokeAsync(StateHasChanged);
     }
 
-    // ===== Messages =====
+    //  Messages 
     private void OnMessageReceived(MessageModel message)
     {
         if (message.RoomId != RoomId)
@@ -391,7 +391,7 @@ else
         }
     }
 
-    // ===== Group actions =====
+    //  Group actions 
     private async Task RemoveMember(Guid userId)
     {
         await Api.RemoveMemberAsync(RoomId, userId);
@@ -405,7 +405,7 @@ else
         Nav.NavigateTo("/rooms");
     }
 
-    // ===== Block / Mute =====
+    //  Block / Mute 
     private async Task BlockOtherUser()
     {
         if (otherUser == null)

@@ -1,41 +1,27 @@
 ﻿using EnterpriseChat.API.Extensions;
 using EnterpriseChat.API.Hubs;
-using EnterpriseChat.API.Messaging;
 using EnterpriseChat.API.Middleware;
-using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Infrastructure;
 using EnterpriseChat.Infrastructure.Persistence.Seeding;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+
+
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Controllers
-builder.Services.AddControllers();
 
-// Swagger
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Chat Services (Infrastructure + Application)
 builder.Services.AddChatServices(builder.Configuration);
 
-builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
-
-// SignalR
-var redisConnection = builder.Configuration.GetConnectionString("Redis");
-
-var signalRBuilder = builder.Services.AddSignalR();
-
-if (!string.IsNullOrWhiteSpace(redisConnection))
-{
-    signalRBuilder.AddStackExchangeRedis(redisConnection, options =>
-    {
-        options.Configuration.ChannelPrefix = "EnterpriseChat";
-    });
-}
-
-builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
+builder.Services.AddSignalR()
+    .AddStackExchangeRedis(
+        builder.Configuration.GetConnectionString("Redis") ?? string.Empty,
+        options => options.Configuration.ChannelPrefix = "EnterpriseChat");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -50,22 +36,20 @@ builder.Services
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
-            )
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
 
-        // 🔥 SignalR support
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
             {
-                var accessToken = context.Request.Query["access_token"];
+                var token = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
 
-                if (!string.IsNullOrEmpty(accessToken) &&
+                if (!string.IsNullOrEmpty(token) &&
                     path.StartsWithSegments("/hubs/chat"))
                 {
-                    context.Token = accessToken;
+                    context.Token = token;
                 }
 
                 return Task.CompletedTask;
@@ -74,6 +58,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
 
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -84,27 +69,23 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
-// Middleware
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-
-app.UseAuthentication();
-app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
 
-app.MapControllers();
-app.MapHub<ChatHub>("/hubs/chat");
-
-// Seed Data
-using (var scope = app.Services.CreateScope())
-{
+    using var scope = app.Services.CreateScope();
     var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
     await seeder.SeedAsync();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
+
 app.Run();
+

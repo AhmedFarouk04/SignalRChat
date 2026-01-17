@@ -1,16 +1,19 @@
-﻿using EnterpriseChat.Application.Interfaces;
+﻿using EnterpriseChat.Application.Features.Messaging.Commands;
+using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
+using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Handlers;
 
-public sealed class DeliverMessageCommandHandler
+public sealed class DeliverRoomMessagesCommandHandler
+    : IRequestHandler<DeliverRoomMessagesCommand, Unit>
 {
     private readonly IMessageReceiptRepository _receiptRepo;
     private readonly IMessageRepository _messageRepo;
     private readonly IUnitOfWork _uow;
 
-    public DeliverMessageCommandHandler(
+    public DeliverRoomMessagesCommandHandler(
         IMessageReceiptRepository receiptRepo,
         IMessageRepository messageRepo,
         IUnitOfWork uow)
@@ -20,24 +23,23 @@ public sealed class DeliverMessageCommandHandler
         _uow = uow;
     }
 
-    public async Task DeliverRoomMessagesAsync(
-        RoomId roomId,
-        UserId userId,
-        CancellationToken ct = default)
+    public async Task<Unit> Handle(
+        DeliverRoomMessagesCommand request,
+        CancellationToken ct)
     {
         var messages = await _messageRepo
-            .GetByRoomAsync(roomId, 0, 100, ct);
+            .GetByRoomAsync(request.RoomId, 0, 100, ct);
 
         foreach (var msg in messages)
         {
-            var receipt = await _receiptRepo.GetAsync(msg.Id, userId, ct);
+            var receipt = await _receiptRepo.GetAsync(msg.Id, request.UserId, ct);
 
             if (receipt is null)
-            {
-                msg.MarkDelivered(userId);
-            }
+                msg.MarkDelivered(request.UserId);
         }
 
         await _uow.CommitAsync(ct);
+
+        return Unit.Value; 
     }
 }

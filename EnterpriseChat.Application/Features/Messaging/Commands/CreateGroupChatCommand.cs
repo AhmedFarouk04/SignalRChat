@@ -1,5 +1,4 @@
 ﻿using EnterpriseChat.Domain.ValueObjects;
-using System.Collections.Generic;
 
 namespace EnterpriseChat.Application.Features.Messaging.Commands;
 

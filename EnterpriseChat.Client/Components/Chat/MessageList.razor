@@ -27,7 +27,6 @@
     [Parameter] public EventCallback<MessageModel> OnRetry { get; set; }
     [Parameter] public EventCallback<Guid> OnReachedBottom { get; set; }
 
-    // لو عايز تقفل smart scroll مؤقتًا
     [Parameter] public bool AutoScroll { get; set; } = true;
 
     private ElementReference listRef;
@@ -38,11 +37,9 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // مهم: لو ref لسه مش جاهز
         if (listRef.Context is null)
             return;
 
-        // أول render: ننزل تحت
         if (firstRender)
         {
             if (AutoScroll)
@@ -52,14 +49,11 @@
             return;
         }
 
-        // مفيش تغيير
         if (Messages.Count == lastMessageCount)
             return;
 
-        // رسائل جديدة
         if (Messages.Count > lastMessageCount)
         {
-            // اعرف المستخدم عند آخر القائمة ولا لأ
             isAtBottom = await JS.InvokeAsync<bool>("scrollHelper.isAtBottom", listRef);
 
             if (AutoScroll && isAtBottom)
@@ -67,13 +61,11 @@
                 await JS.InvokeVoidAsync("scrollHelper.scrollToBottom", listRef);
                 showUnreadDivider = false;
 
-                // وصلنا تحت فعلاً → نبلغ Chat.razor لو محتاج يعمل MarkRead
                 if (Messages.Count > 0)
                     await OnReachedBottom.InvokeAsync(Messages[^1].Id);
             }
             else
             {
-                // المستخدم طالع فوق → أظهر divider
                 showUnreadDivider = true;
             }
         }
@@ -88,7 +80,6 @@
 
         isAtBottom = await JS.InvokeAsync<bool>("scrollHelper.isAtBottom", listRef);
 
-        // لو رجع تحت → اخفي divider وبعت event
         if (isAtBottom)
         {
             showUnreadDivider = false;

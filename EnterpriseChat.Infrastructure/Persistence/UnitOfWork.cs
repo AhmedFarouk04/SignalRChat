@@ -20,23 +20,19 @@ public sealed class UnitOfWork : IUnitOfWork
 
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
-        // 1️⃣ Save changes first
         await _context.SaveChangesAsync(cancellationToken);
 
-        // 2️⃣ Collect domain events
         var domainEvents = _context.ChangeTracker
             .Entries()
             .Where(e => e.Entity is Message)
             .SelectMany(e => ((Message)e.Entity).DomainEvents)
             .ToList();
 
-        // 3️⃣ Dispatch events
         if (domainEvents.Any())
         {
             await _dispatcher.DispatchAsync(domainEvents, cancellationToken);
         }
 
-        // 4️⃣ Clear events
         foreach (var entry in _context.ChangeTracker.Entries<Message>())
         {
             entry.Entity.ClearDomainEvents();

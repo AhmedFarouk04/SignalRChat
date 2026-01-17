@@ -1,6 +1,4 @@
 ﻿using EnterpriseChat.API.Messaging;
-using EnterpriseChat.Application.Features.Messaging.Handlers;
-using EnterpriseChat.Application.Features.Messaging.Queries;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Events;
 using EnterpriseChat.Domain.Interfaces;
@@ -13,7 +11,6 @@ using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 
 namespace EnterpriseChat.API.Extensions;
-
 public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddChatServices(
@@ -28,39 +25,29 @@ public static class ServiceCollectionExtensions
         // Repositories
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IChatRoomRepository, ChatRoomRepository>();
+        services.AddScoped<IMessageReadRepository, MessageReadRepository>();
+        services.AddScoped<IMutedRoomRepository, MutedRoomRepository>();
+        services.AddScoped<IUserBlockRepository, UserBlockRepository>();
 
         // Unit of Work
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-		// Domain Events
-		services.AddScoped<IDomainEventHandler<MessageDeliveredEvent>,
-	     MessageDeliveredEventHandler>();
+        // Domain Events
+        services.AddScoped<IDomainEventHandler<MessageDeliveredEvent>,
+            MessageDeliveredEventHandler>();
+        services.AddScoped<IDomainEventHandler<MessageReadEvent>,
+            MessageReadEventHandler>();
 
-		services.AddScoped<IDomainEventHandler<MessageReadEvent>,
-			MessageReadEventHandler>();
-		// SignalR Broadcaster (API implementation)
-		services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
-		// Commands
-		services.AddScoped<SendMessageCommandHandler>();
+        // SignalR broadcaster
+        services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
 
-        // Repositories
-        services.AddScoped<IMessageRepository, MessageRepository>();
-        services.AddScoped<IChatRoomRepository, ChatRoomRepository>();
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
-
-        // Seeder
-        services.AddScoped<DatabaseSeeder>();
-
-        services.AddScoped<IMessageReadRepository, MessageReadRepository>();
-        services.AddScoped<GetMessagesQueryHandler>();
-
-
-
+        // Authorization / Presence
         services.AddScoped<IRoomAuthorizationService, RoomAuthorizationService>();
+        services.AddScoped<IRoomPresenceService, RedisRoomPresenceService>();
+        services.AddScoped<ITypingService, RedisTypingService>();
 
-
+        // Presence provider
         var provider = configuration["Presence:Provider"];
-
         if (provider == "Redis")
         {
             services.AddSingleton<IConnectionMultiplexer>(
@@ -73,6 +60,10 @@ public static class ServiceCollectionExtensions
         {
             services.AddSingleton<IPresenceService, InMemoryPresenceService>();
         }
+
+        // Seeder (dev only)
+        services.AddScoped<DatabaseSeeder>();
+
         return services;
     }
 }

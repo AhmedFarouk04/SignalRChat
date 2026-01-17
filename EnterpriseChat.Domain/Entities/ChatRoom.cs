@@ -132,7 +132,6 @@ public sealed class ChatRoom
     public bool IsMember(UserId userId)
     => _members.Any(m => m.UserId == userId);
 
-    // 🔥 Helper for repository filtering
     public bool IsPrivateWith(UserId a, UserId b)
      => Type == RoomType.Private &&
         IsMember(a) &&

@@ -25,35 +25,29 @@ public sealed class GetMyRoomsQueryHandler
         GetMyRoomsQuery query,
         CancellationToken ct = default)
     {
-        // ✅ لازم يبقى عندك method: GetForUserAsync
-        // لو مش موجودة ابعتلي repo interface وأنا أظبطها لك
+        
         var myRooms = await _rooms.GetForUserAsync(query.UserId, ct);
 
         var result = new List<RoomListItemDto>(myRooms.Count);
 
         foreach (var room in myRooms)
         {
-            // ✅ UnreadCount = عدد الرسائل اللي receipt بتاعها أقل من Read
-            // هنجيب آخر 200 رسالة مثلا (مؤقت MVP)
+         
             var messages = await _messages.GetByRoomAsync(room.Id, 0, 200, ct);
 
             var unread = 0;
 
             foreach (var msg in messages)
             {
-                // تجاهل رسائلي أنا
                 if (msg.SenderId == query.UserId)
                     continue;
 
                 var receipt = await _receipts.GetAsync(msg.Id, query.UserId, ct);
 
-                // لو مفيش receipt أو status < Read → تعتبر unread
                 if (receipt is null || receipt.Status < Domain.Enums.MessageStatus.Read)
                     unread++;
             }
 
-            // ✅ اسم الروم
-            // (في الخاص: اسم الطرف الآخر / في الجروب: اسم الغروب)
             string name = room.Name ?? "Chat";
             Guid? otherId = null;
             string? otherName = null;

@@ -53,7 +53,7 @@ public sealed class ChatRoomRepository : IChatRoomRepository
         return await _context.ChatRooms
             .Include(r => r.Members)
             .Where(r => r.Members.Any(m => m.UserId == userId))
-            .OrderByDescending(r => r.CreatedAt) // لو عندك CreatedAt
+            .OrderByDescending(r => r.CreatedAt) 
             .ToListAsync(cancellationToken);
     }
 

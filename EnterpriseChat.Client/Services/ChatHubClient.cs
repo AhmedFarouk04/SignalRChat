@@ -128,7 +128,6 @@ public sealed class ChatHubClient
     {
         if (_connection is null) return;
 
-        // debounce: ابعت start كل 300ms فقط
         var now = DateTime.UtcNow;
         if (now - _lastTypingSent > _typingDebounce)
         {
@@ -136,7 +135,6 @@ public sealed class ChatHubClient
             await _connection.InvokeAsync("TypingStart", roomId.ToString());
         }
 
-        // reset stop timer
         _typingCts?.Cancel();
         _typingCts = new CancellationTokenSource();
         var token = _typingCts.Token;
