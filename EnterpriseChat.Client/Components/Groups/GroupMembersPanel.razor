@@ -1,0 +1,50 @@
+﻿@using EnterpriseChat.Client.Models
+
+<div class="group-panel">
+    <h4>Members</h4>
+
+    @foreach (var member in Members)
+    {
+        <div class="member-row">
+            <span class="avatar">
+                @member.DisplayName[..1].ToUpper()
+            </span>
+
+            <span>@member.DisplayName</span>
+
+            @if (member.Id == OwnerId)
+            {
+                <span class="badge owner">Owner</span>
+            }
+
+            @if (CanRemove(member))
+            {
+                <button @onclick="() => OnRemove.InvokeAsync(member.Id)">
+                    Remove
+                </button>
+            }
+        </div>
+    }
+
+    @if (CanLeave)
+    {
+        <button class="leave-btn"
+                @onclick="OnLeave">
+            Leave group
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OwnerId { get; set; }
+    [Parameter] public Guid CurrentUserId { get; set; }
+    [Parameter] public IReadOnlyList<UserModel> Members { get; set; } = [];
+    [Parameter] public EventCallback<Guid> OnRemove { get; set; }
+    [Parameter] public EventCallback OnLeave { get; set; }
+
+    private bool CanRemove(UserModel user)
+        => CurrentUserId == OwnerId && user.Id != OwnerId;
+
+    private bool CanLeave
+        => CurrentUserId != OwnerId;
+}

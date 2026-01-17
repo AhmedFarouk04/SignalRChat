@@ -20,7 +20,6 @@ public sealed class DeliverMessageCommandHandler
         _uow = uow;
     }
 
-    // 🔥 NEW METHOD — REQUIRED BY ChatHub
     public async Task DeliverRoomMessagesAsync(
         RoomId roomId,
         UserId userId,

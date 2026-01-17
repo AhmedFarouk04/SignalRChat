@@ -1,5 +1,6 @@
-﻿@using EnterpriseChat.Client.Extensions
-@using EnterpriseChat.Client.Models
+﻿@using EnterpriseChat.Client.Models
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
 
 <div class="message-list"
      @ref="listRef"
@@ -10,7 +11,6 @@
         <div class="unread-divider">
             Unread messages
         </div>
-
     }
 
     @foreach (var msg in Messages)
@@ -18,7 +18,6 @@
         <MessageBubble Message="msg"
                        CurrentUserId="CurrentUserId"
                        OnRetry="OnRetry" />
-
     }
 </div>
 
@@ -26,54 +25,76 @@
     [Parameter] public IReadOnlyList<MessageModel> Messages { get; set; } = [];
     [Parameter] public Guid CurrentUserId { get; set; }
     [Parameter] public EventCallback<MessageModel> OnRetry { get; set; }
+    [Parameter] public EventCallback<Guid> OnReachedBottom { get; set; }
+
+    // لو عايز تقفل smart scroll مؤقتًا
+    [Parameter] public bool AutoScroll { get; set; } = true;
 
     private ElementReference listRef;
 
-    private int lastMessageCount = 0;
+    private int lastMessageCount;
     private bool isAtBottom = true;
-    private bool showUnreadDivider = false;
+    private bool showUnreadDivider;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // أول render → ننزل تحت
+        // مهم: لو ref لسه مش جاهز
+        if (listRef.Context is null)
+            return;
+
+        // أول render: ننزل تحت
         if (firstRender)
         {
-            await ScrollToBottom();
+            if (AutoScroll)
+                await JS.InvokeVoidAsync("scrollHelper.scrollToBottom", listRef);
+
             lastMessageCount = Messages.Count;
             return;
         }
 
-        // لو رسالة جديدة وصلت
+        // مفيش تغيير
+        if (Messages.Count == lastMessageCount)
+            return;
+
+        // رسائل جديدة
         if (Messages.Count > lastMessageCount)
         {
-            if (isAtBottom)
+            // اعرف المستخدم عند آخر القائمة ولا لأ
+            isAtBottom = await JS.InvokeAsync<bool>("scrollHelper.isAtBottom", listRef);
+
+            if (AutoScroll && isAtBottom)
             {
-                await ScrollToBottom();
+                await JS.InvokeVoidAsync("scrollHelper.scrollToBottom", listRef);
+                showUnreadDivider = false;
+
+                // وصلنا تحت فعلاً → نبلغ Chat.razor لو محتاج يعمل MarkRead
+                if (Messages.Count > 0)
+                    await OnReachedBottom.InvokeAsync(Messages[^1].Id);
             }
             else
             {
+                // المستخدم طالع فوق → أظهر divider
                 showUnreadDivider = true;
             }
-
-            lastMessageCount = Messages.Count;
-            StateHasChanged();
         }
-    }
 
-    private async Task ScrollToBottom()
-    {
-        await listRef.ScrollToBottomAsync();
-        showUnreadDivider = false;
+        lastMessageCount = Messages.Count;
     }
 
     private async Task OnScroll()
     {
-        isAtBottom = await listRef.IsScrolledToBottomAsync();
+        if (listRef.Context is null)
+            return;
 
+        isAtBottom = await JS.InvokeAsync<bool>("scrollHelper.isAtBottom", listRef);
+
+        // لو رجع تحت → اخفي divider وبعت event
         if (isAtBottom)
         {
             showUnreadDivider = false;
-            StateHasChanged();
+
+            if (Messages.Count > 0)
+                await OnReachedBottom.InvokeAsync(Messages[^1].Id);
         }
     }
 }

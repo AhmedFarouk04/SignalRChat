@@ -140,6 +140,29 @@ body {
     font-weight: 500;
 }
 
+
+.room-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.badge {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    background: #ef4444;
+    color: white;
+}
+
+
 /* =========================================================
    CHAT CORE
    ========================================================= */
@@ -196,6 +219,12 @@ body {
     margin-top: 8px;
 }
 
+    .chat-input-wrapper.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+
 .chat-input {
     flex: 1;
     padding: 10px 12px;
@@ -237,7 +266,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    animation: fadeIn 0.15s ease-in;
+    animation: fadeIn 0.18s ease-out;
 }
 
     .message-bubble.mine {
@@ -284,7 +313,7 @@ body {
 @keyframes fadeIn {
     from {
         opacity: 0;
-        transform: translateY(2px);
+        transform: translateY(4px);
     }
 
     to {
@@ -293,15 +322,18 @@ body {
     }
 }
 
+
 .unread-divider {
-    text-align: center;
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin: 8px 0;
     position: sticky;
     top: 0;
-    background: var(--bg-app);
-    padding: 4px 0;
+    background: #eef2ff;
+    color: #3730a3;
+    padding: 6px 10px;
+    border-radius: 10px;
+    margin: 8px auto;
+    width: fit-content;
+    font-size: 12px;
+    opacity: 0.9;
 }
 
 
@@ -348,6 +380,8 @@ body {
     margin: 6px 0;
     font-size: 12px;
     color: var(--text-secondary);
+    opacity: 0.85;
+    transition: opacity 0.15s ease;
 }
 
     .typing-indicator .dots {
@@ -375,6 +409,11 @@ body {
                 animation-delay: 0.4s;
             }
 
+    .typing-indicator:empty {
+        opacity: 0;
+    }
+
+
 @keyframes typingBounce {
     0%, 80%, 100% {
         transform: scale(0);
@@ -389,6 +428,7 @@ body {
 .status {
     cursor: default;
     position: relative;
+    transition: color 0.15s ease, opacity 0.15s ease;
 }
 
     .status.read {
@@ -474,7 +514,7 @@ body {
 .avatar {
     width: 40px;
     height: 40px;
-    background: #4f46e5;
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
     color: white;
     font-weight: 600;
     border-radius: 50%;
@@ -482,6 +522,7 @@ body {
     align-items: center;
     justify-content: center;
 }
+
 
 .room-content {
     display: flex;
@@ -693,3 +734,53 @@ body {
     border: 1px solid #e5e7eb;
     background: #fff;
 }
+
+
+.blocked-banner {
+    padding: 10px;
+    text-align: center;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 8px;
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+
+.chat-error {
+    padding: 16px;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.blocked-banner,
+.chat-error {
+    animation: fadeIn 0.2s ease-out;
+}
+
+.connection-banner {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 6px;
+    text-align: center;
+    font-size: 13px;
+}
+
+.chat-error {
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 12px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.blocked-banner {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 8px;
+    text-align: center;
+    font-size: 13px;
+}
+

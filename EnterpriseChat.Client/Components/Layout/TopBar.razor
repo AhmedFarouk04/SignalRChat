@@ -12,22 +12,48 @@
                 <div class="room-title">@Title</div>
 
                 <div class="room-sub">
-                    @if (IsPrivate)
+                    @if (IsPrivate && OtherUser != null)
                     {
-                        <span class="dot online"></span>
-                        <span>Online</span>
+                        @if (OtherUser.IsOnline)
+                        {
+                            <span class="dot online"></span>
+                            <span>Online</span>
+                        }
+                        else if (OtherUser.LastSeen != null)
+                        {
+                            <span>
+                                Last seen @OtherUser.LastSeen.Value.ToLocalTime().ToShortTimeString()
+                            </span>
+                        }
                     }
                     else
                     {
                         <span>@MembersCount members</span>
                     }
+
                 </div>
             </div>
 
             <div class="room-actions">
-                <button class="icon-btn" title="Search">🔎</button>
-                <button class="icon-btn" title="Info">ℹ️</button>
+
+                @if (IsPrivate)
+                {
+                    <button class="icon-btn"
+                            title="Block user"
+                            @onclick="@(() => OnBlock.InvokeAsync())">
+                        🚫
+                    </button>
+                }
+
+                <button class="icon-btn"
+                        title="Mute"
+                        @onclick="@(() => OnMuteToggle.InvokeAsync())">
+                    @(IsMuted ? "🔔" : "🔕")
+                </button>
+
             </div>
+
+
         </div>
     }
 </div>
@@ -35,6 +61,10 @@
 @code {
     [Parameter] public RoomModel? Room { get; set; }
     [Parameter] public int MembersCount { get; set; }
+    [Parameter] public UserModel? OtherUser { get; set; }
+    [Parameter] public EventCallback OnMuteToggle { get; set; }
+    [Parameter] public EventCallback OnBlock { get; set; }
+    [Parameter] public bool IsMuted { get; set; }
 
     private bool IsPrivate => Room?.Type == "Private";
 

@@ -9,4 +9,6 @@ public sealed class RoomModel
 
     public Guid? OtherUserId { get; init; }
     public string? OtherDisplayName { get; init; }
+
+    public int UnreadCount { get; init; }
 }

@@ -80,6 +80,46 @@ namespace EnterpriseChat.Client.Services
             return (await res.Content.ReadFromJsonAsync<MessageDto>())!;
         }
 
+        public async Task<GroupMembersDto> GetGroupMembersAsync(Guid roomId)
+        {
+            await AttachTokenAsync();
+            return await _http.GetFromJsonAsync<GroupMembersDto>(
+                $"api/chat/groups/{roomId}/members")
+                ?? throw new Exception("Failed to load group members");
+        }
+
+        public async Task MuteRoomAsync(Guid roomId)
+        {
+            await AttachTokenAsync();
+            var res = await _http.PostAsync($"api/chat/mute/{roomId}", null);
+            res.EnsureSuccessStatusCode();
+        }
+
+        public async Task UnmuteRoomAsync(Guid roomId)
+        {
+            await AttachTokenAsync();
+            var res = await _http.DeleteAsync($"api/chat/mute/{roomId}");
+            res.EnsureSuccessStatusCode();
+        }
+
+        public async Task BlockUserAsync(Guid userId)
+        {
+            await AttachTokenAsync();
+            var res = await _http.PostAsync($"api/chat/block/{userId}", null);
+            res.EnsureSuccessStatusCode();
+        }
+
+        public async Task RemoveMemberAsync(Guid roomId, Guid userId)
+        {
+            await AttachTokenAsync();
+
+            var res = await _http.DeleteAsync(
+                $"api/chat/groups/{roomId}/members/{userId}");
+
+            res.EnsureSuccessStatusCode();
+        }
+
+
 
     }
 

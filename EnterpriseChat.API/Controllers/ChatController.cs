@@ -4,6 +4,7 @@ using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Features.Messaging.Handlers;
 using EnterpriseChat.Application.Features.Messaging.Queries;
 using EnterpriseChat.Application.Interfaces;
+using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using Microsoft.AspNetCore.Authorization;
@@ -25,27 +26,30 @@ public sealed class ChatController : ControllerBase
     private readonly BlockUserCommandHandler _blockUserHandler;
     private readonly MuteRoomCommandHandler _muteRoomHandler;
     private readonly UnmuteRoomCommandHandler _unmuteRoomHandler;
-
     private readonly IChatRoomRepository _roomRepository;
     private readonly IMessageBroadcaster _broadcaster;
+    private readonly GetMyRoomsQueryHandler _getMyRooms;
+
+
     public ChatController(
-	SendMessageCommandHandler sendMessageHandler,
-	GetMessagesQueryHandler getMessagesHandler,
-	GetMessageReadersQueryHandler getMessageReaders,
+    SendMessageCommandHandler sendMessageHandler,
+    GetMessagesQueryHandler getMessagesHandler,
+    GetMessageReadersQueryHandler getMessageReaders,
     CreateGroupChatHandler createGroupHandler,
     AddMemberToGroupHandler addMemberHandler,
     RemoveMemberFromGroupHandler removeMemberHandler,
     GetOrCreatePrivateRoomHandler getOrCreatePrivateRoomHandler
        , BlockUserCommandHandler blockUserHandler,
 MuteRoomCommandHandler muteRoomHandler,
-UnmuteRoomCommandHandler unmuteRoomHandler ,
- IChatRoomRepository roomRepository,             
-    IMessageBroadcaster broadcaster   )              
+UnmuteRoomCommandHandler unmuteRoomHandler,
+ IChatRoomRepository roomRepository,
+    IMessageBroadcaster broadcaster, 
+GetMyRoomsQueryHandler getMyRooms)
 
     {
-		_sendMessageHandler = sendMessageHandler;
-		_getMessagesHandler = getMessagesHandler;
-		_getMessageReaders = getMessageReaders;
+        _sendMessageHandler = sendMessageHandler;
+        _getMessagesHandler = getMessagesHandler;
+        _getMessageReaders = getMessageReaders;
         _createGroupHandler = createGroupHandler;
         _addMemberHandler = addMemberHandler;
         _removeMemberHandler = removeMemberHandler;
@@ -55,8 +59,9 @@ UnmuteRoomCommandHandler unmuteRoomHandler ,
         _unmuteRoomHandler = unmuteRoomHandler;
         _roomRepository = roomRepository;               // ✅
         _broadcaster = broadcaster;
+        _getMyRooms = getMyRooms;
     }
-	
+
 
     [HttpPost("messages")]
     [ProducesResponseType(typeof(MessageDto), StatusCodes.Status200OK)]
@@ -65,6 +70,9 @@ UnmuteRoomCommandHandler unmuteRoomHandler ,
         [FromBody] SendMessageRequest request,
         CancellationToken cancellationToken)
     {
+        if (request.Content.Length > 2000)
+            return BadRequest("Message too long.");
+
         if (request.RoomId == Guid.Empty)
             return BadRequest("RoomId is required.");
 
@@ -93,6 +101,8 @@ UnmuteRoomCommandHandler unmuteRoomHandler ,
 
         return Ok(result);
     }
+
+
     [HttpGet("rooms/{roomId}/messages")]
     [ProducesResponseType(typeof(IReadOnlyList<MessageReadDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMessages(
@@ -189,12 +199,13 @@ UnmuteRoomCommandHandler unmuteRoomHandler ,
         Guid userId,
         CancellationToken ct)
     {
-        await _addMemberHandler.Handle(
-     new AddMemberToGroupCommand(
+        await _removeMemberHandler.Handle(
+     new RemoveMemberFromGroupCommand(
          new RoomId(roomId),
          new UserId(userId),
-         GetCurrentUserId()), // ✅
+         GetCurrentUserId()),
      ct);
+
 
         return NoContent();
     }
@@ -284,43 +295,75 @@ UnmuteRoomCommandHandler unmuteRoomHandler ,
     [HttpGet("rooms/{roomId}")]
     public async Task<IActionResult> GetRoom(Guid roomId)
     {
-        
+        var room = await _roomRepository.GetByIdAsync(new RoomId(roomId));
+
+        if (room == null)
+            return NotFound();
+
+        // private room + user deleted
+        if (room.Type == RoomType.Private /* && room.IsOtherUserDeleted()*/)
+        {
+            return Ok(new
+            {
+                Id = roomId,
+                Type = "Private",
+                IsDeleted = true
+            });
+        }
 
         return Ok(new
         {
-            Id = roomId,
-            Name = $"Room {roomId.ToString()[..6]}",
-            Type = "Group"
+            Id = room.Id.Value,
+            Name = room.Name,
+            Type = room.Type.ToString()
         });
     }
 
 
+
+
     [HttpGet("rooms")]
-    public async Task<IActionResult> GetMyRooms()
+    [ProducesResponseType(typeof(IReadOnlyList<RoomListItemDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyRooms(CancellationToken ct)
     {
         var userId = GetCurrentUserId();
 
-        var rooms = new List<RoomListItemDto>
-    {
-        new()
-        {
-            Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-            Name = "Backend Team",
-            Type = "Group"
-        },
-        new()
-        {
-            Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-            Name = "Ahmed",
-            Type = "Private",
-            OtherUserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            OtherDisplayName = "Ahmed"
-        }
-    };
+        var result = await _getMyRooms.Handle(
+            new GetMyRoomsQuery(userId),
+            ct);
 
-        return Ok(rooms);
+        return Ok(result);
     }
 
+
+    [HttpGet("groups/{roomId}/members")]
+    public async Task<IActionResult> GetGroupMembers(
+    Guid roomId,
+    CancellationToken ct)
+    {
+        var room = await _roomRepository.GetByIdAsync(
+            new RoomId(roomId), ct);
+
+        if (room is null)
+            return NotFound();
+
+        var me = GetCurrentUserId();
+
+        if (!room.Members.Any(m => m.UserId == me))
+            return Forbid();
+
+
+        return Ok(new
+        {
+            OwnerId = room.OwnerId.Value,
+            Members = room.Members.Select(m => new
+            {
+                Id = m.UserId.Value,
+                DisplayName = $"User {m.UserId.Value.ToString()[..6]}"
+            })
+        });
+
+    }
 
 
 

@@ -4,25 +4,86 @@
 @inject ApiClient Api
 @inject ChatHubClient Hub
 @inject CurrentUserContext CurrentUser
+@inject NavigationManager Nav
 
 
 <TopBar Room="@room"
-        MembersCount="@onlineUsers.Count" />
+        MembersCount="@onlineUsers.Count"
+        OtherUser="@otherUser"
+        IsMuted="@isMuted"
+        OnMuteToggle="ToggleMute"
+        OnBlock="BlockOtherUser" />
 
-@if (room?.Type != "Private")
+@if (room == null)
 {
-    <PresenceBar OnlineUsers="@onlineUsers" />
+    <div class="chat-error">
+        This room no longer exists.
+    </div>
 }
+else
+{
+    @* ===== Removed from group ===== *@
+    @if (isRemoved)
+    {
+        <div class="chat-error">
+            You were removed from this group.
+        </div>
+    }
+    else
+    {
+        @* ===== Group members ===== *@
+        @if (room.Type == "Group" && groupMembers != null)
+        {
+            <GroupMembersPanel
+                OwnerId="@groupMembers.OwnerId"
+                Members="@groupMembers.Members"
+                CurrentUserId="@currentUserId"
+                OnRemove="RemoveMember"
+                OnLeave="LeaveGroup" />
+        }
 
-<MessageList Messages="@messages"
-             CurrentUserId="@currentUserId"
-             OnRetry="RetrySend" />
+        @* ===== Presence ===== *@
+        @if (room.Type != "Private")
+        {
+            <PresenceBar OnlineUsers="@onlineUsers" />
+        }
 
+        @* ===== Connection banner ===== *@
+        @if (isDisconnected)
+        {
+            <div class="connection-banner">
+                Reconnecting…
+            </div>
+        }
 
-<TypingIndicator TypingUsers="@typingUsers" />
+        @* ===== Messages ===== *@
+        <MessageList Messages="@messages"
+                     CurrentUserId="@currentUserId"
+                     OnRetry="RetrySend"
+                     OnReachedBottom="HandleReachedBottom" />
 
-<ChatInput OnSend="Send"
-           OnUserTyping="NotifyTyping" />
+        <TypingIndicator TypingUsers="@typingUsers" />
+
+        @* ===== Block / Deleted handling ===== *@
+        @if (isOtherDeleted)
+        {
+            <div class="blocked-banner">
+                This user is no longer available.
+            </div>
+        }
+        else if (isBlocked)
+        {
+            <div class="blocked-banner">
+                You blocked this user. Unblock to send messages.
+            </div>
+        }
+        else
+        {
+            <ChatInput OnSend="Send"
+                       OnUserTyping="NotifyTyping" />
+        }
+    }
+}
 
 @code {
     [Parameter] public Guid RoomId { get; set; }
@@ -31,28 +92,160 @@
     private List<MessageModel> messages = new();
     private List<UserModel> onlineUsers = new();
     private List<UserModel> typingUsers = new();
+    private UserModel? otherUser;
+    private GroupMembersModel? groupMembers;
 
     private Guid currentUserId;
 
+    private bool isMuted;
+    private bool isBlocked;
+    private bool isDisconnected;
+    private bool isOtherDeleted;
+    private bool isRemoved;
 
     protected override async Task OnInitializedAsync()
     {
-        currentUserId = await CurrentUser.GetUserIdAsync()
-            ?? throw new InvalidOperationException("User not authenticated");
+        try
+        {
+            currentUserId = await CurrentUser.GetUserIdAsync()
+                ?? throw new InvalidOperationException("User not authenticated");
 
-        room = await Api.GetRoomAsync(RoomId);
-        messages = (await Api.GetMessagesAsync(RoomId)).ToList();
+            room = await Api.GetRoomAsync(RoomId);
 
-        Hub.MessageReceived += OnMessageReceived;
-        Hub.RoomPresenceUpdated += OnRoomPresenceUpdated;
-        Hub.TypingStarted += OnTypingStarted;
-        Hub.TypingStopped += OnTypingStopped;
+            if (room == null)
+            {
+                Nav.NavigateTo("/rooms");
+                return;
+            }
+
+            messages = (await Api.GetMessagesAsync(RoomId)).ToList();
+        }
+        catch
+        {
+            Nav.NavigateTo("/rooms");
+            return;
+        }
+
+        // ===== Group members =====
+        if (room.Type == "Group")
+        {
+            var dto = await Api.GetGroupMembersAsync(RoomId);
+
+            groupMembers = new GroupMembersModel
+            {
+                OwnerId = dto.OwnerId,
+                Members = dto.Members
+                    .Select(m => new UserModel
+                    {
+                        Id = m.Id,
+                        DisplayName = m.DisplayName
+                    })
+                    .ToList()
+            };
+        }
+
+        // ===== Private chat =====
+        if (room.Type == "Private")
+        {
+            if (room.OtherUserId == null)
+            {
+                isOtherDeleted = true;
+            }
+            else
+            {
+                otherUser = new UserModel
+                {
+                    Id = room.OtherUserId.Value,
+                    DisplayName = room.OtherDisplayName!,
+                    IsOnline = false
+                };
+            }
+        }
+
+        RegisterHubEvents();
 
         await Hub.ConnectAsync();
         await Hub.JoinRoomAsync(RoomId);
     }
 
+    private void RegisterHubEvents()
+    {
+        Hub.MessageReceived += OnMessageReceived;
+        Hub.RoomPresenceUpdated += OnRoomPresenceUpdated;
+        Hub.TypingStarted += OnTypingStarted;
+        Hub.TypingStopped += OnTypingStopped;
+        Hub.MessageDelivered += OnMessageDelivered;
 
+        Hub.MessageRead += id =>
+        {
+            if (!messages.Any(m => m.Id == id))
+                return;
+
+            var msg = messages.First(m => m.Id == id);
+            if (msg.Status != MessageStatus.Read)
+            {
+                msg.Status = MessageStatus.Read;
+                InvokeAsync(StateHasChanged);
+            }
+        };
+
+        Hub.UserOnline += userId =>
+        {
+            if (otherUser?.Id == userId)
+            {
+                otherUser.IsOnline = true;
+                otherUser.LastSeen = null;
+                InvokeAsync(StateHasChanged);
+            }
+        };
+
+        Hub.UserOffline += userId =>
+        {
+            if (otherUser?.Id == userId)
+            {
+                otherUser.IsOnline = false;
+                otherUser.LastSeen = DateTime.UtcNow;
+                InvokeAsync(StateHasChanged);
+            }
+        };
+
+        Hub.PresenceSnapshot += users =>
+        {
+            if (otherUser == null) return;
+
+            otherUser.IsOnline = users.Contains(otherUser.Id);
+            if (!otherUser.IsOnline)
+                otherUser.LastSeen ??= DateTime.UtcNow;
+
+            InvokeAsync(StateHasChanged);
+        };
+
+        Hub.Disconnected += () =>
+        {
+            isDisconnected = true;
+            InvokeAsync(StateHasChanged);
+        };
+
+        Hub.Reconnected += () =>
+        {
+            isDisconnected = false;
+            InvokeAsync(StateHasChanged);
+        };
+
+        Hub.RemovedFromRoom += roomId =>
+        {
+            if (roomId == RoomId)
+            {
+                isRemoved = true;
+                InvokeAsync(StateHasChanged);
+
+                Task.Delay(1500).ContinueWith(_ =>
+                    Nav.NavigateTo("/rooms"));
+            }
+        };
+    }
+
+    // ===== Presence =====
     private async void OnRoomPresenceUpdated(Guid roomId, int _)
     {
         if (roomId != RoomId)
@@ -73,8 +266,12 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    // ===== Typing =====
     private void OnTypingStarted(Guid roomId, Guid userId)
     {
+        if (isBlocked || isOtherDeleted)
+            return;
+
         if (roomId != RoomId || userId == currentUserId)
             return;
 
@@ -95,14 +292,16 @@
         InvokeAsync(StateHasChanged);
     }
 
+    // ===== Messages =====
     private void OnMessageReceived(MessageModel message)
     {
-        // لو الرسالة جاية مني وموجودة Pending (نفس content) → replace
+        if (message.RoomId != RoomId)
+            return;
+
         var existing = messages.FirstOrDefault(m =>
             m.Status == MessageStatus.Pending &&
-            m.SenderId == message.SenderId &&
-            m.RoomId == message.RoomId &&
-            m.Content == message.Content);
+            m.Content == message.Content &&
+            m.SenderId == message.SenderId);
 
         if (existing != null)
         {
@@ -118,17 +317,16 @@
         InvokeAsync(StateHasChanged);
     }
 
-
     private async Task Send(string text)
     {
+        if (isBlocked || isOtherDeleted)
+            return;
+
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        // 1) Optimistic message
-        var clientId = Guid.NewGuid();
         var pending = new MessageModel
         {
-            ClientId = clientId,
             Id = Guid.Empty,
             RoomId = RoomId,
             SenderId = currentUserId,
@@ -142,29 +340,23 @@
 
         try
         {
-            // 2) HTTP send
             var dto = await Api.SendMessageAsync(RoomId, text);
-
-            // 3) Mark as Sent locally (await reconcile from SignalR too)
             pending.Id = dto.Id;
             pending.Status = MessageStatus.Sent;
-            pending.Error = null;
-
-            await InvokeAsync(StateHasChanged);
         }
-        catch (Exception ex)
+        catch
         {
             pending.Status = MessageStatus.Failed;
             pending.Error = "Failed to send";
-            await InvokeAsync(StateHasChanged);
         }
+
+        await InvokeAsync(StateHasChanged);
     }
+
     private async Task RetrySend(MessageModel msg)
     {
-        // رجّعها Pending تاني
         msg.Status = MessageStatus.Pending;
         msg.Error = null;
-        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -181,7 +373,58 @@
         await InvokeAsync(StateHasChanged);
     }
 
-
     private Task NotifyTyping()
         => Hub.NotifyTypingAsync(RoomId);
+
+    private Task HandleReachedBottom(Guid lastMessageId)
+        => lastMessageId == Guid.Empty
+            ? Task.CompletedTask
+            : Hub.MarkRoomReadAsync(RoomId, lastMessageId);
+
+    private void OnMessageDelivered(Guid messageId)
+    {
+        var msg = messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg?.Status == MessageStatus.Sent)
+        {
+            msg.Status = MessageStatus.Delivered;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // ===== Group actions =====
+    private async Task RemoveMember(Guid userId)
+    {
+        await Api.RemoveMemberAsync(RoomId, userId);
+        groupMembers?.Members.RemoveAll(u => u.Id == userId);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LeaveGroup()
+    {
+        await Api.RemoveMemberAsync(RoomId, currentUserId);
+        Nav.NavigateTo("/rooms");
+    }
+
+    // ===== Block / Mute =====
+    private async Task BlockOtherUser()
+    {
+        if (otherUser == null)
+            return;
+
+        await Api.BlockUserAsync(otherUser.Id);
+        isBlocked = true;
+        typingUsers.Clear();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleMute()
+    {
+        if (!isMuted)
+            await Api.MuteRoomAsync(RoomId);
+        else
+            await Api.UnmuteRoomAsync(RoomId);
+
+        isMuted = !isMuted;
+        await InvokeAsync(StateHasChanged);
+    }
 }

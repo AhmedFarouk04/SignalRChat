@@ -46,6 +46,16 @@ public sealed class ChatRoomRepository : IChatRoomRepository
                 r.Members.Any(m => m.UserId == b))
             .FirstOrDefaultAsync(ct);
     }
+    public async Task<IReadOnlyList<ChatRoom>> GetForUserAsync(
+    UserId userId,
+    CancellationToken cancellationToken = default)
+    {
+        return await _context.ChatRooms
+            .Include(r => r.Members)
+            .Where(r => r.Members.Any(m => m.UserId == userId))
+            .OrderByDescending(r => r.CreatedAt) // لو عندك CreatedAt
+            .ToListAsync(cancellationToken);
+    }
 
 
 }

@@ -17,8 +17,4 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.1.2" />
 	  <ProjectReference Include="..\EnterpriseChat.Application\EnterpriseChat.Application.csproj" />  </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="NewFolder\" />
-  </ItemGroup>
-
 </Project>

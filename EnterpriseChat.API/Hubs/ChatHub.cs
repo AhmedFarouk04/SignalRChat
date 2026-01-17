@@ -17,13 +17,15 @@ public sealed class ChatHub : Hub
     private readonly IChatRoomRepository _roomRepository;
     private readonly IRoomPresenceService _roomPresence;
     private readonly ITypingService _typing;
+    private readonly MarkRoomReadCommandHandler _markRoomReadHandler;
     public ChatHub(
         IPresenceService presence,
         DeliverMessageCommandHandler deliverHandler,
         ReadMessageCommandHandler readHandler,
         IChatRoomRepository roomRepository,
         IRoomPresenceService roomPresence,
-        ITypingService typing)
+        ITypingService typing,
+        MarkRoomReadCommandHandler markRoomReadHandler)
     {
         _presence = presence;
         _deliverHandler = deliverHandler;
@@ -31,6 +33,7 @@ public sealed class ChatHub : Hub
         _roomRepository = roomRepository;
         _roomPresence = roomPresence;
         _typing = typing;
+        _markRoomReadHandler = markRoomReadHandler;
     }
 
     public override async Task OnConnectedAsync()
@@ -164,4 +167,22 @@ public sealed class ChatHub : Hub
 
         return new UserId(Guid.Parse(id));
     }
+    public async Task MarkRoomRead(
+    Guid roomId,
+    Guid lastMessageId)
+    {
+        await _markRoomReadHandler.Handle(
+            new MarkRoomReadCommand(
+                new RoomId(roomId),
+                GetUserId(),
+                MessageId.From(lastMessageId)));
+    }
+
+    public async Task RemoveMember(Guid roomId, Guid userId)
+    {
+        await Clients.User(userId.ToString())
+            .SendAsync("RemovedFromRoom", roomId);
+    }
+
+
 }

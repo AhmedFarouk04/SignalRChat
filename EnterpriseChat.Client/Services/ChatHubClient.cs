@@ -23,6 +23,11 @@ public sealed class ChatHubClient
     public event Action<Guid, Guid>? TypingStarted; // (roomId, userId)
     public event Action<Guid, Guid>? TypingStopped;
     public event Action<Guid, int>? RoomPresenceUpdated;
+    public event Action? Disconnected;
+    public event Action? Reconnected;
+    public event Action<Guid>? RemovedFromRoom;
+  
+
     public ChatHubClient(ITokenService tokenService)
     {
         _tokenService = tokenService;
@@ -42,6 +47,25 @@ public sealed class ChatHubClient
             .Build();
 
         RegisterHandlers();
+
+        _connection.Reconnecting += error =>
+        {
+            Disconnected?.Invoke();
+            return Task.CompletedTask;
+        };
+
+        _connection.Reconnected += _ =>
+        {
+            Reconnected?.Invoke();
+            return Task.CompletedTask;
+        };
+
+        _connection.Closed += error =>
+        {
+            Disconnected?.Invoke();
+            return Task.CompletedTask;
+        };
+
         await _connection.StartAsync();
 
         var onlineUsers =
@@ -49,6 +73,8 @@ public sealed class ChatHubClient
 
         PresenceSnapshot?.Invoke(onlineUsers);
     }
+
+
 
     private void RegisterHandlers()
     {
@@ -67,6 +93,7 @@ public sealed class ChatHubClient
         _connection.On<Guid>("UserOffline",
             id => UserOffline?.Invoke(id));
 
+
    
 
         _connection.On<Guid, int>("RoomPresenceUpdated",
@@ -77,6 +104,11 @@ public sealed class ChatHubClient
 
         _connection.On<Guid, Guid>("TypingStopped",
             (roomId, userId) => TypingStopped?.Invoke(roomId, userId));
+
+        _connection.On<Guid>("RemovedFromRoom",
+        roomId => RemovedFromRoom?.Invoke(roomId));
+
+
     }
 
     public Task JoinRoomAsync(Guid roomId)
@@ -119,4 +151,11 @@ public sealed class ChatHubClient
             catch (TaskCanceledException) { }
         }, token);
     }
+
+    public Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId)
+    => _connection!.InvokeAsync(
+        "MarkRoomRead",
+        roomId,
+        lastMessageId);
+
 }
