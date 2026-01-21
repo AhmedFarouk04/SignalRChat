@@ -1,0 +1,27 @@
+﻿@using EnterpriseChat.Client.Authentication.Abstractions
+@inject ICurrentUser CurrentUser
+@inject NavigationManager Nav
+
+@if (_authorized)
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _authorized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await CurrentUser.GetUserIdAsync();
+
+        if (userId == null)
+        {
+            Nav.NavigateTo("/login", true);
+            return;
+        }
+
+        _authorized = true;
+    }
+}

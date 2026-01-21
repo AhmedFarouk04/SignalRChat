@@ -12,21 +12,28 @@ public sealed class DeliverRoomMessagesCommandHandler
     private readonly IMessageReceiptRepository _receiptRepo;
     private readonly IMessageRepository _messageRepo;
     private readonly IUnitOfWork _uow;
-
+    private readonly IRoomAuthorizationService _auth;
     public DeliverRoomMessagesCommandHandler(
         IMessageReceiptRepository receiptRepo,
         IMessageRepository messageRepo,
+        IRoomAuthorizationService authorizationService,
         IUnitOfWork uow)
     {
         _receiptRepo = receiptRepo;
         _messageRepo = messageRepo;
         _uow = uow;
+        _auth=authorizationService;
     }
 
     public async Task<Unit> Handle(
         DeliverRoomMessagesCommand request,
         CancellationToken ct)
     {
+        await _auth.EnsureUserIsMemberAsync(
+    request.RoomId,
+    request.UserId,
+    ct);
+
         var messages = await _messageRepo
             .GetByRoomAsync(request.RoomId, 0, 100, ct);
 

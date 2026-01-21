@@ -1,9 +1,9 @@
-﻿
-using EnterpriseChat.Domain.ValueObjects;
-namespace EnterpriseChat.Application.Features.Messaging.Commands
-{
-    public sealed record LeaveGroupCommand(
+﻿using EnterpriseChat.Domain.ValueObjects;
+using MediatR;
+
+namespace EnterpriseChat.Application.Features.Messaging.Commands;
+
+public sealed record LeaveGroupCommand(
     RoomId RoomId,
-    UserId UserId
-);
-}
+    UserId RequesterId
+) : IRequest<Unit>;

@@ -30,6 +30,11 @@ public sealed class ChatRoomMemberConfiguration
                 value => new UserId(value))
             .IsRequired();
 
+        builder.Property(x => x.IsAdmin)   
+           .IsRequired()
+           .HasDefaultValue(false);
+
+
         builder.HasIndex(x => x.UserId);
     }
 }

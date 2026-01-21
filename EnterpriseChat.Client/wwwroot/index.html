@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="Chat.Client.styles.css" rel="stylesheet" />
-    <link href="css/chat-ui.css" rel="stylesheet" />
 </head>
 
 <body>
@@ -28,7 +27,11 @@
         <a class="dismiss">🗙</a>
     </div>
     <script src="_framework/blazor.webassembly.js"></script>
-    <script src="js/scroll.js"></script>
+    <script type="module">
+        import { scrollToBottom, isAtBottom } from './js/scroll.js';
+        window.scrollToBottom = scrollToBottom;
+        window.isAtBottom = isAtBottom;
+    </script>
 
 </body>
 

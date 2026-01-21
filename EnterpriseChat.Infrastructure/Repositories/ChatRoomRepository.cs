@@ -57,5 +57,21 @@ public sealed class ChatRoomRepository : IChatRoomRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<ChatRoom?> GetByIdWithMembersAsync(
+     RoomId roomId,
+     CancellationToken ct = default)
+    {
+        return await _context.ChatRooms
+            .Include(r => r.Members)
+            .FirstOrDefaultAsync(r => r.Id == roomId, ct);
+    }
+    public Task DeleteAsync(ChatRoom room, CancellationToken ct = default)
+    {
+        _context.ChatRooms.Remove(room);
+        return Task.CompletedTask;
+    }
+
+
+
 
 }

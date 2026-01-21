@@ -45,5 +45,8 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         builder.Ignore(x => x.DomainEvents);
         builder.Ignore(x => x.Receipts);
+
+        builder.HasIndex(x => x.RoomId);
+
     }
 }

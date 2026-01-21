@@ -49,18 +49,34 @@ public class Message
     public void MarkDelivered(UserId userId)
     {
         var receipt = _receipts.FirstOrDefault(r => r.UserId == userId);
-        receipt?.MarkDelivered();
+
+        if (receipt == null)
+            return;
+
+        if (receipt.Status >= MessageStatus.Delivered)
+            return;
+
+        receipt.MarkDelivered();
 
         AddDomainEvent(new MessageDeliveredEvent(Id, userId));
     }
 
+
     public void MarkRead(UserId userId)
     {
         var receipt = _receipts.FirstOrDefault(r => r.UserId == userId);
-        receipt?.MarkRead();
+
+        if (receipt == null)
+            return;
+
+        if (receipt.Status == MessageStatus.Read)
+            return;
+
+        receipt.MarkRead();
 
         AddDomainEvent(new MessageReadEvent(Id, userId));
     }
+
 
     private void AddDomainEvent(DomainEvent domainEvent)
     {

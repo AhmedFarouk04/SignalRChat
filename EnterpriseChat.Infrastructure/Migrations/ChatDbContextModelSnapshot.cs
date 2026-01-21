@@ -77,6 +77,11 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.Property<Guid?>("ChatRoomId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsAdmin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsOwner")
                         .HasColumnType("bit");
 
@@ -112,6 +117,8 @@ namespace EnterpriseChat.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RoomId");
 
                     b.ToTable("Messages");
                 });
@@ -165,6 +172,15 @@ namespace EnterpriseChat.Infrastructure.Migrations
                         .WithMany("Members")
                         .HasForeignKey("ChatRoomId");
 
+                    b.HasOne("EnterpriseChat.Domain.Entities.ChatRoom", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnterpriseChat.Domain.Entities.Message", b =>
+                {
                     b.HasOne("EnterpriseChat.Domain.Entities.ChatRoom", null)
                         .WithMany()
                         .HasForeignKey("RoomId")

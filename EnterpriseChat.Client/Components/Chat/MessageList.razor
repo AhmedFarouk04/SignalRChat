@@ -1,6 +1,6 @@
 ﻿@using EnterpriseChat.Client.Models
-@using Microsoft.JSInterop
-@inject IJSRuntime JS
+@using EnterpriseChat.Client.Services.JsInterop
+@inject IScrollService Scroll
 
 <div class="message-list"
      @ref="listRef"
@@ -26,7 +26,6 @@
     [Parameter] public Guid CurrentUserId { get; set; }
     [Parameter] public EventCallback<MessageModel> OnRetry { get; set; }
     [Parameter] public EventCallback<Guid> OnReachedBottom { get; set; }
-
     [Parameter] public bool AutoScroll { get; set; } = true;
 
     private ElementReference listRef;
@@ -43,7 +42,7 @@
         if (firstRender)
         {
             if (AutoScroll)
-                await JS.InvokeVoidAsync("scrollHelper.scrollToBottom", listRef);
+                await Scroll.ScrollToBottomAsync(listRef);
 
             lastMessageCount = Messages.Count;
             return;
@@ -54,11 +53,11 @@
 
         if (Messages.Count > lastMessageCount)
         {
-            isAtBottom = await JS.InvokeAsync<bool>("scrollHelper.isAtBottom", listRef);
+            isAtBottom = await Scroll.IsAtBottomAsync(listRef);
 
             if (AutoScroll && isAtBottom)
             {
-                await JS.InvokeVoidAsync("scrollHelper.scrollToBottom", listRef);
+                await Scroll.ScrollToBottomAsync(listRef);
                 showUnreadDivider = false;
 
                 if (Messages.Count > 0)
@@ -78,7 +77,7 @@
         if (listRef.Context is null)
             return;
 
-        isAtBottom = await JS.InvokeAsync<bool>("scrollHelper.isAtBottom", listRef);
+        isAtBottom = await Scroll.IsAtBottomAsync(listRef);
 
         if (isAtBottom)
         {

@@ -1,0 +1,147 @@
+﻿.chat-title {
+    margin-bottom: 8px;
+}
+
+.message-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 6px;
+    display: flex;
+    flex-direction: column;
+}
+
+.message-bubble {
+    max-width: 70%;
+    padding: 10px 12px;
+    border-radius: var(--radius-lg);
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: fadeIn 0.18s ease-out;
+}
+
+    .message-bubble.mine {
+        align-self: flex-end;
+        background: #2563eb;
+        color: white;
+    }
+
+    .message-bubble.theirs {
+        align-self: flex-start;
+        background: var(--bg-message);
+    }
+
+.message-meta {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+.message-bubble.theirs .message-meta {
+    justify-content: flex-start;
+}
+
+.status.sent {
+    opacity: 0.5;
+}
+
+.status.delivered {
+    opacity: 0.8;
+}
+
+.status.read {
+    color: #38bdf8;
+}
+
+.unread-divider {
+    position: sticky;
+    top: 0;
+    background: #eef2ff;
+    color: #3730a3;
+    padding: 6px 10px;
+    border-radius: 10px;
+    margin: 8px auto;
+    width: fit-content;
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.presence-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.presence-user {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+    .dot.online {
+        background: #22c55e;
+    }
+
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.chat-input-wrapper {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.chat-input {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+}
+
+.send-btn {
+    padding: 0 16px;
+    background: var(--accent-main);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    color: black;
+}
+
+.blocked-banner,
+.chat-error {
+    padding: 12px;
+    text-align: center;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.blocked-banner {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.chat-error {
+    background: #fee2e2;
+    color: #991b1b;
+}

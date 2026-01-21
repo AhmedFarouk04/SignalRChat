@@ -1,5 +1,7 @@
-﻿@inject ITokenService TokenService
-@inject AuthStateProvider AuthProvider
+﻿@using EnterpriseChat.Client.Authentication.Abstractions
+@using EnterpriseChat.Client.Authentication.Services
+@inject ITokenStore TokenStore
+@inject JwtAuthStateProvider AuthProvider
 @inject NavigationManager Nav
 
 <h3>Login</h3>
@@ -9,8 +11,9 @@
 @code {
     private async Task DoLogin()
     {
-        await TokenService.SetTokenAsync("mock-jwt-token");
+        await TokenStore.SetAsync("mock-jwt-token");
         AuthProvider.Notify();
         Nav.NavigateTo("/rooms");
     }
 }
+

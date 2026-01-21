@@ -1,13 +1,24 @@
 ﻿using EnterpriseChat.Domain.ValueObjects;
 
+namespace EnterpriseChat.Application.Interfaces;
 
-namespace EnterpriseChat.Application.Interfaces
+public interface IRoomAuthorizationService
 {
-    public interface IRoomAuthorizationService
-    {
-        Task<bool> CanAccessAsync(
-            RoomId roomId,
-            UserId userId,
-            CancellationToken cancellationToken = default);
-    }
+    Task EnsureUserIsMemberAsync(
+        RoomId roomId,
+        UserId userId,
+        CancellationToken ct = default);
+
+    Task EnsureUserIsOwnerAsync(
+        RoomId roomId,
+        UserId userId,
+        CancellationToken ct = default);
+
+    Task EnsureUserIsAdminAsync(
+        RoomId roomId,
+        UserId userId,
+        CancellationToken ct = default);
+
+
+
 }

@@ -1,0 +1,17 @@
+﻿:root {
+    --bg-app: #0f172a;
+    --bg-sidebar: #020617;
+    --bg-panel: #020617;
+    --bg-message: #1e293b;
+    --bg-input: #020617;
+    --text-primary: #e5e7eb;
+    --text-secondary: #94a3b8;
+    --text-accent: #38bdf8;
+    --border-subtle: #1e293b;
+    --accent-main: #38bdf8;
+    --accent-hover: #0ea5e9;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --transition-fast: 0.15s ease;
+}

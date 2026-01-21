@@ -1,11 +1,13 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Queries;
+using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
+using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Handlers;
 
-public sealed class GetMyRoomsQueryHandler
+public sealed class GetMyRoomsQueryHandler : IRequestHandler<GetMyRoomsQuery, IReadOnlyList<RoomListItemDto>>
 {
     private readonly IChatRoomRepository _rooms;
     private readonly IMessageRepository _messages;
@@ -25,41 +27,37 @@ public sealed class GetMyRoomsQueryHandler
         GetMyRoomsQuery query,
         CancellationToken ct = default)
     {
-        
-        var myRooms = await _rooms.GetForUserAsync(query.UserId, ct);
+        var myRooms = await _rooms.GetForUserAsync(query.CurrentUserId, ct);
 
         var result = new List<RoomListItemDto>(myRooms.Count);
 
         foreach (var room in myRooms)
         {
-         
-            var messages = await _messages.GetByRoomAsync(room.Id, 0, 200, ct);
+            var recentMessages = await _messages.GetByRoomAsync(room.Id, skip: 0, take: 200, ct);
 
-            var unread = 0;
-
-            foreach (var msg in messages)
+            int unreadCount = 0;
+            foreach (var msg in recentMessages)
             {
-                if (msg.SenderId == query.UserId)
+                if (msg.SenderId == query.CurrentUserId)
                     continue;
 
-                var receipt = await _receipts.GetAsync(msg.Id, query.UserId, ct);
-
-                if (receipt is null || receipt.Status < Domain.Enums.MessageStatus.Read)
-                    unread++;
+                var receipt = await _receipts.GetAsync(msg.Id, query.CurrentUserId, ct);
+                if (receipt == null || receipt.Status < MessageStatus.Read)
+                    unreadCount++;
             }
 
             string name = room.Name ?? "Chat";
-            Guid? otherId = null;
-            string? otherName = null;
+            Guid? otherUserId = null;
+            string? otherDisplayName = null;
 
-            if (room.Type == Domain.Enums.RoomType.Private)
+            if (room.Type == RoomType.Private)
             {
-                var otherMember = room.Members.FirstOrDefault(m => m.UserId != query.UserId);
+                var otherMember = room.Members.FirstOrDefault(m => m.UserId != query.CurrentUserId);
                 if (otherMember != null)
                 {
-                    otherId = otherMember.UserId.Value;
-                    otherName = $"User {otherMember.UserId.Value.ToString()[..6]}";
-                    name = otherName;
+                    otherUserId = otherMember.UserId.Value;
+                    otherDisplayName = $"User {otherUserId.Value.ToString()[..8]}";
+                    name = otherDisplayName;
                 }
             }
 
@@ -68,12 +66,12 @@ public sealed class GetMyRoomsQueryHandler
                 Id = room.Id.Value,
                 Name = name,
                 Type = room.Type.ToString(),
-                OtherUserId = otherId,
-                OtherDisplayName = otherName,
-                UnreadCount = unread
+                OtherUserId = otherUserId,
+                OtherDisplayName = otherDisplayName,
+                UnreadCount = unreadCount
             });
         }
 
-        return result;
+        return result.AsReadOnly();
     }
 }

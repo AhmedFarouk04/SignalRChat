@@ -1,24 +1,15 @@
-﻿@using Microsoft.JSInterop
-@using EnterpriseChat.Client.Extensions
-@inject IJSRuntime JS
-
-<CascadingAuthenticationState>
+﻿<CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <RouteView RouteData="@routeData" />
+            <AuthorizeRouteView RouteData="@routeData"
+                                DefaultLayout="@typeof(MainLayout)">
+            </AuthorizeRouteView>
         </Found>
+
         <NotFound>
-            <p>Page not found</p>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <h3>Page not found</h3>
+            </LayoutView>
         </NotFound>
     </Router>
 </CascadingAuthenticationState>
-
-@code {
-    protected override void OnAfterRender(bool firstRender)
-    {
-        if (firstRender)
-        {
-            ScrollExtensions.Init(JS);
-        }
-    }
-}

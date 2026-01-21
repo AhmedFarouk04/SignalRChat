@@ -1,9 +1,6 @@
 ﻿using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Interfaces;
-using EnterpriseChat.Domain.ValueObjects;
-
-namespace EnterpriseChat.Application.Features.Messaging.Handlers;
 
 public sealed class ReadMessageCommandHandler
 {

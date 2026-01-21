@@ -1,0 +1,17 @@
+﻿html, body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    color: var(--text-primary);
+    background: var(--bg-app);
+}
+
+h1:focus {
+    outline: none;
+}
+
+a, .btn-link {
+    color: #0071c1;
+}
+
+code {
+    color: #c02d76;
+}

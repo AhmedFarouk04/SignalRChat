@@ -1,36 +1,40 @@
 ﻿@page "/rooms"
-@inject ApiClient Api
+@using EnterpriseChat.Client.ViewModels
+@inject RoomsViewModel VM
 @inject NavigationManager Nav
 
-<div class="rooms-page">
-    <h2 class="rooms-title">Chats</h2>
+<AuthGuard>
+    <div class="rooms-page">
+        <h2 class="rooms-title">Chats</h2>
 
-    @if (rooms == null)
-    {
-        <div class="rooms-loading">Loading…</div>
-    }
-    else if (!rooms.Any())
-    {
-        <div class="rooms-empty">No conversations yet</div>
-    }
-    else
-    {
-        <ul class="rooms-list">
-            @foreach (var room in rooms)
-            {
-                <RoomListItem Room="room"
-                              OnOpen="Open" />
-            }
-        </ul>
-    }
-</div>
+        @if (VM.UiError != null)
+        {
+            <div class="rooms-error">@VM.UiError</div>
+        }
+        else if (VM.IsLoading)
+        {
+            <div class="rooms-loading">Loading…</div>
+        }
+        else if (VM.IsEmpty)
+        {
+            <div class="rooms-empty">No conversations yet</div>
+        }
+        else
+        {
+            <ul class="rooms-list">
+                @foreach (var room in VM.Rooms!)
+                {
+                    <RoomListItem Room="room" OnOpen="Open" />
+                }
+            </ul>
+        }
+    </div>
+</AuthGuard>
 
 @code {
-    private IReadOnlyList<RoomModel>? rooms;
-
     protected override async Task OnInitializedAsync()
     {
-        rooms = await Api.GetRoomsAsync();
+        await VM.LoadAsync();
     }
 
     private void Open(Guid roomId)

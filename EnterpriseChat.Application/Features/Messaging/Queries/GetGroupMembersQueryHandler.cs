@@ -1,4 +1,5 @@
 ﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Interfaces;
 using MediatR;
 
@@ -8,23 +9,26 @@ public sealed class GetGroupMembersQueryHandler
     : IRequestHandler<GetGroupMembersQuery, GroupMembersDto>
 {
     private readonly IChatRoomRepository _roomRepository;
+    private readonly IRoomAuthorizationService _auth;
 
-    public GetGroupMembersQueryHandler(IChatRoomRepository roomRepository)
+    public GetGroupMembersQueryHandler(
+        IChatRoomRepository roomRepository,
+        IRoomAuthorizationService auth)
     {
         _roomRepository = roomRepository;
+        _auth = auth;
     }
 
-    public async Task<GroupMembersDto> Handle(
-        GetGroupMembersQuery request,
-        CancellationToken ct)
+    public async Task<GroupMembersDto> Handle(GetGroupMembersQuery request, CancellationToken ct)
     {
-        var room = await _roomRepository.GetByIdAsync(request.RoomId, ct);
+        await _auth.EnsureUserIsMemberAsync(request.RoomId, request.RequesterId, ct);
 
+        var room = await _roomRepository.GetByIdWithMembersAsync(request.RoomId, ct);
         if (room is null)
             throw new InvalidOperationException("Room not found");
 
-        if (!room.Members.Any(m => m.UserId == request.RequesterId))
-            throw new UnauthorizedAccessException();
+        if (room.OwnerId is null)
+            throw new InvalidOperationException("Group room owner not set.");
 
         return new GroupMembersDto(
             room.OwnerId.Value,

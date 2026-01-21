@@ -1,9 +1,5 @@
 ﻿@using EnterpriseChat.Client.Models
-@using System.Linq
-@using System.Threading.Tasks
 @using Microsoft.AspNetCore.Components
-
-@inject ApiClient Api
 
 <div class="message-bubble @(IsMine ? "mine" : "theirs")">
     <div class="message-content">
@@ -18,17 +14,16 @@
         @if (IsMine)
         {
             <span class="status @StatusClass"
-                  title="@TooltipText"
-                  @onmouseenter="LoadReadersIfNeeded">
+                  title="@TooltipText">
                 @StatusIcon
             </span>
+
             @if (Message.Status == MessageStatus.Failed)
             {
                 <button class="retry-btn" @onclick="Retry">
                     Retry
                 </button>
             }
-
         }
     </div>
 </div>
@@ -39,8 +34,9 @@
     [Parameter] public EventCallback<MessageModel> OnRetry { get; set; }
 
     private bool IsMine => Message.SenderId == CurrentUserId;
+
     private Task Retry()
-    => OnRetry.InvokeAsync(Message);
+        => OnRetry.InvokeAsync(Message);
 
     private string StatusIcon => Message.Status switch
     {
@@ -58,24 +54,12 @@
         _ => ""
     };
 
-    private string _tooltipText = "Read";
-    private bool _loaded;
-
-    private string TooltipText => _tooltipText;
-
-    private async Task LoadReadersIfNeeded()
+    private string TooltipText => Message.Status switch
     {
-        if (_loaded || Message.Status != MessageStatus.Read)
-            return;
-
-        var readers = await Api.GetReadersAsync(Message.Id);
-
-        _tooltipText =
-            readers.Count == 0
-                ? "Read"
-                : $"Read by {string.Join(", ", readers.Select(r => r.UserId.ToString()[..6]))}";
-
-        _loaded = true;
-        await InvokeAsync(StateHasChanged);
-    }
+        MessageStatus.Sent => "Sent",
+        MessageStatus.Delivered => "Delivered",
+        MessageStatus.Read => "Read",
+        MessageStatus.Failed => "Failed",
+        _ => string.Empty
+    };
 }

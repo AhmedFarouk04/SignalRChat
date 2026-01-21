@@ -1,0 +1,32 @@
+﻿.sidebar {
+    width: 240px;
+    background: var(--bg-sidebar);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-subtle);
+}
+
+.sidebar-header h2 {
+    margin: 0 0 24px;
+    font-size: 20px;
+    color: var(--text-accent);
+}
+
+.sidebar-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+    .sidebar-menu li {
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        color: var(--text-primary);
+        transition: background var(--transition-fast);
+    }
+
+        .sidebar-menu li:hover {
+            background: var(--bg-message);
+        }

@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>    <ItemGroup>
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
+    <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection.Libraries" Version="1.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.22" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.22" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="8.0.23" />
@@ -21,6 +22,10 @@
   <ItemGroup>
 	  <ProjectReference Include="..\EnterpriseChat.Application\EnterpriseChat.Application.csproj" />
 	  <ProjectReference Include="..\EnterpriseChat.Infrastructure\EnterpriseChat.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Contracts\Groups\" />
   </ItemGroup>
 
 </Project>

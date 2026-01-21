@@ -20,7 +20,6 @@ public sealed class ChatRoom
     public IReadOnlyCollection<ChatRoomMember> Members => _members.AsReadOnly();
     private ChatRoom() { }
 
-    // ✅ Keep your existing ctor (useful for creating rooms manually)
     public ChatRoom(string name, RoomType type, UserId creatorId)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -34,10 +33,9 @@ public sealed class ChatRoom
         if (type == RoomType.Group)
             OwnerId = creatorId;
 
-        AddMember(creatorId);
+        AddMember(creatorId, isOwner: type == RoomType.Group);
     }
 
-    // 🔥 Factory: Private room auto-create
     public static ChatRoom CreatePrivate(UserId a, UserId b)
     {
         var room = new ChatRoom
@@ -54,11 +52,10 @@ public sealed class ChatRoom
         return room;
     }
 
-    // 🔥 Factory: Group room
     public static ChatRoom CreateGroup(
-     string name,
-     UserId creator,
-     IEnumerable<UserId> members)
+      string name,
+      UserId creator,
+      IEnumerable<UserId> members)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Group name is required.");
@@ -68,10 +65,11 @@ public sealed class ChatRoom
             Id = RoomId.New(),
             Name = name,
             Type = RoomType.Group,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            OwnerId = creator
         };
 
-        room.AddMember(creator);
+        room.AddMember(creator, isOwner: true);
 
         foreach (var member in members.Distinct())
         {
@@ -79,41 +77,38 @@ public sealed class ChatRoom
                 room.AddMember(member);
         }
 
-
         return room;
     }
 
-    // ✅ Your existing seeding helper (keep it)
-    public static ChatRoom Seed(
-        RoomId id,
-        string name,
-        RoomType type,
-        IEnumerable<UserId> members)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Room name is required.");
 
-        var room = new ChatRoom
-        {
-            Id = id,
-            Name = name,
-            Type = type,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        foreach (var member in members)
-            room.AddMember(member);
-
-        return room;
-    }
 
     public void AddMember(UserId userId, bool isOwner = false)
     {
-        if (_members.Any(m => m.UserId == userId))
+        if (_members.Any(m => m.UserId.Value == userId.Value))
             return;
 
-        _members.Add(ChatRoomMember.Create(Id, userId, isOwner));
+        var isAdmin = isOwner;
+        _members.Add(ChatRoomMember.Create(Id, userId, isOwner, isAdmin));
     }
+
+
+    public void Leave(UserId userId)
+    {
+        if (Type == RoomType.Private)
+            throw new InvalidOperationException("Cannot leave private rooms.");
+
+        if (OwnerId == userId)
+            throw new InvalidOperationException("Owner cannot leave the group. Transfer ownership first.");
+
+        if (!_members.Any(m => m.UserId == userId))
+            throw new InvalidOperationException("User is not a member of this room.");
+
+        if (_members.Count == 1)
+            throw new InvalidOperationException("Cannot remove the last member of the group.");
+
+        RemoveMember(userId);
+    }
+
 
     public void RemoveMember(UserId userId)
     {
@@ -121,16 +116,33 @@ public sealed class ChatRoom
             throw new InvalidOperationException(
                 "Cannot remove members from private rooms.");
 
-        var member = _members.FirstOrDefault(m => m.UserId == userId);
+        var member = _members.FirstOrDefault(m => m.UserId.Value == userId.Value);
         if (member != null)
             _members.Remove(member);
+    }
+
+    public void SetOwner(UserId newOwnerId)
+    {
+        if (Type != RoomType.Group)
+            throw new InvalidOperationException("Only group rooms have owners.");
+
+        OwnerId = newOwnerId;
+
+        foreach (var m in _members)
+        {
+            if (m.UserId.Value == newOwnerId.Value)
+                m.SetOwner(true);
+            else
+                m.SetOwner(false);
+        }
     }
 
 
     public IReadOnlyList<UserId> GetMemberIds()
     => _members.Select(m => m.UserId).ToList();
     public bool IsMember(UserId userId)
-    => _members.Any(m => m.UserId == userId);
+      => _members.Any(m => m.UserId.Value == userId.Value);
+
 
     public bool IsPrivateWith(UserId a, UserId b)
      => Type == RoomType.Private &&

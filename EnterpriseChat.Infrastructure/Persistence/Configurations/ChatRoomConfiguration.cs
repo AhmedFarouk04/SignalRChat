@@ -33,11 +33,19 @@ public sealed class ChatRoomConfiguration
                 value => new UserId(value))
             .IsRequired(false);
 
+        builder.Navigation(x => x.Members)
+    .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.HasMany<ChatRoomMember>()
             .WithOne()
             .HasForeignKey(x => x.RoomId)
             .OnDelete(DeleteBehavior.Cascade);
-      
+
+        builder.HasMany<Message>()
+    .WithOne()
+    .HasForeignKey(m => m.RoomId)
+    .OnDelete(DeleteBehavior.Cascade);
+
 
 
     }

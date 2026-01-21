@@ -17,7 +17,7 @@
                 <span class="badge owner">Owner</span>
             }
 
-            @if (CanRemove(member))
+            @if (CanManageMembers && member.Id != OwnerId)
             {
                 <button @onclick="() => OnRemove.InvokeAsync(member.Id)">
                     Remove
@@ -26,7 +26,7 @@
         </div>
     }
 
-    @if (CanLeave)
+    @if (CanLeaveGroup)
     {
         <button class="leave-btn"
                 @onclick="OnLeave">
@@ -37,14 +37,10 @@
 
 @code {
     [Parameter] public Guid OwnerId { get; set; }
-    [Parameter] public Guid CurrentUserId { get; set; }
     [Parameter] public IReadOnlyList<UserModel> Members { get; set; } = [];
     [Parameter] public EventCallback<Guid> OnRemove { get; set; }
     [Parameter] public EventCallback OnLeave { get; set; }
 
-    private bool CanRemove(UserModel user)
-        => CurrentUserId == OwnerId && user.Id != OwnerId;
-
-    private bool CanLeave
-        => CurrentUserId != OwnerId;
+    [Parameter] public bool CanManageMembers { get; set; }
+    [Parameter] public bool CanLeaveGroup { get; set; }
 }
