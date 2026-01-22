@@ -49,7 +49,8 @@ builder.Services.AddSwaggerGen(c =>
 // DbContext
 builder.Services.AddDbContext<ChatDbContext>(options =>
     options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+         sql => sql.CommandTimeout(300)));
 
 // Infrastructure
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -169,6 +170,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
+    await db.Database.MigrateAsync();
     var seeder = new DatabaseSeeder(db);
     await seeder.SeedAsync();
 }

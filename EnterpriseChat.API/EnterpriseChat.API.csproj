@@ -24,8 +24,4 @@
 	  <ProjectReference Include="..\EnterpriseChat.Infrastructure\EnterpriseChat.Infrastructure.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Contracts\Groups\" />
-  </ItemGroup>
-
 </Project>

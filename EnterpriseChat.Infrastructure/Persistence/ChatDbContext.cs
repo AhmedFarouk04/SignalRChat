@@ -12,6 +12,10 @@ public sealed class ChatDbContext : DbContext
     public DbSet<BlockedUser> BlockedUsers => Set<BlockedUser>();
     public DbSet<MutedRoom> MutedRooms => Set<MutedRoom>();
     public DbSet<MessageReceipt> MessageReceipts => Set<MessageReceipt>();
+
+    public DbSet<ChatUser> Users => Set<ChatUser>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
+
     public ChatDbContext(DbContextOptions<ChatDbContext> options)
         : base(options)
     {

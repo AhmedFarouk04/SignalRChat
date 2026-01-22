@@ -15,10 +15,7 @@ public sealed class UserBlockRepository : IUserBlockRepository
         _context = context;
     }
 
-    public async Task<bool> IsBlockedAsync(
-        UserId a,
-        UserId b,
-        CancellationToken ct = default)
+    public async Task<bool> IsBlockedAsync(UserId a, UserId b, CancellationToken ct = default)
     {
         return await _context.BlockedUsers.AnyAsync(
             x =>
@@ -30,5 +27,24 @@ public sealed class UserBlockRepository : IUserBlockRepository
     public async Task AddAsync(BlockedUser block, CancellationToken ct = default)
     {
         await _context.BlockedUsers.AddAsync(block, ct);
+    }
+
+    public async Task RemoveAsync(UserId blockerId, UserId blockedId, CancellationToken ct = default)
+    {
+        var entity = await _context.BlockedUsers.FirstOrDefaultAsync(
+            x => x.BlockerId == blockerId && x.BlockedId == blockedId,
+            ct);
+
+        if (entity != null)
+            _context.BlockedUsers.Remove(entity);
+    }
+
+    public async Task<IReadOnlyList<BlockedUser>> GetBlockedByBlockerAsync(UserId blockerId, CancellationToken ct = default)
+    {
+        return await _context.BlockedUsers
+            .AsNoTracking()
+            .Where(x => x.BlockerId == blockerId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(ct);
     }
 }

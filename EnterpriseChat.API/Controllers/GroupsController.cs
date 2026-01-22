@@ -195,4 +195,48 @@ public sealed class GroupsController : BaseController
         return NoContent();
     }
 
+    // POST api/groups/{roomId}/owner/{userId}
+    [HttpPost("{roomId:guid}/owner/{userId:guid}")]
+    public async Task<IActionResult> TransferOwnership(Guid roomId, Guid userId, CancellationToken ct)
+    {
+        if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
+        if (userId == Guid.Empty) return BadRequest("UserId is required.");
+
+        await _mediator.Send(
+            new TransferGroupOwnershipCommand(
+                new RoomId(roomId),
+                GetCurrentUserId(),
+                new UserId(userId)),
+            ct);
+
+        return NoContent();
+    }
+
+    [HttpPut("{roomId:guid}")]
+    public async Task<IActionResult> Rename(Guid roomId, [FromBody] RenameGroupRequest request, CancellationToken ct)
+    {
+        if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
+        if (request is null) return BadRequest("Request body is required.");
+        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
+
+        await _mediator.Send(
+            new RenameGroupCommand(new RoomId(roomId), GetCurrentUserId(), request.Name),
+            ct);
+
+        return NoContent();
+    }
+
+    [HttpGet("{roomId:guid}")]
+    public async Task<IActionResult> GetGroup(Guid roomId, CancellationToken ct)
+    {
+        if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
+
+        var dto = await _mediator.Send(
+            new GetGroupDetailsQuery(new RoomId(roomId), GetCurrentUserId()),
+            ct);
+
+        return Ok(dto);
+    }
+
+
 }

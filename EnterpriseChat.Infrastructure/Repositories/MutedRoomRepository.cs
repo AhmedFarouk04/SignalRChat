@@ -43,4 +43,16 @@ public sealed class MutedRoomRepository : IMutedRoomRepository
         if (entity != null)
             _context.MutedRooms.Remove(entity);
     }
+
+    
+
+    public async Task<IReadOnlyList<MutedRoom>> GetMutedRoomsAsync(UserId userId, CancellationToken ct = default)
+    {
+        return await _context.MutedRooms
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.MutedAt)
+            .ToListAsync(ct);
+    }
+
 }

@@ -10,4 +10,6 @@ public interface IMutedRoomRepository
     Task AddAsync(MutedRoom mute, CancellationToken ct = default);
 
     Task RemoveAsync(RoomId roomId, UserId userId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<MutedRoom>> GetMutedRoomsAsync(UserId userId, CancellationToken ct = default);
 }

@@ -4,45 +4,41 @@ using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
-using EnterpriseChat.Domain.ValueObjects;
-using System.Net;
+using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Handlers;
 
 public sealed class SendMessageCommandHandler
+    : IRequestHandler<SendMessageCommand, MessageDto>
 {
     private readonly IChatRoomRepository _roomRepository;
     private readonly IMessageRepository _messageRepository;
     private readonly IUserBlockRepository _blockRepository;
     private readonly IRoomAuthorizationService _authorization;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IMessageBroadcaster? _broadcaster; // optional
 
     public SendMessageCommandHandler(
         IChatRoomRepository roomRepository,
         IMessageRepository messageRepository,
         IUserBlockRepository blockRepository,
         IRoomAuthorizationService authorization,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IMessageBroadcaster? broadcaster = null)
     {
         _roomRepository = roomRepository;
         _messageRepository = messageRepository;
         _blockRepository = blockRepository;
         _authorization = authorization;
         _unitOfWork = unitOfWork;
+        _broadcaster = broadcaster;
     }
 
-    public async Task<MessageDto> Handle(
-     SendMessageCommand command,
-     CancellationToken cancellationToken)
+    public async Task<MessageDto> Handle(SendMessageCommand command, CancellationToken ct)
     {
-        await _authorization.EnsureUserIsMemberAsync(
-            command.RoomId,
-            command.SenderId,
-            cancellationToken);
+        await _authorization.EnsureUserIsMemberAsync(command.RoomId, command.SenderId, ct);
 
-        var room = await _roomRepository.GetByIdAsync(
-            command.RoomId,
-            cancellationToken)
+        var room = await _roomRepository.GetByIdWithMembersAsync(command.RoomId, ct)
             ?? throw new InvalidOperationException("Chat room not found.");
 
         var recipients = room.Members
@@ -52,25 +48,17 @@ public sealed class SendMessageCommandHandler
 
         if (room.Type == RoomType.Private && recipients.Count == 1)
         {
-            var blocked = await _blockRepository.IsBlockedAsync(
-                command.SenderId,
-                recipients[0],
-                cancellationToken);
-
+            var blocked = await _blockRepository.IsBlockedAsync(command.SenderId, recipients[0], ct);
             if (blocked)
                 throw new InvalidOperationException("User is blocked.");
         }
 
-        var message = new Message(
-            command.RoomId,
-            command.SenderId,
-            command.Content,
-            recipients);
+        var message = new Message(command.RoomId, command.SenderId, command.Content, recipients);
 
-        await _messageRepository.AddAsync(message, cancellationToken);
-        await _unitOfWork.CommitAsync(cancellationToken);
+        await _messageRepository.AddAsync(message, ct);
+        await _unitOfWork.CommitAsync(ct);
 
-        return new MessageDto
+        var dto = new MessageDto
         {
             Id = message.Id.Value,
             RoomId = command.RoomId.Value,
@@ -78,6 +66,10 @@ public sealed class SendMessageCommandHandler
             Content = message.Content,
             CreatedAt = message.CreatedAt
         };
-    }
 
+        if (_broadcaster is not null)
+            await _broadcaster.BroadcastMessageAsync(dto, recipients);
+
+        return dto;
+    }
 }

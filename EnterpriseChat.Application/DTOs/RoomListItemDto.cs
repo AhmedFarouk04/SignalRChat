@@ -13,4 +13,9 @@ public sealed class RoomListItemDto
     public int UnreadCount { get; init; }
 
 
+    public bool IsMuted { get; init; }
+    public DateTime? LastMessageAt { get; init; }
+    public string? LastMessagePreview { get; init; }
+    public Guid? LastMessageId { get; init; }
+
 }

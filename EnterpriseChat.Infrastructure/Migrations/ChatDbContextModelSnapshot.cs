@@ -22,6 +22,48 @@ namespace EnterpriseChat.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("EnterpriseChat.Domain.Entities.Attachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("UploaderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomId");
+
+                    b.HasIndex("UploaderId");
+
+                    b.ToTable("Attachments", (string)null);
+                });
+
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.BlockedUser", b =>
                 {
                     b.Property<Guid>("BlockerId")
@@ -95,6 +137,28 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("ChatRoomMembers", (string)null);
+                });
+
+            modelBuilder.Entity("EnterpriseChat.Domain.Entities.ChatUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DisplayName");
+
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.Message", b =>
@@ -191,7 +255,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.MessageReceipt", b =>
                 {
                     b.HasOne("EnterpriseChat.Domain.Entities.Message", null)
-                        .WithMany()
+                        .WithMany("Receipts")
                         .HasForeignKey("MessageId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -200,6 +264,11 @@ namespace EnterpriseChat.Infrastructure.Migrations
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.ChatRoom", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("EnterpriseChat.Domain.Entities.Message", b =>
+                {
+                    b.Navigation("Receipts");
                 });
 #pragma warning restore 612, 618
         }

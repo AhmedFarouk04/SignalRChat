@@ -12,10 +12,15 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id)
-            .HasConversion(
-                id => id.Value,
-                value => MessageId.From(value)
-            )
+            .HasConversion(id => id.Value, value => MessageId.From(value))
+            .IsRequired();
+
+        builder.Property(x => x.RoomId)
+            .HasConversion(id => id.Value, value => new RoomId(value))
+            .IsRequired();
+
+        builder.Property(x => x.SenderId)
+            .HasConversion(id => id.Value, value => new UserId(value))
             .IsRequired();
 
         builder.Property(x => x.Content)
@@ -25,28 +30,17 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 
-        builder.HasMany<MessageReceipt>()
-         .WithOne()
-         .HasForeignKey("MessageId")
-         .OnDelete(DeleteBehavior.Cascade);
+        builder.Metadata
+            .FindNavigation(nameof(Message.Receipts))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
 
-
-        builder.Property(x => x.RoomId)
-            .HasConversion(
-                id => id.Value,
-                value => new RoomId(value))
-            .IsRequired();
-
-        builder.Property(x => x.SenderId)
-            .HasConversion(
-                id => id.Value,
-                value => new UserId(value))
-            .IsRequired();
+        builder.HasMany(x => x.Receipts)
+            .WithOne()
+            .HasForeignKey(r => r.MessageId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Ignore(x => x.DomainEvents);
-        builder.Ignore(x => x.Receipts);
 
         builder.HasIndex(x => x.RoomId);
-
     }
 }

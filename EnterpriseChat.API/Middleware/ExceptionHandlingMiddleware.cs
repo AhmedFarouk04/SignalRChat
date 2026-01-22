@@ -25,11 +25,22 @@ public sealed class ExceptionHandlingMiddleware
         {
             _logger.LogError(ex, "Unhandled exception");
 
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            var (statusCode, title) = ex switch
+            {
+                UnauthorizedAccessException => ((int)HttpStatusCode.Forbidden, "Forbidden"),
+                KeyNotFoundException => ((int)HttpStatusCode.NotFound, "Not Found"),
+                ArgumentException => ((int)HttpStatusCode.BadRequest, "Bad Request"),
+                InvalidOperationException => ((int)HttpStatusCode.BadRequest, "Bad Request"),
+                _ => ((int)HttpStatusCode.InternalServerError, "Internal Server Error")
+            };
+
+            context.Response.StatusCode = statusCode;
             context.Response.ContentType = "application/json";
 
             await context.Response.WriteAsJsonAsync(new
             {
+                title,
+                status = statusCode,
                 error = ex.Message
             });
         }

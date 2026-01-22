@@ -1,8 +1,13 @@
-﻿using EnterpriseChat.Application.Interfaces;
+﻿using EnterpriseChat.Application.Features.Messaging.Commands;
+using EnterpriseChat.Application.Interfaces;
+using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
-using EnterpriseChat.Domain.ValueObjects;
+using MediatR;
+
+namespace EnterpriseChat.Application.Features.Messaging.Handlers;
 
 public sealed class DeliverMessageCommandHandler
+    : IRequestHandler<DeliverMessageCommand, Unit>
 {
     private readonly IMessageReceiptRepository _receiptRepo;
     private readonly IMessageRepository _messageRepo;
@@ -21,23 +26,24 @@ public sealed class DeliverMessageCommandHandler
         _uow = uow;
     }
 
-    public async Task DeliverRoomMessagesAsync(
-        RoomId roomId,
-        UserId userId,
-        CancellationToken ct = default)
+    public async Task<Unit> Handle(DeliverMessageCommand command, CancellationToken ct)
     {
-        await _auth.EnsureUserIsMemberAsync(roomId, userId, ct);
+        var message = await _messageRepo.GetByIdAsync(command.MessageId.Value, ct);
+        if (message is null)
+            return Unit.Value;
 
-        var messages = await _messageRepo
-            .GetByRoomAsync(roomId, 0, 100, ct);
+        await _auth.EnsureUserIsMemberAsync(message.RoomId, command.UserId, ct);
 
-        foreach (var msg in messages)
-        {
-            var receipt = await _receiptRepo.GetAsync(msg.Id, userId, ct);
-            if (receipt is null)
-                msg.MarkDelivered(userId);
-        }
+        var receipt = await _receiptRepo.GetAsync(command.MessageId, command.UserId, ct);
+        if (receipt is null)
+            return Unit.Value;
 
+        if (receipt.Status >= MessageStatus.Delivered)
+            return Unit.Value;
+
+        receipt.MarkDelivered();
         await _uow.CommitAsync(ct);
+
+        return Unit.Value;
     }
 }

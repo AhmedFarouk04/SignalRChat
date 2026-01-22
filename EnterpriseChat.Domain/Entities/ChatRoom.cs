@@ -149,7 +149,21 @@ public sealed class ChatRoom
         IsMember(a) &&
         IsMember(b);
 
+    public void Rename(string name)
+    {
+        if (Type != RoomType.Group)
+            throw new InvalidOperationException("Only group rooms can be renamed.");
 
-    
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Group name is required.");
+
+        if (name.Length > 100)
+            throw new ArgumentException("Group name is too long.");
+
+        Name = name.Trim();
+    }
+
+
+
 
 }
