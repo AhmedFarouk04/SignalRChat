@@ -2,10 +2,14 @@
 using EnterpriseChat.Application.Features.Messaging.Queries;
 using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EnterpriseChat.API.Controllers;
 
+[Authorize]
+[ApiController]
+[Route("api/rooms")]
 public sealed class RoomsController : BaseController
 {
     private readonly IMediator _mediator;
@@ -32,7 +36,7 @@ public sealed class RoomsController : BaseController
         if (roomId == Guid.Empty)
             return BadRequest("RoomId is required.");
 
-        return Ok(await _mediator.Send(
+                return Ok(await _mediator.Send(
             new GetRoomQuery(
                 new RoomId(roomId),
                 GetCurrentUserId()),

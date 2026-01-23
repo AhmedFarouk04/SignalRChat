@@ -25,12 +25,24 @@ public sealed class ExceptionHandlingMiddleware
         {
             _logger.LogError(ex, "Unhandled exception");
 
+            var isNotAuthenticated =
+                ex is UnauthorizedAccessException &&
+                ex.Message.Contains("not authenticated", StringComparison.OrdinalIgnoreCase);
+
             var (statusCode, title) = ex switch
             {
-                UnauthorizedAccessException => ((int)HttpStatusCode.Forbidden, "Forbidden"),
-                KeyNotFoundException => ((int)HttpStatusCode.NotFound, "Not Found"),
-                ArgumentException => ((int)HttpStatusCode.BadRequest, "Bad Request"),
-                InvalidOperationException => ((int)HttpStatusCode.BadRequest, "Bad Request"),
+                UnauthorizedAccessException when isNotAuthenticated
+                    => ((int)HttpStatusCode.Unauthorized, "Unauthorized"),
+
+                UnauthorizedAccessException
+                    => ((int)HttpStatusCode.Forbidden, "Forbidden"),
+
+                KeyNotFoundException
+                    => ((int)HttpStatusCode.NotFound, "Not Found"),
+
+                ArgumentException or InvalidOperationException
+                    => ((int)HttpStatusCode.BadRequest, "Bad Request"),
+
                 _ => ((int)HttpStatusCode.InternalServerError, "Internal Server Error")
             };
 
@@ -44,5 +56,6 @@ public sealed class ExceptionHandlingMiddleware
                 error = ex.Message
             });
         }
+
     }
 }

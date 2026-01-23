@@ -24,7 +24,7 @@ public sealed class MessageReadRepository : IMessageReadRepository
     {
         return await _context.Messages
             .AsNoTracking()
-            .Where(m => m.RoomId.Value == roomId.Value)
+            .Where(m => m.RoomId == roomId)
             .OrderByDescending(m => m.CreatedAt)
             .Skip(skip)
             .Take(take)

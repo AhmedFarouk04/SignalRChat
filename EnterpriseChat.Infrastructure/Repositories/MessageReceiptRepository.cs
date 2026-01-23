@@ -24,8 +24,8 @@ public sealed class MessageReceiptRepository
         return await _context.MessageReceipts
             .FirstOrDefaultAsync(
                 x =>
-                    x.MessageId.Value == messageId.Value &&
-                    x.UserId.Value == userId.Value,
+                    x.MessageId == messageId &&
+                    x.UserId == userId,
                 cancellationToken);
     }
 

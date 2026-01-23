@@ -1,20 +1,23 @@
 ﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Application.Interfaces;
 using MediatR;
 
 public sealed class GetRoomQueryHandler
     : IRequestHandler<GetRoomQuery, RoomDetailsDto>
 {
     private readonly IChatRoomRepository _repo;
+    private readonly IRoomAuthorizationService _auth;
 
-    public GetRoomQueryHandler(IChatRoomRepository repo)
+    public GetRoomQueryHandler(IChatRoomRepository repo, IRoomAuthorizationService auth)
     {
         _repo = repo;
+        _auth = auth;
     }
 
-    public async Task<RoomDetailsDto> Handle(
-        GetRoomQuery request,
-        CancellationToken ct)
+    public async Task<RoomDetailsDto> Handle(GetRoomQuery request, CancellationToken ct)
     {
+        await _auth.EnsureUserIsMemberAsync(request.RoomId, request.UserId, ct);
+
         var room = await _repo.GetByIdAsync(request.RoomId, ct);
         if (room is null)
             throw new KeyNotFoundException("Room not found");
@@ -24,4 +27,5 @@ public sealed class GetRoomQueryHandler
             room.Name,
             room.Type.ToString());
     }
+
 }

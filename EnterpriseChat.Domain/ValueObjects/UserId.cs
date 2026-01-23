@@ -23,6 +23,16 @@ public sealed class UserId : IEquatable<UserId>
     public override int GetHashCode()
         => Value.GetHashCode();
 
+    public static bool operator ==(UserId? left, UserId? right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left is null || right is null) return false;
+        return left.Value == right.Value;
+    }
+
+    public static bool operator !=(UserId? left, UserId? right)
+        => !(left == right);
+
     public override string ToString()
         => Value.ToString();
 

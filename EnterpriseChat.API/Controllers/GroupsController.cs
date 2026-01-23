@@ -136,10 +136,8 @@ public sealed class GroupsController : BaseController
     public async Task<IActionResult> Leave(Guid roomId, CancellationToken ct)
     {
         var requesterId = GetCurrentUserId();
+        var command = new LeaveGroupCommand(new RoomId(roomId), requesterId);
 
-        var command = new LeaveGroupCommand(
-            new RoomId(roomId),
-            new UserId(requesterId));
 
         await _mediator.Send(command, ct);
        

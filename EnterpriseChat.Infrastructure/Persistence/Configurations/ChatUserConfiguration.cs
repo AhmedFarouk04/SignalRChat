@@ -8,7 +8,7 @@ public sealed class ChatUserConfiguration : IEntityTypeConfiguration<ChatUser>
 {
     public void Configure(EntityTypeBuilder<ChatUser> builder)
     {
-        builder.ToTable("Users"); // ✅ يخليها Users فعلاً
+        builder.ToTable("Users"); 
 
         builder.HasKey(x => x.Id);
 

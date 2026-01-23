@@ -36,7 +36,11 @@ public sealed class DeliverMessageCommandHandler
 
         var receipt = await _receiptRepo.GetAsync(command.MessageId, command.UserId, ct);
         if (receipt is null)
+        {
+            message.MarkDelivered(command.UserId);
+            await _uow.CommitAsync(ct);
             return Unit.Value;
+        }
 
         if (receipt.Status >= MessageStatus.Delivered)
             return Unit.Value;

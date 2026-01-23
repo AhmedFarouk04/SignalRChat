@@ -78,7 +78,6 @@ builder.Services.AddSignalR()
         });
 builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
 
-// ──────────────────────────────── Auth + Logging كامل ────────────────────────────────
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -102,7 +101,6 @@ builder.Services
 
         options.Events = new JwtBearerEvents
         {
-            // للـ SignalR لو محتاج
             OnMessageReceived = context =>
             {
                 var token = context.Request.Query["access_token"];
@@ -114,7 +112,6 @@ builder.Services
                 return Task.CompletedTask;
             },
 
-            // المهم جدًا: لما التوكن يفشل
             OnAuthenticationFailed = context =>
             {
                 var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
@@ -130,7 +127,6 @@ builder.Services
                     logger.LogError("Inner Exception: {Inner}", context.Exception.InnerException.Message);
                 }
 
-                // طباعة إضافية في الـ Console عشان تتأكد
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("\n========== JWT AUTH FAILED ==========");
                 Console.WriteLine("Message: " + (context.Exception?.Message ?? "No message"));
@@ -141,7 +137,6 @@ builder.Services
                 return Task.CompletedTask;
             },
 
-            // لو نجح التوكن (للتأكيد)
             OnTokenValidated = context =>
             {
                 var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
@@ -158,7 +153,6 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
-// ─────────────────────────────────────────────────────────────────────────────────────
 
 var app = builder.Build();
 

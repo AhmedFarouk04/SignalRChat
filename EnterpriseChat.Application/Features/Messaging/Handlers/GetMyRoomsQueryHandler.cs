@@ -66,7 +66,9 @@ public sealed class GetMyRoomsQueryHandler
 
             if (room.Type == RoomType.Private)
             {
-                var otherMember = room.Members.FirstOrDefault(m => m.UserId != query.CurrentUserId);
+                var otherMember = room.Members
+                    .FirstOrDefault(m => m.UserId.Value != query.CurrentUserId.Value);
+
                 if (otherMember != null)
                 {
                     otherUserId = otherMember.UserId.Value;
@@ -75,6 +77,7 @@ public sealed class GetMyRoomsQueryHandler
                     name = otherDisplayName;
                 }
             }
+
 
             result.Add(new RoomListItemDto
             {

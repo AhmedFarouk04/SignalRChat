@@ -43,7 +43,6 @@ public sealed class DemoteGroupAdminHandler
         if (room.Type != RoomType.Group)
             throw new InvalidOperationException("Only group rooms allowed.");
 
-        // Owner لا يمكن تنزيله
         if (room.OwnerId != null && room.OwnerId.Value == command.TargetUserId.Value)
             throw new InvalidOperationException("Owner cannot be demoted.");
 

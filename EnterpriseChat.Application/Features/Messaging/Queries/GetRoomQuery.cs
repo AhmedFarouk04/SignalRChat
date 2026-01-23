@@ -4,5 +4,5 @@ using MediatR;
 
 public sealed record GetRoomQuery(
     RoomId RoomId,
-    UserId RequesterId
+    UserId UserId
 ) : IRequest<RoomDetailsDto>;

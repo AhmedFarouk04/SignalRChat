@@ -6,10 +6,14 @@ using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Persistence;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+[Authorize]
+[ApiController]
+[Route("api/chat")]
 public sealed class ChatController : BaseController
 {
     private readonly IMediator _mediator;
@@ -72,7 +76,8 @@ public sealed class ChatController : BaseController
         CancellationToken ct)
     {
         return Ok(await _mediator.Send(
-            new GetMessageReadersQuery(MessageId.From(messageId)),
+            new GetMessageReadersQuery(MessageId.From(messageId), GetCurrentUserId())
+,
             ct));
     }
 
@@ -245,6 +250,8 @@ public sealed class ChatController : BaseController
 
         return Ok(dto);
     }
+    
+    
     [HttpGet("rooms/{roomId:guid}/attachments")]
     public async Task<IActionResult> ListRoomAttachments(
     Guid roomId,

@@ -58,10 +58,17 @@ public sealed class AttachmentsController : BaseController
 
         var requester = GetCurrentUserId();
 
-        // صلاحية: uploader أو admin/owner
         if (entity.UploaderId != requester.Value)
-            await _auth.EnsureUserIsAdminAsync(new RoomId(entity.RoomId), requester, ct);
-
+        {
+            try
+            {
+                await _auth.EnsureUserIsOwnerAsync(new RoomId(entity.RoomId), requester, ct);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
         var absolute = Path.Combine(
             Directory.GetCurrentDirectory(),
             entity.StoragePath.Replace("/", Path.DirectorySeparatorChar.ToString()));

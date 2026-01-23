@@ -9,11 +9,9 @@ public sealed class DatabaseSeeder
 {
     private readonly ChatDbContext _context;
 
-    // ثابتين للتست (زي ما انت متعود)
     private readonly UserId _user1 = new(Guid.Parse("11111111-1111-1111-1111-111111111111")); // Owner
     private readonly UserId _user2 = new(Guid.Parse("22222222-2222-2222-2222-222222222222")); // Member
 
-    // Users كتير للتست
     private readonly UserId _user3 = new(Guid.Parse("33333333-3333-3333-3333-333333333333"));
     private readonly UserId _user4 = new(Guid.Parse("44444444-4444-4444-4444-444444444444"));
     private readonly UserId _user5 = new(Guid.Parse("55555555-5555-5555-5555-555555555555"));
@@ -38,7 +36,6 @@ public sealed class DatabaseSeeder
 
     private async Task SeedUsersAsync()
     {
-        // ✅ Upsert: ضيف اللي ناقص بس (مش return لو فيه أي users)
         var usersToEnsure = new List<ChatUser>
         {
             new ChatUser(_user1.Value,  "Owner 111",  "owner111@gmail.com"),
@@ -73,22 +70,18 @@ public sealed class DatabaseSeeder
 
     private async Task SeedRoomsAsync()
     {
-        // لو عندك Rooms موجودة خلاص، سيبها (عشان ما نعملش duplicate)
         if (await _context.ChatRooms.AnyAsync())
             return;
 
-        // ✅ General Group: Owner = user1 + members كتير
         var general = new ChatRoom("General", RoomType.Group, _user1);
         general.AddMember(_user2);
         general.AddMember(_user3);
         general.AddMember(_user4);
         general.AddMember(_user5);
 
-        // خلّي user2 و user3 Admins عشان تختبر Promote/Demote + صلاحيات
         general.Members.First(m => m.UserId == _user2).PromoteToAdmin();
         general.Members.First(m => m.UserId == _user3).PromoteToAdmin();
 
-        // ✅ Tech Group: Owner = user1 + members تانيين
         var tech = new ChatRoom("Tech", RoomType.Group, _user1);
         tech.AddMember(_user6);
         tech.AddMember(_user7);
@@ -96,14 +89,12 @@ public sealed class DatabaseSeeder
 
         tech.Members.First(m => m.UserId == _user6).PromoteToAdmin();
 
-        // ✅ Management Group: Owner = user4 (عشان تختبر ownership transfer بين ناس مختلفة)
         var management = new ChatRoom("Management", RoomType.Group, _user4);
         management.AddMember(_user1);
         management.AddMember(_user9);
         management.AddMember(_user10);
 
-        // ✅ Private rooms (اختياري قوي للتست)
-        // بيخليك تختبر block/private بسهولة
+     
         var private_1_2 = ChatRoom.CreatePrivate(_user1, _user2);
         var private_1_3 = ChatRoom.CreatePrivate(_user1, _user3);
         var private_2_4 = ChatRoom.CreatePrivate(_user2, _user4);

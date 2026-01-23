@@ -19,21 +19,26 @@ public sealed class MessageRepository : IMessageRepository
         await _context.Messages.AddAsync(message, cancellationToken);
     }
 
-    public async Task<Message?> GetByIdAsync(Guid messageId, CancellationToken cancellationToken = default)
+    public async Task<Message?> GetByIdAsync(Guid messageId, CancellationToken cancellationToken)
     {
         return await _context.Messages
-            .FirstOrDefaultAsync(x => x.Id.Value == messageId, cancellationToken);
+            .FirstOrDefaultAsync(
+                m => m.Id == MessageId.From(messageId),
+                cancellationToken
+            );
     }
 
+
     public async Task<IReadOnlyList<Message>> GetByRoomAsync(
-        RoomId roomId,
-        int skip,
-        int take,
-        CancellationToken cancellationToken = default)
+       RoomId roomId,
+       int skip,
+       int take,
+       CancellationToken cancellationToken = default)
     {
         return await _context.Messages
-            .Where(m => m.RoomId.Value == roomId.Value)
-            .OrderBy(x => x.CreatedAt)
+            .AsNoTracking()
+            .Where(m => m.RoomId == roomId)   // ✅ هنا
+            .OrderByDescending(m => m.CreatedAt)
             .Skip(skip)
             .Take(take)
             .ToListAsync(cancellationToken);

@@ -43,7 +43,6 @@ public sealed class PromoteGroupAdminHandler
         if (room.Type != RoomType.Group)
             throw new InvalidOperationException("Only group rooms allowed.");
 
-        // Owner يعتبر Admin تلقائيًا
         if (room.OwnerId != null && room.OwnerId.Value == command.TargetUserId.Value)
             return Unit.Value;
 

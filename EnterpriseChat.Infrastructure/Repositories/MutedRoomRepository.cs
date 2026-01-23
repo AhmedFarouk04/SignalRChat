@@ -30,21 +30,17 @@ public sealed class MutedRoomRepository : IMutedRoomRepository
         await _context.MutedRooms.AddAsync(mute, ct);
     }
 
-    public async Task RemoveAsync(
-        RoomId roomId,
-        UserId userId,
-        CancellationToken ct = default)
+    public async Task RemoveAsync(RoomId roomId, UserId userId, CancellationToken ct = default)
     {
-        var entity = await _context.MutedRooms
-            .FirstOrDefaultAsync(
-                x => x.RoomId == roomId && x.UserId == userId,
-                ct);
+        var entities = await _context.MutedRooms
+            .Where(x => x.RoomId == roomId && x.UserId == userId)
+            .ToListAsync(ct);
 
-        if (entity != null)
-            _context.MutedRooms.Remove(entity);
+        if (entities.Count > 0)
+            _context.MutedRooms.RemoveRange(entities);
     }
 
-    
+
 
     public async Task<IReadOnlyList<MutedRoom>> GetMutedRoomsAsync(UserId userId, CancellationToken ct = default)
     {
