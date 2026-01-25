@@ -6,25 +6,17 @@
         <span class="dots">
             <span></span><span></span><span></span>
         </span>
-
         <span class="text">@TypingText</span>
     </div>
 }
 
 @code {
-    [Parameter]
-    public IReadOnlyList<UserModel> TypingUsers { get; set; } = [];
+    [Parameter] public IReadOnlyList<UserModel> TypingUsers { get; set; } = [];
 
-    private string TypingText
+    private string TypingText => TypingUsers.Count switch
     {
-        get
-        {
-            return TypingUsers.Count switch
-            {
-                1 => $"{TypingUsers[0].DisplayName} is typing…",
-                2 => $"{TypingUsers[0].DisplayName} and {TypingUsers[1].DisplayName} are typing…",
-                _ => $"{TypingUsers[0].DisplayName} and others are typing…"
-            };
-        }
-    }
+        1 => $"{TypingUsers[0].DisplayName} is typing…",
+        2 => $"{TypingUsers[0].DisplayName} and {TypingUsers[1].DisplayName} are typing…",
+        _ => $"{TypingUsers[0].DisplayName} and others are typing…"
+    };
 }

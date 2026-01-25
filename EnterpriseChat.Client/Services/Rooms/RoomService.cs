@@ -1,4 +1,5 @@
-﻿using EnterpriseChat.Client.Models;
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Http;
 
 namespace EnterpriseChat.Client.Services.Rooms;
@@ -12,9 +13,23 @@ public sealed class RoomService : IRoomService
         _api = api;
     }
 
-    public async Task<IReadOnlyList<RoomModel>> GetRoomsAsync()
-        => await _api.GetAsync<IReadOnlyList<RoomModel>>(ApiEndpoints.Rooms) ?? [];
-
+    public async Task<IReadOnlyList<RoomListItemModel>> GetRoomsAsync()
+    {
+        var dtos = await _api.GetAsync<IReadOnlyList<RoomListItemDto>>(ApiEndpoints.Rooms) ?? [];
+        return dtos.Select(d => new RoomListItemModel
+        {
+            Id = d.Id,
+            Name = d.Name,
+            Type = d.Type,
+            OtherUserId = d.OtherUserId,
+            OtherDisplayName = d.OtherDisplayName,
+            UnreadCount = d.UnreadCount,
+            IsMuted = d.IsMuted,
+            LastMessageAt = d.LastMessageAt,
+            LastMessagePreview = d.LastMessagePreview,
+            LastMessageId = d.LastMessageId
+        }).ToList();
+    }
     public Task<RoomModel?> GetRoomAsync(Guid roomId)
         => _api.GetAsync<RoomModel>(ApiEndpoints.Room(roomId));
 }

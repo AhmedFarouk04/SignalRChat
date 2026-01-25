@@ -1,25 +1,55 @@
-﻿
-<li class="room-item" @onclick="() => OnOpen.InvokeAsync(Room.Id)">
+﻿@using EnterpriseChat.Client.Models
+@using Microsoft.AspNetCore.Components.Routing
 
-    <div class="avatar">
-        <span>@Room.Name[..1].ToUpper()</span>
-    </div>
+<li>
+    <NavLink class="room-item"
+             ActiveClass="active"
+             href="@($"/chat/{Room.Id}")"
+             Match="NavLinkMatch.Prefix">
 
-    <div class="room-content">
-        <div class="room-top">
-            <div class="room-name">@Room.Name</div>
-
-            @if (Room.UnreadCount > 0)
-            {
-                <span class="badge">@Room.UnreadCount</span>
-            }
+        <div class="room-avatar">
+            <span>@Room.Name[..1].ToUpper()</span>
         </div>
 
-        <div class="room-subtitle">Tap to open chat</div>
-    </div>
+        <div class="room-main">
+            <div class="room-top">
+                <div class="room-title">@Room.Name</div>
+
+                <div class="room-meta">
+                    @if (Room.IsMuted)
+                    {
+                        <span class="mute" title="Muted" aria-label="Muted">🔕</span>
+                    }
+
+                    @if (Room.UnreadCount > 0)
+                    {
+                        <span class="badge" aria-label="@($"{Room.UnreadCount} unread")">@Room.UnreadCount</span>
+                    }
+
+                    @if (Room.LastMessageAt != null)
+                    {
+                        <span class="room-time">@FormatTime(Room.LastMessageAt.Value)</span>
+                    }
+                </div>
+            </div>
+
+            <div class="room-preview">
+                @(string.IsNullOrWhiteSpace(Room.LastMessagePreview) ? "Tap to open chat" : Room.LastMessagePreview)
+            </div>
+        </div>
+
+    </NavLink>
 </li>
 
 @code {
-    [Parameter, EditorRequired] public RoomModel Room { get; set; } = default!;
-    [Parameter, EditorRequired] public EventCallback<Guid> OnOpen { get; set; }
+    [Parameter, EditorRequired] public RoomListItemModel Room { get; set; } = default!;
+
+    private static string FormatTime(DateTime utc)
+    {
+        var dt = utc.ToLocalTime();
+        var today = DateTime.Now.Date;
+        if (dt.Date == today) return dt.ToShortTimeString();
+        if (dt.Date == today.AddDays(-1)) return "Yesterday";
+        return dt.ToString("dd MMM");
+    }
 }

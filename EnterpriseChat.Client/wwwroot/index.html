@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chat.Client</title>
     <base href="/" />
-    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="Chat.Client.styles.css" rel="stylesheet" />
@@ -29,9 +28,18 @@
     <script src="_framework/blazor.webassembly.js"></script>
     <script type="module">
         import { scrollToBottom, isAtBottom } from './js/scroll.js';
+        import { registerEscape, unregisterEscape } from './js/keyboard.js';
+        import { downloadBytes } from './js/download.js';
+        window.downloadBytes = downloadBytes;
         window.scrollToBottom = scrollToBottom;
         window.isAtBottom = isAtBottom;
+
+        window.registerEscape = registerEscape;
+        window.unregisterEscape = unregisterEscape;
     </script>
+
+
+
 
 </body>
 

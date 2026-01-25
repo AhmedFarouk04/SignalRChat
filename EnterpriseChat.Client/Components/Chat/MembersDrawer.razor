@@ -1,0 +1,73 @@
+﻿@using EnterpriseChat.Client.Models
+@using Microsoft.AspNetCore.Components.Web
+
+@if (IsOpen)
+{
+    <div class="drawer-backdrop" @onclick="Close"></div>
+
+    <aside class="drawer"
+           role="dialog"
+           aria-modal="true"
+           aria-label="Members drawer"
+           tabindex="0"
+           @onkeydown="OnKeyDown">
+
+        <div class="drawer-header">
+            <div>
+                <div class="drawer-name">Members</div>
+                <div class="drawer-sub">@Members.Count members • @Members.Count(m => m.IsOnline) online</div>
+            </div>
+
+            <button class="icon-btn" title="Close" @onclick="Close" autofocus>✕</button>
+        </div>
+
+        <div class="drawer-list">
+            @foreach (var u in Members)
+            {
+                <div class="drawer-row">
+                    <div class="drawer-left">
+                        <div class="drawer-avatar">@u.DisplayName[..1].ToUpper()</div>
+
+                        <div>
+                            <div class="drawer-user">@u.DisplayName</div>
+                            <div class="drawer-badges">
+                                <span class="pill @(u.IsOnline ? "on" : "off")">
+                                    @(u.IsOnline ? "Online" : "Offline")
+                                </span>
+
+                                @if (OwnerId != Guid.Empty && u.Id == OwnerId)
+                                {
+                                    <span class="pill owner">Owner</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (CanManageMembers && OwnerId != Guid.Empty && u.Id != OwnerId)
+                    {
+                        <button class="mini-btn" @onclick="() => OnRemove.InvokeAsync(u.Id)">
+                            Remove
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </aside>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public IReadOnlyList<UserModel> Members { get; set; } = [];
+    [Parameter] public Guid OwnerId { get; set; }
+    [Parameter] public bool CanManageMembers { get; set; }
+    [Parameter] public EventCallback<Guid> OnRemove { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            await Close();
+    }
+}

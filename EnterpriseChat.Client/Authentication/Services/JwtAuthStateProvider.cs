@@ -21,26 +21,31 @@ public sealed class JwtAuthStateProvider : AuthenticationStateProvider
         if (string.IsNullOrWhiteSpace(token))
             return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
 
-        var identity = BuildIdentityFromJwt(token);
+        var identity = await BuildIdentityFromJwtOrEmptyAsync(token);
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 
-    public void Notify()
-    {
-        NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
-    }
+    public void Notify() => NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
 
-    private static ClaimsIdentity BuildIdentityFromJwt(string token)
+    private async Task<ClaimsIdentity> BuildIdentityFromJwtOrEmptyAsync(string token)
     {
         try
         {
             var handler = new JwtSecurityTokenHandler();
             var jwt = handler.ReadJwtToken(token);
 
+            // Expiration safety (UTC)
+            if (jwt.ValidTo != DateTime.MinValue && jwt.ValidTo < DateTime.UtcNow)
+            {
+                await _tokenStore.ClearAsync();
+                return new ClaimsIdentity();
+            }
+
             return new ClaimsIdentity(jwt.Claims, "jwt");
         }
         catch
         {
+            await _tokenStore.ClearAsync();
             return new ClaimsIdentity();
         }
     }

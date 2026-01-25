@@ -2,136 +2,159 @@
 
 @using EnterpriseChat.Client.ViewModels
 @using EnterpriseChat.Client.Models
+@using Microsoft.JSInterop
 @inject ChatViewModel VM
 @inject NavigationManager Nav
-
+@inject IJSRuntime JS
 @implements IDisposable
 
 <AuthGuard>
-<TopBar Room="@VM.Room"
-        MembersCount="@VM.OnlineUsers.Count"
-        OtherUser="@VM.OtherUser"
-        IsMuted="@VM.IsMuted"
-        OnMuteToggle="ToggleMute"
-        OnBlock="BlockOtherUser" />
+    <TopBar Room="@VM.Room"
+            MembersCount="@(VM.GroupMembers?.Members.Count ?? 0)"
+            OnlineCount="@VM.OnlineUsers.Count"
+            OtherUser="@VM.OtherUser"
+            IsMuted="@VM.IsMuted"
+            OnMuteToggle="ToggleMute"
+            OnBlock="BlockOtherUser"
+            OnMembers="OpenMembers" />
 
-@if (VM.UiError != null)
-{
-    <div class="chat-error">
-        @VM.UiError
-    </div>
-}
-else if (VM.Room == null)
-{
-    <div class="chat-error">
-        This room no longer exists.
-    </div>
-}
-else if (VM.IsRemoved)
-{
-    <div class="chat-error">
-        You were removed from this group.
-    </div>
-}
-else
-{
-    @* Group members *@
-    @if (VM.Room.Type == "Group" && VM.GroupMembers != null)
+    @if (VM.UiError != null)
     {
-        <GroupMembersPanel
-            OwnerId="@VM.GroupMembers.OwnerId"
-            Members="@VM.GroupMembers.Members"
-            CurrentUserId="@VM.CurrentUserId"
-            OnRemove="RemoveMember"
-            OnLeave="LeaveGroup" />
+        <div class="chat-error">@VM.UiError</div>
     }
-
-    @* Presence *@
-    @if (VM.Room.Type != "Private")
+    else if (VM.Room == null)
     {
-        <PresenceBar OnlineUsers="@VM.OnlineUsers" />
+        <div class="chat-error">This room no longer exists.</div>
     }
-
-    @* Connection banner *@
-    @if (VM.IsDisconnected)
+    else if (VM.IsRemoved)
     {
-        <div class="connection-banner">
-            Reconnecting…
-        </div>
-    }
-
-    @* Messages *@
-    <MessageList Messages="@VM.Messages"
-                 CurrentUserId="@VM.CurrentUserId"
-                 OnRetry="RetrySend"
-                 OnReachedBottom="HandleReachedBottom" />
-
-    <TypingIndicator TypingUsers="@VM.TypingUsers" />
-
-    @* Block / Deleted handling *@
-    @if (VM.IsOtherDeleted)
-    {
-        <div class="blocked-banner">
-            This user is no longer available.
-        </div>
-    }
-    else if (VM.IsBlocked)
-    {
-        <div class="blocked-banner">
-            You blocked this user. Unblock to send messages.
-        </div>
+        <div class="chat-error">You were removed from this group.</div>
     }
     else
     {
-        <ChatInput OnSend="Send"
-                   OnUserTyping="NotifyTyping" />
+        @* Presence bar: online فقط (Group) *@
+        @if (VM.Room.Type == "Group")
+        {
+            <PresenceBar OnlineUsers="@VM.OnlineUsers" />
+        }
+
+        @if (VM.IsDisconnected)
+        {
+            <div class="connection-banner">Reconnecting…</div>
+        }
+
+        <MessageList Messages="@VM.Messages"
+                     CurrentUserId="@VM.CurrentUserId"
+                     OnRetry="RetrySend"
+                     OnReachedBottom="HandleReachedBottom" />
+
+        <TypingIndicator TypingUsers="@VM.TypingUsers" />
+
+        @if (VM.IsOtherDeleted)
+        {
+            <div class="blocked-banner">This user is no longer available.</div>
+        }
+        else if (VM.IsBlocked)
+        {
+            <div class="blocked-banner">You blocked this user. Unblock to send messages.</div>
+        }
+        else
+        {
+            <ChatInput OnSend="Send"
+                       OnUserTyping="NotifyTyping" />
+        }
+
+        @* Members Drawer (مش جوه شرط ChatInput) *@
+        @if (_membersOpen && VM.Room?.Type == "Group")
+        {
+            <MembersDrawer IsOpen="_membersOpen"
+                           Members="@VM.GetAllMembersForDrawer()"
+                           OwnerId="@(VM.GroupMembers?.OwnerId ?? Guid.Empty)"
+                           CanManageMembers="@(VM.GroupMembers?.OwnerId == VM.CurrentUserId)"
+                           OnRemove="RemoveMember"
+                           OnClose="CloseMembers" />
+        }
     }
-}
-   </AuthGuard>
+</AuthGuard>
+
 @code {
     [Parameter] public Guid RoomId { get; set; }
 
+    private bool _membersOpen;
+
+    private DotNetObjectReference<ChatPageInterop>? _objRef;
+    private bool _escapeRegistered;
+
     protected override async Task OnInitializedAsync()
     {
+        VM.Changed += OnVmChanged;
         await VM.InitializeAsync(RoomId);
 
         if (VM.Room == null && VM.UiError == null)
             Nav.NavigateTo("/rooms");
     }
 
-    private Task Send(string text)
-        => VM.SendAsync(RoomId, text);
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_escapeRegistered)
+        {
+            // سجل Global Escape مرة واحدة
+            _objRef = DotNetObjectReference.Create(new ChatPageInterop(this));
+            await JS.InvokeVoidAsync("registerEscape", _objRef);
+            _escapeRegistered = true;
+        }
+    }
 
-    private Task RetrySend(MessageModel msg)
-        => VM.SendAsync(RoomId, msg.Content);
-
-    private Task NotifyTyping()
-        => VM.NotifyTypingAsync(RoomId);
+    private Task Send(string text) => VM.SendAsync(RoomId, text);
+    private Task RetrySend(MessageModel msg) => VM.SendAsync(RoomId, msg.Content);
+    private Task NotifyTyping() => VM.NotifyTypingAsync(RoomId);
 
     private Task HandleReachedBottom(Guid lastMessageId)
         => lastMessageId == Guid.Empty
             ? Task.CompletedTask
             : VM.MarkRoomReadAsync(RoomId, lastMessageId);
 
-    private Task RemoveMember(Guid userId)
-        => VM.RemoveMemberAsync(RoomId, userId);
-
-    private Task LeaveGroup()
-    {
-        Nav.NavigateTo("/rooms");
-        return Task.CompletedTask;
-    }
+    private Task RemoveMember(Guid userId) => VM.RemoveMemberAsync(RoomId, userId);
 
     private Task BlockOtherUser()
         => VM.OtherUser == null
             ? Task.CompletedTask
             : VM.BlockUserAsync(VM.OtherUser.Id);
 
-    private Task ToggleMute()
-        => VM.ToggleMuteAsync(RoomId);
+    private Task ToggleMute() => VM.ToggleMuteAsync(RoomId);
+
+    private void OpenMembers()
+    {
+        if (VM.Room?.Type == "Group") _membersOpen = true;
+    }
+
+    private void CloseMembers() => _membersOpen = false;
+
+    private void OnVmChanged() => InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
+        VM.Changed -= OnVmChanged;
         _ = VM.DisposeAsync();
+
+        // unregister global escape
+        _ = JS.InvokeVoidAsync("unregisterEscape");
+        _objRef?.Dispose();
+    }
+
+    // Wrapper class عشان DotNetObjectReference يبقى stable
+    private sealed class ChatPageInterop
+    {
+        private readonly Chat _page;
+        public ChatPageInterop(Chat page) => _page = page;
+
+        [JSInvokable]
+        public Task OnGlobalEscape()
+        {
+            if (_page._membersOpen)
+                _page.CloseMembers();
+
+            return Task.CompletedTask;
+        }
     }
 }

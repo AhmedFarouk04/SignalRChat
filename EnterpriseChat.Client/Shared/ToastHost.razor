@@ -1,0 +1,63 @@
+﻿@implements IDisposable
+@inject EnterpriseChat.Client.Services.Ui.ToastService Toasts
+
+<div class="toast-host">
+    @foreach (var t in _toasts)
+    {
+        <div class="toast @Css(t.Type)" @onclick="() => Dismiss(t.Id)">
+            <div class="toast-title">@t.Title</div>
+            <div class="toast-msg">@t.Message</div>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly List<EnterpriseChat.Client.Services.Ui.ToastItem> _toasts = new();
+
+    protected override void OnInitialized()
+    {
+        Toasts.OnShow += HandleShow;
+    }
+
+    private void HandleShow(EnterpriseChat.Client.Services.Ui.ToastItem toast)
+    {
+        _toasts.Insert(0, toast);
+        InvokeAsync(StateHasChanged);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(toast.DurationMs);
+                await InvokeAsync(() =>
+                {
+                    Dismiss(toast.Id);
+                });
+            }
+            catch { }
+        });
+    }
+
+    private void Dismiss(Guid id)
+    {
+        var idx = _toasts.FindIndex(t => t.Id == id);
+        if (idx >= 0)
+        {
+            _toasts.RemoveAt(idx);
+            StateHasChanged();
+        }
+    }
+
+    private static string Css(EnterpriseChat.Client.Services.Ui.ToastType t) => t switch
+    {
+        EnterpriseChat.Client.Services.Ui.ToastType.Success => "success",
+        EnterpriseChat.Client.Services.Ui.ToastType.Warning => "warning",
+        EnterpriseChat.Client.Services.Ui.ToastType.Error => "error",
+        _ => "info"
+    };
+
+    public void Dispose()
+    {
+        Toasts.OnShow -= HandleShow;
+    }
+}

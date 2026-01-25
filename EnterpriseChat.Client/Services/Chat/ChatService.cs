@@ -1,6 +1,8 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Http;
+using System.Text;
+using System.Text.Json;
 
 namespace EnterpriseChat.Client.Services.Chat;
 
@@ -29,9 +31,6 @@ public sealed class ChatService : IChatService
     public Task<GroupMembersDto?> GetGroupMembersAsync(Guid roomId)
         => _api.GetAsync<GroupMembersDto>(ApiEndpoints.GroupMembers(roomId));
 
-    public async Task<IReadOnlyList<UserModel>> GetOnlineUsersInRoomAsync(Guid roomId)
-        => await _api.GetAsync<IReadOnlyList<UserModel>>(ApiEndpoints.OnlineUsersInRoom(roomId)) ?? [];
-
     public Task MuteAsync(Guid roomId)
         => _api.PostAsync(ApiEndpoints.Mute(roomId));
 
@@ -43,4 +42,19 @@ public sealed class ChatService : IChatService
 
     public Task RemoveMemberAsync(Guid roomId, Guid userId)
         => _api.DeleteAsync(ApiEndpoints.RemoveGroupMember(roomId, userId));
+
+    public Task MarkMessageDeliveredAsync(Guid messageId)
+        => _api.PostAsync(ApiEndpoints.MarkMessageDelivered(messageId));
+
+    public Task MarkMessageReadAsync(Guid messageId)
+        => _api.PostAsync(ApiEndpoints.MarkMessageRead(messageId));
+
+    public async Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId)
+    {
+        var json = JsonSerializer.Serialize(new { LastMessageId = lastMessageId });
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        await _api.SendAsync(HttpMethod.Post, ApiEndpoints.MarkRoomRead(roomId), content);
+    }
+
 }

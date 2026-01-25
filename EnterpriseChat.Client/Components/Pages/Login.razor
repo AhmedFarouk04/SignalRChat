@@ -1,19 +1,65 @@
-﻿@using EnterpriseChat.Client.Authentication.Abstractions
+﻿@page "/login"
+
+@using EnterpriseChat.Client.Authentication.Abstractions
 @using EnterpriseChat.Client.Authentication.Services
 @inject ITokenStore TokenStore
 @inject JwtAuthStateProvider AuthProvider
 @inject NavigationManager Nav
 
-<h3>Login</h3>
+<div class="login-page">
+    <div class="login-card">
+        <h2>Login (Dev)</h2>
+        <p class="muted">
+            Paste a JWT token (must contain <code>sub</code> as a GUID).
+        </p>
 
-<button @onclick="DoLogin">Login</button>
+        <textarea class="token-box"
+                  placeholder="Paste JWT here..."
+                  @bind="token"></textarea>
+
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="login-error">@error</div>
+        }
+
+        <div class="login-actions">
+            <button class="btn" @onclick="DoLogin">Login</button>
+            <button class="btn ghost" @onclick="Clear">Logout / Clear</button>
+        </div>
+    </div>
+</div>
 
 @code {
+    private string token = "";
+    private string? error;
+
     private async Task DoLogin()
     {
-        await TokenStore.SetAsync("mock-jwt-token");
+        error = null;
+        var t = (token ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(t))
+        {
+            error = "Token is required.";
+            return;
+        }
+
+        if (t.Split('.').Length != 3)
+        {
+            error = "This doesn't look like a JWT (expected 3 parts).";
+            return;
+        }
+
+        await TokenStore.SetAsync(t);
         AuthProvider.Notify();
-        Nav.NavigateTo("/rooms");
+        Nav.NavigateTo("/rooms", true);
+    }
+
+    private async Task Clear()
+    {
+        token = "";
+        error = null;
+        await TokenStore.ClearAsync();
+        AuthProvider.Notify();
     }
 }
-

@@ -2,27 +2,68 @@
 @using EnterpriseChat.Client.ViewModels
 @inject RoomsViewModel VM
 @inject NavigationManager Nav
+@implements IDisposable
 
 <AuthGuard>
     <div class="rooms-page">
-        <h2 class="rooms-title">Chats</h2>
+        <div class="rooms-header">
+            <h2 class="rooms-title">Chats</h2>
+        </div>
 
-        @if (VM.UiError != null)
+        <div class="rooms-toolbar">
+            <input class="rooms-search"
+                   id="roomsSearch"
+                   aria-label="Search chats"
+                   placeholder="Search chats…"
+                   value="@VM.SearchQuery"
+                   @oninput="OnSearch"
+                   autofocus />
+
+
+            <div class="rooms-tabs">
+                <button class="tab @(VM.ActiveFilter == RoomsFilter.All ? "active" : "")"
+                        @onclick="() => VM.SetFilter(RoomsFilter.All)">All</button>
+
+                <button class="tab @(VM.ActiveFilter == RoomsFilter.Unread ? "active" : "")"
+                        @onclick="() => VM.SetFilter(RoomsFilter.Unread)">Unread</button>
+
+                <button class="tab @(VM.ActiveFilter == RoomsFilter.Muted ? "active" : "")"
+                        @onclick="() => VM.SetFilter(RoomsFilter.Muted)">Muted</button>
+
+                <button class="tab @(VM.ActiveFilter == RoomsFilter.Groups ? "active" : "")"
+                        @onclick="() => VM.SetFilter(RoomsFilter.Groups)">Groups</button>
+
+                <button class="tab @(VM.ActiveFilter == RoomsFilter.Private ? "active" : "")"
+                        @onclick="() => VM.SetFilter(RoomsFilter.Private)">Private</button>
+            </div>
+        </div>
+
+        @if (VM.IsLoading)
         {
-            <div class="rooms-error">@VM.UiError</div>
-        }
-        else if (VM.IsLoading)
-        {
-            <div class="rooms-loading">Loading…</div>
+            <ul class="rooms-list">
+                @for (int i = 0; i < 8; i++)
+                {
+                    <li class="room-skeleton">
+                        <div class="sk-avatar"></div>
+                        <div class="sk-lines">
+                            <div class="sk-line w-60"></div>
+                            <div class="sk-line w-90"></div>
+                        </div>
+                    </li>
+                }
+            </ul>
         }
         else if (VM.IsEmpty)
         {
-            <div class="rooms-empty">No conversations yet</div>
+            <div class="rooms-empty">
+                <div class="rooms-empty-title">No conversations yet</div>
+                <div class="rooms-empty-sub">Start a new chat from Users (Phase 3) — or wait for messages.</div>
+            </div>
         }
         else
         {
             <ul class="rooms-list">
-                @foreach (var room in VM.Rooms!)
+                @foreach (var room in VM.VisibleRooms)
                 {
                     <RoomListItem Room="room" OnOpen="Open" />
                 }
@@ -32,11 +73,45 @@
 </AuthGuard>
 
 @code {
+    private CancellationTokenSource? _searchCts;
+
     protected override async Task OnInitializedAsync()
     {
+        VM.Changed += OnVmChanged;
         await VM.LoadAsync();
     }
 
-    private void Open(Guid roomId)
-        => Nav.NavigateTo($"/chat/{roomId}");
+    private void Open(Guid roomId) => Nav.NavigateTo($"/chat/{roomId}");
+
+    private void OnSearch(ChangeEventArgs e)
+    {
+        var q = e.Value?.ToString() ?? "";
+
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+
+        _searchCts = new CancellationTokenSource();
+        var ct = _searchCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(150, ct);
+                if (!ct.IsCancellationRequested)
+                    VM.SetSearch(q);
+            }
+            catch { /* ignored */ }
+        }, ct);
+    }
+
+    private void OnVmChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        VM.Changed -= OnVmChanged;
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+    }
 }
+

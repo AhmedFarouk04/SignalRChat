@@ -1,18 +1,37 @@
-﻿@inject NavigationManager Nav
+﻿@using Microsoft.AspNetCore.Components.Routing
+@inject NavigationManager Nav
+@inject EnterpriseChat.Client.Authentication.Abstractions.ITokenStore TokenStore
+@inject EnterpriseChat.Client.Authentication.Services.JwtAuthStateProvider AuthProvider
 
 <div class="sidebar-header">
     <h2>EnterpriseChat</h2>
 </div>
 
 <ul class="sidebar-menu">
-    <li @onclick="GoToRooms">
-        💬 Rooms
+    <li>
+        <NavLink class="sidebar-link"
+                 ActiveClass="active"
+                 href="/rooms"
+                 Match="NavLinkMatch.All">
+            <span class="ico">💬</span>
+            <span>Rooms</span>
+        </NavLink>
     </li>
 </ul>
 
+<div class="sidebar-footer">
+    <button class="logout-btn" type="button" @onclick="Logout">
+        ⎋ Logout
+    </button>
+</div>
+
 @code {
-    private void GoToRooms()
+    private void GoToRooms() => Nav.NavigateTo("/rooms");
+
+    private async Task Logout()
     {
-        Nav.NavigateTo("/rooms");
+        await TokenStore.ClearAsync();
+        AuthProvider.Notify();
+        Nav.NavigateTo("/login", true);
     }
 }

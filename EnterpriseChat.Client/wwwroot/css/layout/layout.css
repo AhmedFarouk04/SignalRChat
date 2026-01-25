@@ -18,3 +18,12 @@
     flex-direction: column;
     overflow: hidden;
 }
+@media (max-width: 860px) {
+    .sidebar {
+        display: none;
+    }
+
+    .content {
+        padding: 12px;
+    }
+}

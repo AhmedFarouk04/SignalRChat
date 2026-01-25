@@ -3,30 +3,23 @@
 <div class="presence-bar">
     @if (!OnlineUsers.Any())
     {
-        <div class="presence-empty">
-            No one online
+        <div class="presence-chip">
+            <span class="presence-name">No one online</span>
         </div>
     }
     else
     {
         @foreach (var user in OnlineUsers)
         {
-            <div class="presence-user">
-                <span class="avatar">
-                    @user.DisplayName[..1].ToUpper()
-                </span>
-
-                <span class="name">@user.DisplayName</span>
-
-                <span class="dot online"
-                      title="Online"></span>
+            <div class="presence-chip">
+                <span class="presence-avatar">@user.DisplayName[..1].ToUpper()</span>
+                <span class="presence-name">@user.DisplayName</span>
+                <span class="dot online" title="Online"></span>
             </div>
         }
     }
 </div>
 
 @code {
-    [Parameter]
-    public IReadOnlyList<UserModel> OnlineUsers { get; set; } = [];
+    [Parameter] public IReadOnlyList<UserModel> OnlineUsers { get; set; } = [];
 }
-

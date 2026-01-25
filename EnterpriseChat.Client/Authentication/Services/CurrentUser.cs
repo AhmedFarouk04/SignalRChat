@@ -23,19 +23,26 @@ public sealed class CurrentUser : ICurrentUser
         if (!isAuth)
             return null;
 
-        var sub = user.FindFirst("sub")?.Value;
+        var sub =
+            user.FindFirst("sub")?.Value
+            ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? user.FindFirst("nameid")?.Value;
+
         if (!Guid.TryParse(sub, out var id))
             return null;
+
+        var displayName =
+            user.FindFirst("name")?.Value
+            ?? user.FindFirst("unique_name")?.Value
+            ?? user.FindFirst(ClaimTypes.Name)?.Value
+            ?? $"User {id.ToString()[..8]}";
 
         return new AuthUser
         {
             Id = id,
-            DisplayName =
-         user.FindFirst("name")?.Value
-         ?? user.FindFirst("unique_name")?.Value,
+            DisplayName = displayName,
             IsAuthenticated = true
         };
-
     }
 
     public async Task<bool> IsAuthenticatedAsync()

@@ -12,9 +12,12 @@ public sealed class ScrollService : IScrollService
         _js = js;
     }
 
-    public ValueTask ScrollToBottomAsync(ElementReference element)
-        => _js.InvokeVoidAsync("scrollToBottom", element);
+    public Task ScrollToBottomAsync(ElementReference el)
+        => _js.InvokeVoidAsync("scrollToBottom", el).AsTask();
 
-    public ValueTask<bool> IsAtBottomAsync(ElementReference element)
-        => _js.InvokeAsync<bool>("isAtBottom", element);
+    public Task ScrollToBottomSmoothAsync(ElementReference el)
+        => _js.InvokeVoidAsync("scrollToBottomSmooth", el).AsTask();
+
+    public Task<bool> IsAtBottomAsync(ElementReference el)
+        => _js.InvokeAsync<bool>("isAtBottom", el).AsTask();
 }

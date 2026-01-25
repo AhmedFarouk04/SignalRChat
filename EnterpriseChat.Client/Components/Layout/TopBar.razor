@@ -21,50 +21,71 @@
                         }
                         else if (OtherUser.LastSeen != null)
                         {
-                            <span>
-                                Last seen @OtherUser.LastSeen.Value.ToLocalTime().ToShortTimeString()
-                            </span>
+                            <span>Last seen @OtherUser.LastSeen.Value.ToLocalTime().ToShortTimeString()</span>
+                        }
+                        else
+                        {
+                            <span>Offline</span>
                         }
                     }
                     else
                     {
                         <span>@MembersCount members</span>
+                        <span>•</span>
+                        <span>@OnlineCount online</span>
                     }
-
                 </div>
             </div>
 
             <div class="room-actions">
+                @if (!IsPrivate)
+                {
+                    <button class="icon-btn"
+                            type="button"
+                            aria-label="Open members"
+                            title="Members"
+                            @onclick="() => OnMembers.InvokeAsync()">
+                        👥
+                    </button>
+                }
 
                 @if (IsPrivate)
                 {
                     <button class="icon-btn"
+                            type="button"
+                            aria-label="Block user"
                             title="Block user"
-                            @onclick="@(() => OnBlock.InvokeAsync())">
+                            @onclick="() => OnBlock.InvokeAsync()">
                         🚫
                     </button>
                 }
 
                 <button class="icon-btn"
+                        type="button"
+                        aria-label="Toggle mute"
                         title="Mute"
-                        @onclick="@(() => OnMuteToggle.InvokeAsync())">
-                    @(IsMuted ? "🔔" : "🔕")
+                        @onclick="() => OnMuteToggle.InvokeAsync()">
+                    @(IsMuted ? "🔕" : "🔔")
                 </button>
-
             </div>
-
-
         </div>
     }
 </div>
 
 @code {
     [Parameter] public RoomModel? Room { get; set; }
-    [Parameter] public int MembersCount { get; set; }
+
+    // Group:
+    [Parameter] public int MembersCount { get; set; }      // total members
+    [Parameter] public int OnlineCount { get; set; }       // online only
+
+    // Private:
     [Parameter] public UserModel? OtherUser { get; set; }
+
+    [Parameter] public bool IsMuted { get; set; }
     [Parameter] public EventCallback OnMuteToggle { get; set; }
     [Parameter] public EventCallback OnBlock { get; set; }
-    [Parameter] public bool IsMuted { get; set; }
+    [Parameter] public EventCallback OnMembers { get; set; }
 
     private bool IsPrivate => Room?.Type == "Private";
 

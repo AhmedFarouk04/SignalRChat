@@ -1,12 +1,15 @@
 ﻿using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Models;
 using Microsoft.AspNetCore.SignalR.Client;
+using static System.Net.WebRequestMethods;
 
 namespace EnterpriseChat.Client.Services.Realtime;
 
 public sealed class ChatRealtimeClient : IChatRealtimeClient
 {
     private readonly ITokenStore _tokenStore;
+    private readonly HttpClient _http;
+
 
     private HubConnection? _connection;
 
@@ -34,18 +37,23 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action? Disconnected;
     public event Action? Reconnected;
 
-    public ChatRealtimeClient(ITokenStore tokenStore)
+    public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http)
     {
         _tokenStore = tokenStore;
+        _http = http;
     }
+
 
     public async Task ConnectAsync()
     {
         if (_connection != null)
             return;
 
+        var apiBase = _http.BaseAddress?.ToString()?.TrimEnd('/') ?? "https://localhost:5001";
+        var hubUrl = $"{apiBase}/hubs/chat";
+
         _connection = new HubConnectionBuilder()
-            .WithUrl("https://localhost:5001/hubs/chat", options =>
+            .WithUrl(hubUrl, options =>
             {
                 options.AccessTokenProvider = _tokenStore.GetAsync;
             })

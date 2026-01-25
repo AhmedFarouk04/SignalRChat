@@ -1,18 +1,33 @@
-﻿<div class="chat-input-wrapper">
-    <input class="chat-input"
-           value="@text"
-           @oninput="OnInput" />
+﻿@using Microsoft.AspNetCore.Components.Web
+@inject IJSRuntime JS
 
-    <button class="send-btn" @onclick="Send">
-        Send
-    </button>
+<div class="composer">
+    <div class="composer-box">
+        <textarea class="composer-input"
+                  @ref="inputRef"
+                  placeholder="Message…"
+                  value="@text"
+                  @oninput="OnInput"
+                  @onkeydown="OnKeyDown"
+                  @onkeydown:preventDefault="true"></textarea>
+
+        <button class="composer-send"
+                type="button"
+                disabled="@IsSendDisabled"
+                @onclick="Send">
+            Send
+        </button>
+    </div>
 </div>
 
 @code {
     private string text = string.Empty;
+    private ElementReference inputRef;
 
     [Parameter] public EventCallback<string> OnSend { get; set; }
     [Parameter] public EventCallback OnUserTyping { get; set; }
+
+    private bool IsSendDisabled => string.IsNullOrWhiteSpace(text);
 
     private async Task OnInput(ChangeEventArgs e)
     {
@@ -20,12 +35,31 @@
         await OnUserTyping.InvokeAsync();
     }
 
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter")
+            return;
+
+        if (e.ShiftKey)
+        {
+            // insert newline at cursor (JS) + triggers input event => text updates
+            await JS.InvokeVoidAsync("chatInsertNewline", inputRef);
+            await OnUserTyping.InvokeAsync();
+            return;
+        }
+
+        await Send();
+    }
+
     private async Task Send()
     {
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        await OnSend.InvokeAsync(text);
+        var toSend = text.TrimEnd();
         text = string.Empty;
+
+        await OnSend.InvokeAsync(toSend);
+        await JS.InvokeVoidAsync("chatFocus", inputRef);
     }
 }

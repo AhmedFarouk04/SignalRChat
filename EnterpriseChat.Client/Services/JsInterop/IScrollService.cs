@@ -4,6 +4,7 @@ namespace EnterpriseChat.Client.Services.JsInterop;
 
 public interface IScrollService
 {
-    ValueTask ScrollToBottomAsync(ElementReference element);
-    ValueTask<bool> IsAtBottomAsync(ElementReference element);
+    Task ScrollToBottomAsync(ElementReference el);
+    Task ScrollToBottomSmoothAsync(ElementReference el);
+    Task<bool> IsAtBottomAsync(ElementReference el);
 }

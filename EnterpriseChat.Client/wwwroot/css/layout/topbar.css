@@ -33,21 +33,17 @@
     font-weight: 600;
 }
 
-.icon-btn {
-    background: transparent;
-    border: 1px solid var(--border-subtle);
-    color: var(--text-primary);
-    border-radius: var(--radius-md);
-    padding: 6px 10px;
-    cursor: pointer;
-    transition: background var(--transition-fast);
-}
-
-    .icon-btn:hover {
-        background: var(--bg-message);
-    }
-
 .room-actions {
     display: flex;
     gap: 8px;
+    align-items: center;
 }
+
+.icon-btn {
+    height: 34px;
+    min-width: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+

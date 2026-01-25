@@ -10,10 +10,13 @@ public interface IChatService
     Task<IReadOnlyList<MessageReadReceiptDto>> GetReadersAsync(Guid messageId);
 
     Task<GroupMembersDto?> GetGroupMembersAsync(Guid roomId);
-    Task<IReadOnlyList<UserModel>> GetOnlineUsersInRoomAsync(Guid roomId);
 
     Task MuteAsync(Guid roomId);
     Task UnmuteAsync(Guid roomId);
     Task BlockUserAsync(Guid userId);
     Task RemoveMemberAsync(Guid roomId, Guid userId);
+    Task MarkMessageDeliveredAsync(Guid messageId);
+    Task MarkMessageReadAsync(Guid messageId);
+    Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId);
+
 }
