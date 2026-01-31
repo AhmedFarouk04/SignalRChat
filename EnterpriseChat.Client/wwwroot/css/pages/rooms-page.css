@@ -157,3 +157,135 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+
+.user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(148,163,184,0.12);
+    background: rgba(2,6,23,0.35);
+}
+
+.user-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.mini-btn {
+    border: 1px solid rgba(56,189,248,0.35);
+    background: rgba(56,189,248,0.12);
+    padding: 10px 14px;
+    border-radius: 12px;
+    color: #e2e8f0;
+    cursor: pointer;
+}
+
+    .mini-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+.room-item {
+    margin-bottom: 10px;
+}
+
+.room-link {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 14px;
+    text-decoration: none;
+    transition: .15s ease;
+}
+
+    .room-link:hover {
+        background: rgba(255,255,255,.06);
+    }
+
+    .room-link.active {
+        background: rgba(255,255,255,.10);
+    }
+
+.room-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: rgba(255,255,255,.06);
+    position: relative;
+    flex-shrink: 0;
+}
+
+    .room-avatar.private .avatar-text {
+        font-weight: 700;
+        opacity: .9;
+    }
+
+    .room-avatar.group {
+        font-size: 18px;
+    }
+
+.online-dot {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    right: 3px;
+    bottom: 3px;
+    background: #22c55e;
+    border: 2px solid #0b1220;
+}
+
+.room-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.room-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.room-title {
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.room-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+
+
+.typing {
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+.badge {
+    min-width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 0 7px;
+    background: rgba(96,165,250,.2);
+}

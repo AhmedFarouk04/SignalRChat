@@ -5,9 +5,5 @@ namespace EnterpriseChat.Application.Interfaces;
 
 public interface IMessageReadRepository
 {
-    Task<IReadOnlyList<MessageReadDto>> GetMessagesAsync(
-        RoomId roomId,
-        int skip,
-        int take,
-        CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<MessageReadDto>> GetMessagesAsync(RoomId roomId, int skip, int take, CancellationToken cancellationToken = default);
 }

@@ -1,9 +1,12 @@
 ﻿using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Chat;
+using EnterpriseChat.Client.Services.Http;
 using EnterpriseChat.Client.Services.Realtime;
 using EnterpriseChat.Client.Services.Rooms;
 using EnterpriseChat.Client.Services.Ui;
+using EnterpriseChat.Domain.ValueObjects;
+
 
 namespace EnterpriseChat.Client.ViewModels;
 
@@ -14,27 +17,42 @@ public sealed class ChatViewModel
     private readonly IChatRealtimeClient _realtime;
     private readonly ICurrentUser _currentUser;
     private readonly ToastService _toasts;
+    private readonly RoomFlagsStore _flags;
+    private readonly ModerationApi _mod;
+
 
     private DateTime _lastTyping;
     private Guid? _currentRoomId;
     private bool _eventsRegistered;
     private Guid? _eventsRoomId;
-
+    private readonly object _notifyLock = new();
+    private bool _notifyQueued;
+    private DateTime _lastNotifyAt = DateTime.MinValue;
+    private readonly TimeSpan _notifyMinInterval = TimeSpan.FromMilliseconds(80); // 50-120 مناسب
     public event Action? Changed;
-    private void NotifyChanged() => Changed?.Invoke();
+    private void NotifyChanged([System.Runtime.CompilerServices.CallerMemberName] string from = "?")
+    {
+        DebugChanged(from);
+        Changed?.Invoke();
+    }
 
     public ChatViewModel(
         IChatService chatService,
         IRoomService roomService,
         IChatRealtimeClient realtime,
         ICurrentUser currentUser,
-        ToastService toasts)
+        ToastService toasts,
+        RoomFlagsStore flags,
+        ModerationApi mod)
     {
         _chatService = chatService;
         _roomService = roomService;
         _realtime = realtime;
         _currentUser = currentUser;
         _toasts = toasts;
+        _flags = flags;
+        _mod = mod;
+
     }
 
     public RoomModel? Room { get; private set; }
@@ -56,9 +74,27 @@ public sealed class ChatViewModel
     public bool IsOtherDeleted { get; private set; }
     public bool IsRemoved { get; private set; }
 
+    private int _changedCount;
+    private DateTime _lastLog = DateTime.UtcNow;
+
+    private void DebugChanged(string from)
+    {
+        _changedCount++;
+        var now = DateTime.UtcNow;
+        if ((now - _lastLog).TotalSeconds >= 2)
+        {
+            Console.WriteLine($"[VM Changed] last2s={_changedCount} from={from} msgs={Messages.Count} typing={TypingUsers.Count} online={OnlineUsers.Count} disconnected={IsDisconnected}");
+            _changedCount = 0;
+            _lastLog = now;
+        }
+    }
+
     public async Task InitializeAsync(Guid roomId)
     {
+        // ✅ افصل القديم + unsubscribe من الستور
         UnregisterRealtimeEvents();
+        _flags.RoomMuteChanged -= OnRoomMuteChanged;
+        _flags.UserBlockChanged -= OnUserBlockChanged;
 
         TypingUsers.Clear();
         OnlineUsers.Clear();
@@ -67,6 +103,12 @@ public sealed class ChatViewModel
         IsRemoved = false;
         IsOtherDeleted = false;
         UiError = null;
+
+        // ✅ خلي قيم الحالة دايمًا تتظبط من الستور أولاً
+        _currentRoomId = roomId;
+        _flags.SetActiveRoom(roomId);
+        IsMuted = _flags.GetMuted(roomId);
+        IsBlocked = false;
 
         NotifyChanged();
 
@@ -83,15 +125,44 @@ public sealed class ChatViewModel
                 return;
             }
 
-            _currentRoomId = roomId;
+            if (Room.Type == "Private" && OtherUser != null)
+            {
+                try
+                {
+                    var blocked = await _mod.GetBlockedAsync();
+                    _flags.SetBlockedUsers(blocked.Select(b => b.UserId));
+                    IsBlocked = _flags.GetBlocked(OtherUser.Id);
+                }
+                catch { }
+            }
 
+
+            // ✅ messages
             Messages.AddRange(await _chatService.GetMessagesAsync(roomId));
+            var myId = CurrentUserId;
+            var toDeliver = Messages
+                .Where(m => m.SenderId != myId && m.Status < MessageStatus.Delivered)
+                .Select(m => m.Id)
+                .ToList();
+
+            if (toDeliver.Any())
+            {
+                // fire-and-forget كلها
+                _ = Task.Run(async () =>
+                {
+                    foreach (var id in toDeliver)
+                    {
+                        try { await _chatService.MarkMessageDeliveredAsync(id); }
+                        catch { /* silent */ }
+                    }
+                });
+            }
             NotifyChanged();
 
+            // ✅ group members / other user
             if (Room.Type == "Group")
             {
                 var dto = await _chatService.GetGroupMembersAsync(roomId);
-
                 GroupMembers = new GroupMembersModel
                 {
                     OwnerId = dto.OwnerId,
@@ -122,6 +193,10 @@ public sealed class ChatViewModel
                         DisplayName = Room.OtherDisplayName ?? "User",
                         IsOnline = false
                     };
+
+                    // ✅ sync block مع الستور
+                    IsBlocked = _flags.GetBlocked(OtherUser.Id);
+
                 }
             }
             else
@@ -129,23 +204,70 @@ public sealed class ChatViewModel
                 OtherUser = null;
             }
 
+            // ✅ subscribe للستور بعد ما عرفنا room + other user
+            _flags.RoomMuteChanged += OnRoomMuteChanged;
+            _flags.UserBlockChanged += OnUserBlockChanged;
+
             RegisterRealtimeEvents(roomId);
 
+            // ✅ realtime connect + join
             await _realtime.ConnectAsync();
             await _realtime.JoinRoomAsync(roomId);
+
+            // ✅ صفّر unread فور الدخول (مرة واحدة) + بعد Join
+            var lastMsg = Messages
+                .OrderByDescending(m => m.CreatedAt)
+                .FirstOrDefault();
+
+            if (lastMsg != null)
+            {
+                try
+                {
+                    await MarkRoomReadAsync(roomId, lastMsg.Id);
+                }
+                catch { }
+            }
+
+            // ✅ صفر محليًا فورًا (القائمة)
+            _flags.SetUnread(roomId, 0);
+
+
+            if (Room?.Type == "Private")
+            {
+                try
+                {
+                    var blocked = await _mod.GetBlockedAsync();
+                    _flags.SetBlockedUsers(blocked.Select(b => b.UserId));
+                }
+                catch { /* ignore preload errors */ }
+            }
+
+            // ✅ snapshot presence للـ private chat (بدون refresh)
+            if (Room?.Type == "Private" && OtherUser is not null)
+            {
+                var set = _realtime.State.OnlineUsers?.ToHashSet() ?? new HashSet<Guid>();
+                OtherUser.IsOnline = set.Contains(OtherUser.Id);
+
+                if (OtherUser.IsOnline)
+                    OtherUser.LastSeen = null;
+
+                NotifyChanged();
+            }
 
             if (Room.Type == "Group" && GroupMembers is not null)
                 RebuildPresenceFromRealtime();
 
             NotifyChanged();
         }
-        catch
+        catch (Exception ex)
         {
-            UiError = "Failed to load chat. Please try again.";
+            UiError = ex.Message;
             Room = null;
             NotifyChanged();
         }
     }
+
+
 
     private void RegisterRealtimeEvents(Guid roomId)
     {
@@ -158,6 +280,7 @@ public sealed class ChatViewModel
         _realtime.MessageReceived += OnMessageReceived;
         _realtime.MessageDelivered += OnMessageDelivered;
         _realtime.MessageRead += OnMessageRead;
+        _realtime.RoomMuteChanged += OnRoomMuteChanged;
 
         _realtime.UserOnline += OnUserOnline;
         _realtime.UserOffline += OnUserOffline;
@@ -191,10 +314,20 @@ public sealed class ChatViewModel
         _realtime.Disconnected -= OnDisconnected;
         _realtime.Reconnected -= OnReconnected;
         _realtime.RemovedFromRoom -= OnRemovedFromRoom;
+        _realtime.RoomMuteChanged -= OnRoomMuteChanged;
 
         _eventsRegistered = false;
         _eventsRoomId = null;
     }
+
+    private void OnRoomMuteChanged(Guid rid, bool muted)
+    {
+        if (_eventsRoomId != rid) return;
+
+        IsMuted = muted;
+        NotifyChanged();
+    }
+
 
     private void RebuildPresenceFromRealtime()
     {
@@ -245,6 +378,13 @@ public sealed class ChatViewModel
 
     public async Task SendAsync(Guid roomId, string text)
     {
+        if (IsMuted)
+        {
+            _toasts.Warning("Muted", "This chat is muted. Unmute to send messages.");
+            return;
+        }
+
+
         if (IsBlocked)
         {
             _toasts.Warning("Blocked", "You can't send messages to this user.");
@@ -302,6 +442,44 @@ public sealed class ChatViewModel
         }
     }
 
+    private void NotifyChangedThrottled()
+    {
+        lock (_notifyLock)
+        {
+            // لو فيه Update متسجل بالفعل، ما نكررش
+            if (_notifyQueued) return;
+
+            var now = DateTime.UtcNow;
+            var elapsed = now - _lastNotifyAt;
+
+            if (elapsed >= _notifyMinInterval)
+            {
+                _lastNotifyAt = now;
+                Changed?.Invoke();
+                return;
+            }
+
+            _notifyQueued = true;
+            var delay = _notifyMinInterval - elapsed;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(delay);
+                    lock (_notifyLock)
+                    {
+                        _notifyQueued = false;
+                        _lastNotifyAt = DateTime.UtcNow;
+                    }
+                    Changed?.Invoke();
+                }
+                catch { }
+            });
+        }
+    }
+
+
     public async Task NotifyTypingAsync(Guid roomId)
     {
         if ((DateTime.UtcNow - _lastTyping).TotalMilliseconds < 800)
@@ -353,8 +531,8 @@ public sealed class ChatViewModel
         {
             await _chatService.BlockUserAsync(userId);
             IsBlocked = true;
+            _flags.SetBlocked(userId, true); // ✅
             TypingUsers.Clear();
-            _toasts.Success("Blocked", "User blocked.");
             NotifyChanged();
         }
         catch
@@ -363,15 +541,41 @@ public sealed class ChatViewModel
         }
     }
 
+    public async Task UnblockUserAsync(Guid userId)
+    {
+        try
+        {
+            await _mod.UnblockAsync(userId);
+            IsBlocked = false;
+            _flags.SetBlocked(userId, false);
+            NotifyChanged();
+        }
+        catch
+        {
+            _toasts.Error("Failed", "Could not unblock user.");
+        }
+    }
+
+
     public async Task ToggleMuteAsync(Guid roomId)
     {
         try
         {
-            if (!IsMuted) await _chatService.MuteAsync(roomId);
-            else await _chatService.UnmuteAsync(roomId);
+            // ✅ خلي الستوري هو مصدر الحقيقة
+            var currentlyMuted = _flags.GetMuted(roomId);
+            var nextMuted = !currentlyMuted;
 
-            IsMuted = !IsMuted;
-            _toasts.Success("Updated", IsMuted ? "Muted." : "Unmuted.");
+            if (nextMuted)
+                await _chatService.MuteAsync(roomId);
+            else
+                await _chatService.UnmuteAsync(roomId);
+
+            // ✅ تحديث فوري لكل الصفحات
+            _flags.SetMuted(roomId, nextMuted);
+
+            // ✅ تحديث فوري لزرار TopBar في نفس الشات
+            IsMuted = nextMuted;
+
             NotifyChanged();
         }
         catch
@@ -380,14 +584,52 @@ public sealed class ChatViewModel
         }
     }
 
+
+    public async Task RefreshRoomStateAsync(Guid roomId)
+    {
+        try
+        {
+            var room = await _roomService.GetRoomAsync(roomId);
+            if (room != null)
+            {
+                Room = room;
+                IsMuted = room.IsMuted;
+                NotifyChanged();
+            }
+        }
+        catch { }
+    }
+
     public async Task DisposeAsync()
     {
+        _flags.SetActiveRoom(null);
+
+        // ✅ unsubscribe من الستور
+        _flags.RoomMuteChanged -= OnRoomMuteChanged;
+        _flags.UserBlockChanged -= OnUserBlockChanged;
+
         UnregisterRealtimeEvents();
 
         if (_currentRoomId != null)
             await _realtime.LeaveRoomAsync(_currentRoomId.Value);
 
         await _realtime.DisconnectAsync();
+
+        _currentRoomId = null;
+    }
+
+    private void OnRoomMuteChanged(Guid roomId)
+    {
+        if (_currentRoomId != roomId) return;
+        IsMuted = _flags.GetMuted(roomId);
+        NotifyChanged();
+    }
+
+    private void OnUserBlockChanged(Guid userId)
+    {
+        if (OtherUser?.Id != userId) return;
+        IsBlocked = _flags.GetBlocked(userId);
+        NotifyChanged();
     }
 
     // ===== Realtime handlers =====
@@ -410,6 +652,18 @@ public sealed class ChatViewModel
         }
 
         NotifyChanged();
+        // ✅ لو الرسالة جاية من شخص تاني وأنا فاتح نفس الروم:
+        if (_currentRoomId == message.RoomId && message.SenderId != CurrentUserId)
+        {
+            if (message.Status < MessageStatus.Delivered)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try { await _chatService.MarkMessageDeliveredAsync(message.Id); }
+                    catch { }
+                });
+            }
+        }
     }
 
     private void OnMessageDelivered(Guid messageId)
@@ -418,8 +672,31 @@ public sealed class ChatViewModel
         if (msg?.Status == MessageStatus.Sent)
             msg.Status = MessageStatus.Delivered;
 
-        NotifyChanged();
+        NotifyChangedThrottled();
     }
+
+    public async Task RefreshMuteStateAsync(Guid roomId)
+    {
+        try
+        {
+            var room = await _roomService.GetRoomAsync(roomId);
+            if (room != null)
+            {
+                Room = room;
+
+                // ✅ عدّل اسم الخاصية حسب الموديل عندك:
+                // لو عندك room.IsMuted استخدمها، لو اسمها Muted أو IsRoomMuted إلخ
+                IsMuted = room.IsMuted;
+
+                NotifyChanged();
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
 
     private void OnMessageRead(Guid id)
     {
@@ -427,8 +704,9 @@ public sealed class ChatViewModel
         if (msg != null && msg.Status != MessageStatus.Read)
             msg.Status = MessageStatus.Read;
 
-        NotifyChanged();
+        NotifyChangedThrottled();
     }
+
 
     private void OnUserOnline(Guid id)
     {
@@ -441,8 +719,9 @@ public sealed class ChatViewModel
         if (Room?.Type == "Group")
             RebuildPresenceFromRealtime();
 
-        NotifyChanged();
+        NotifyChangedThrottled();
     }
+
 
     private void OnUserOffline(Guid id)
     {
@@ -455,8 +734,9 @@ public sealed class ChatViewModel
         if (Room?.Type == "Group")
             RebuildPresenceFromRealtime();
 
-        NotifyChanged();
+        NotifyChangedThrottled();
     }
+
 
     private void OnRoomPresenceUpdated(Guid rid, int _)
     {

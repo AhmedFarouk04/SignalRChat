@@ -1,4 +1,5 @@
 ﻿@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
 @inject IJSRuntime JS
 
 <div class="composer">
@@ -6,10 +7,11 @@
         <textarea class="composer-input"
                   @ref="inputRef"
                   placeholder="Message…"
-                  value="@text"
-                  @oninput="OnInput"
-                  @onkeydown="OnKeyDown"
-                  @onkeydown:preventDefault="true"></textarea>
+                  @bind-value="text"
+                  @bind-value:event="oninput"
+                  @onkeydown="OnKeyDown"></textarea>
+
+
 
         <button class="composer-send"
                 type="button"
@@ -29,37 +31,78 @@
 
     private bool IsSendDisabled => string.IsNullOrWhiteSpace(text);
 
-    private async Task OnInput(ChangeEventArgs e)
-    {
-        text = e.Value?.ToString() ?? string.Empty;
-        await OnUserTyping.InvokeAsync();
-    }
+    private CancellationTokenSource? _typingCts;
+    private DateTime _lastTypingSent = DateTime.MinValue;
+
+    private static readonly HashSet<string> IgnoreKeys = new()
+{
+    "Shift","Control","Alt","Meta",
+    "ArrowUp","ArrowDown","ArrowLeft","ArrowRight",
+    "Escape","Tab","CapsLock"
+};
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key != "Enter")
-            return;
-
-        if (e.ShiftKey)
+        if (e.Key == "Enter" && !e.ShiftKey)
         {
-            // insert newline at cursor (JS) + triggers input event => text updates
-            await JS.InvokeVoidAsync("chatInsertNewline", inputRef);
-            await OnUserTyping.InvokeAsync();
+            await Send();
             return;
         }
 
-        await Send();
+        if (IgnoreKeys.Contains(e.Key))
+            return;
+
+        await OnUserTyping.InvokeAsync();
+    }
+
+
+    private async Task OnInput(ChangeEventArgs _)
+    {
+        // input بيغطي paste + mobile keyboards
+        await DebouncedTypingAsync();
+    }
+
+    private static bool IsNonTypingKey(string key)
+        => key is "Shift" or "Control" or "Alt" or "Meta"
+            or "ArrowUp" or "ArrowDown" or "ArrowLeft" or "ArrowRight"
+            or "CapsLock" or "Tab" or "Escape";
+
+    private async Task DebouncedTypingAsync()
+    {
+        // throttle: ابعت بحد أقصى مرة كل 700ms
+        var now = DateTime.UtcNow;
+        if ((now - _lastTypingSent).TotalMilliseconds < 700) return;
+
+        _typingCts?.Cancel();
+        _typingCts?.Dispose();
+        _typingCts = new CancellationTokenSource();
+        var ct = _typingCts.Token;
+
+        try
+        {
+            await Task.Delay(120, ct); // debounce صغير
+            if (ct.IsCancellationRequested) return;
+
+            _lastTypingSent = DateTime.UtcNow;
+            await OnUserTyping.InvokeAsync();
+        }
+        catch { }
     }
 
     private async Task Send()
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return;
+        if (string.IsNullOrWhiteSpace(text)) return;
 
         var toSend = text.TrimEnd();
         text = string.Empty;
 
         await OnSend.InvokeAsync(toSend);
         await JS.InvokeVoidAsync("chatFocus", inputRef);
+    }
+
+    public void Dispose()
+    {
+        _typingCts?.Cancel();
+        _typingCts?.Dispose();
     }
 }

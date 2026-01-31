@@ -7,16 +7,22 @@
     </Authorized>
 
     <NotAuthorized>
-        @code {
-            protected override void OnAfterRender(bool firstRender)
-            {
-                if (firstRender)
-                    Nav.NavigateTo("/login", true);
-            }
-        }
+        @* ممكن تحط placeholder *@
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var state = AuthStateTask is null ? null : await AuthStateTask;
+        var isAuthed = state?.User?.Identity?.IsAuthenticated == true;
+
+        if (!isAuthed)
+            Nav.NavigateTo("/login", true);
+    }
 }

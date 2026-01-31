@@ -17,19 +17,21 @@ public sealed class MessageReceiptReadRepository
     }
 
     public async Task<IReadOnlyList<MessageReadReceiptDto>> GetReadersAsync(
-        MessageId messageId,
-        CancellationToken cancellationToken = default)
+    MessageId messageId,
+    CancellationToken cancellationToken = default)
     {
         return await _context.MessageReceipts
             .AsNoTracking()
             .Where(r =>
-                r.MessageId.Value == messageId.Value &&
-                r.Status == Domain.Enums.MessageStatus.Read)
+                r.MessageId == messageId &&
+                r.Status == Domain.Enums.MessageStatus.Read
+            )
             .Select(r => new MessageReadReceiptDto
             {
-                UserId = r.UserId.Value,
+                UserId = r.UserId!.Value,
                 ReadAt = r.UpdatedAt
             })
             .ToListAsync(cancellationToken);
     }
+
 }

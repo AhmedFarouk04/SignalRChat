@@ -53,12 +53,14 @@
                 {
                     <button class="icon-btn"
                             type="button"
-                            aria-label="Block user"
-                            title="Block user"
-                            @onclick="() => OnBlock.InvokeAsync()">
-                        🚫
+                            aria-label="@(IsBlocked ? "Unblock user" : "Block user")"
+                            title="@(IsBlocked ? "Unblock user" : "Block user")"
+                            @onclick="() => (IsBlocked ? OnUnblock : OnBlock).InvokeAsync()">
+                        @(IsBlocked ? "🔓" : "🚫")
                     </button>
                 }
+
+
 
                 <button class="icon-btn"
                         type="button"
@@ -86,7 +88,8 @@
     [Parameter] public EventCallback OnMuteToggle { get; set; }
     [Parameter] public EventCallback OnBlock { get; set; }
     [Parameter] public EventCallback OnMembers { get; set; }
-
+    [Parameter] public bool IsBlocked { get; set; }
+    [Parameter] public EventCallback OnUnblock { get; set; }
     private bool IsPrivate => Room?.Type == "Private";
 
     private string Title =>

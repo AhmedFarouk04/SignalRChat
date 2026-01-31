@@ -1,0 +1,68 @@
+﻿@page "/register"
+@using EnterpriseChat.Client.Contracts.Auth
+@using EnterpriseChat.Client.Services.Http
+@layout EnterpriseChat.Client.Components.Layout.AuthLayout
+
+@inject AuthApi AuthApi
+@inject NavigationManager Nav
+
+<div class="auth-head">
+    <h2>Create account</h2>
+    <p>We will send you a verification code.</p>
+</div>
+
+<div class="auth-grid">
+    <input class="auth-input" placeholder="Username" @bind="Username" autocomplete="username" />
+    <input class="auth-input" placeholder="Email" @bind="Email" autocomplete="email" />
+    <input class="auth-input" placeholder="Password" type="password" @bind="Password" autocomplete="new-password" />
+    <input class="auth-input" placeholder="Confirm password" type="password" @bind="ConfirmPassword" autocomplete="new-password" />
+</div>
+
+<button class="auth-btn" @onclick="DoRegisterAsync" disabled="@IsBusy">
+    @(IsBusy ? "Sending code..." : "Register")
+</button>
+
+@if (!string.IsNullOrWhiteSpace(Error))
+{
+    <div class="auth-error">@Error</div>
+}
+
+<div class="auth-links">
+    <a href="/login">Back to login</a>
+</div>
+
+@code {
+    private string Username = "";
+    private string Email = "";
+    private string Password = "";
+    private string ConfirmPassword = "";
+    private bool IsBusy;
+    private string? Error;
+
+    private async Task DoRegisterAsync()
+    {
+        Error = null;
+        IsBusy = true;
+
+        try
+        {
+            var dto = await AuthApi.RegisterAsync(new RegisterRequest
+            {
+                Username = Username.Trim(),
+                Email = Email.Trim(),
+                Password = Password,
+                ConfirmPassword = ConfirmPassword
+            });
+
+            Nav.NavigateTo($"/verify-email?email={Uri.EscapeDataString(dto.Email)}", true);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+}

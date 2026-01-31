@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseChat.Domain", "En
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseChat.Infrastructure", "EnterpriseChat.Infrastructure\EnterpriseChat.Infrastructure.csproj", "{BF4ACBF6-D9BC-57BF-6AB5-8E2415EADD9A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EnterpriseChat.TestClient", "EnterpriseChat.TestClient\EnterpriseChat.TestClient.csproj", "{FEC4CF45-01DF-447A-9157-DD8AF3F8408C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{BF4ACBF6-D9BC-57BF-6AB5-8E2415EADD9A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BF4ACBF6-D9BC-57BF-6AB5-8E2415EADD9A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BF4ACBF6-D9BC-57BF-6AB5-8E2415EADD9A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FEC4CF45-01DF-447A-9157-DD8AF3F8408C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FEC4CF45-01DF-447A-9157-DD8AF3F8408C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FEC4CF45-01DF-447A-9157-DD8AF3F8408C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FEC4CF45-01DF-447A-9157-DD8AF3F8408C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,6 +1,7 @@
 using EnterpriseChat.Client;
 using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Authentication.Services;
+using EnterpriseChat.Client.Services.Attachments;
 using EnterpriseChat.Client.Services.Chat;
 using EnterpriseChat.Client.Services.Http;
 using EnterpriseChat.Client.Services.JsInterop;
@@ -26,7 +27,7 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped(sp =>
 {
     // prefer config if present
-    var apiBase = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:5001";
+    var apiBase = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7188";
     return new HttpClient { BaseAddress = new Uri(apiBase.EndsWith("/") ? apiBase : apiBase + "/") };
 });
 
@@ -40,5 +41,15 @@ builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddScoped<ChatViewModel>();
 builder.Services.AddScoped<RoomsViewModel>();
 builder.Services.AddScoped<ToastService>();
-
+builder.Services.AddScoped<AttachmentDownloadService>();
+builder.Services.AddScoped<EnterpriseChat.Client.Authentication.AuthFlowState>();
+builder.Services.AddScoped<AuthApi>();
+builder.Services.AddScoped<UsersApi>();
+builder.Services.AddScoped<ChatApi>();
+builder.Services.AddScoped<GroupsApi>();
+builder.Services.AddScoped<ModerationApi>();
+builder.Services.AddScoped<AttachmentsApi>();
+builder.Services.AddScoped<PresenceApi>();
+builder.Services.AddSingleton<RoomFlagsStore>();
+builder.Services.AddScoped<NotificationSoundService>();
 await builder.Build().RunAsync();

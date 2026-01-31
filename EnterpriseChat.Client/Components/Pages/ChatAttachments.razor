@@ -1,0 +1,196 @@
+﻿@using EnterpriseChat.Application.DTOs
+@using EnterpriseChat.Client.Services.Http
+@using EnterpriseChat.Client.Services.Attachments
+@using Microsoft.AspNetCore.Components.Forms
+
+@inject AttachmentsApi AttachmentsApi
+@inject AttachmentDownloadService Downloader
+
+<div class="attach-wrap">
+    <div class="attach-bar">
+        <InputFile OnChange="OnPicked" multiple class="attach-file" />
+
+        <button type="button" class="mini-btn" @onclick="LoadAsync" disabled="@busy">
+            @(busy ? "..." : "Refresh")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="auth-error" style="margin-top:10px;">@error</div>
+    }
+
+    @if (items.Count == 0)
+    {
+        <div class="rooms-empty" style="margin-top:10px;">
+            <div class="rooms-empty-sub">No attachments</div>
+        </div>
+    }
+    else
+    {
+        <ul class="rooms-list" style="margin-top:10px;">
+            @foreach (var a in items.OrderByDescending(x => x.CreatedAt))
+            {
+                <li class="user-row">
+                    <div class="user-left" style="min-width:0;">
+                        <div class="room-main" style="min-width:0;">
+                            <div class="room-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                @a.FileName
+                            </div>
+                            <div class="room-preview">
+                                @FormatSize(a.Size) • @a.CreatedAt.ToLocalTime()
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => DownloadAsync(a.Id))">
+                            Download
+                        </button>
+
+                        <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => DeleteAsync(a.Id))">
+                            Delete
+                        </button>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid RoomId { get; set; }
+
+    private bool busy;
+    private string? error;
+    private readonly List<AttachmentDto> items = new();
+
+    private Guid _loadedRoomId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RoomId == Guid.Empty) return;
+        if (_loadedRoomId == RoomId) return;
+
+        _loadedRoomId = RoomId;
+        await LoadAsync();
+    }
+
+
+    private async Task LoadAsync()
+    {
+        busy = true;
+        error = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            items.Clear();
+            var res = await AttachmentsApi.ListAsync(RoomId, 0, 50);
+            items.AddRange(res);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OnPicked(InputFileChangeEventArgs e)
+    {
+        if (RoomId == Guid.Empty) return;
+
+        busy = true;
+        error = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            foreach (var file in e.GetMultipleFiles())
+            {
+                // حد آمن للحجم (غيّره حسب API)
+                const long maxBytes = 25 * 1024 * 1024;
+
+                await using var stream = file.OpenReadStream(maxAllowedSize: maxBytes);
+                await AttachmentsApi.UploadAsync(
+                    RoomId,
+                    stream,
+                    fileName: file.Name,
+                    contentType: file.ContentType);
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DownloadAsync(Guid attachmentId)
+    {
+        busy = true;
+        error = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            // ✅ هنا الحل: نجيب ApiFile من الـ API client
+            var file = await AttachmentsApi.DownloadAsync(attachmentId);
+
+            // ✅ نستخدم Downloader بالـ ApiFile (حل CS1503)
+            await Downloader.DownloadAsync(file);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DeleteAsync(Guid attachmentId)
+    {
+        busy = true;
+        error = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await AttachmentsApi.DeleteAsync(attachmentId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        double kb = bytes / 1024.0;
+        if (kb < 1024) return $"{kb:0.#} KB";
+        double mb = kb / 1024.0;
+        if (mb < 1024) return $"{mb:0.#} MB";
+        double gb = mb / 1024.0;
+        return $"{gb:0.#} GB";
+    }
+}

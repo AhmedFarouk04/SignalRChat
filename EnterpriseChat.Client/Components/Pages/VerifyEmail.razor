@@ -1,0 +1,160 @@
+﻿@page "/verify-email"
+@implements IDisposable
+
+@using EnterpriseChat.Client.Contracts.Auth
+@using EnterpriseChat.Client.Services.Http
+@layout EnterpriseChat.Client.Components.Layout.AuthLayout
+@using System.Web
+
+@inject AuthApi AuthApi
+@inject EnterpriseChat.Client.Authentication.Abstractions.ITokenStore TokenStore
+@inject EnterpriseChat.Client.Authentication.Services.JwtAuthStateProvider AuthProvider
+@inject NavigationManager Nav
+
+<div class="auth-head">
+    <h2>Verify email</h2>
+    <p>Enter the 6-digit code we sent to your email.</p>
+</div>
+
+<div class="auth-grid">
+    <input class="auth-input" placeholder="Email" @bind="Email" autocomplete="email" />
+
+    <input class="auth-input code"
+           placeholder="6-digit code"
+           @bind="Code"
+           maxlength="6"
+           inputmode="numeric"
+           pattern="[0-9]*" />
+</div>
+
+<button class="auth-btn" type="button"
+        @onclick="DoVerifyAsync"
+        disabled="@(IsBusy)">
+    @(IsBusy ? "Verifying..." : "Verify")
+</button>
+
+<button class="auth-btn secondary" type="button"
+        @onclick="DoResendAsync"
+        disabled="@(IsBusy || ResendCooldown || string.IsNullOrWhiteSpace(Email))">
+    @(ResendCooldown ? $"Resend in {ResendSecondsLeft}s" : "Resend code")
+</button>
+
+
+@if (!string.IsNullOrWhiteSpace(Error))
+{
+    <div class="auth-error">@Error</div>
+}
+
+<div class="auth-links">
+    <a href="/login">Back to login</a>
+</div>
+
+@code {
+    private string Email = "";
+    private string Code = "";
+    private bool IsBusy;
+    private string? Error;
+
+    private bool ResendCooldown;
+    private int ResendSecondsLeft;
+
+    private System.Timers.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        var uri = new Uri(Nav.Uri);
+        var qs = HttpUtility.ParseQueryString(uri.Query);
+        Email = qs.Get("email") ?? "";
+    }
+
+    private async Task DoVerifyAsync()
+    {
+        Error = null;
+        IsBusy = true;
+
+        try
+        {
+            var dto = await AuthApi.VerifyEmailAsync(new VerifyEmailRequest
+            {
+                Email = Email.Trim(),
+                Code = Code.Trim()
+            });
+
+            await TokenStore.SetAsync(dto.AccessToken);
+            AuthProvider.Notify();
+
+            Nav.NavigateTo("/rooms", true);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task DoResendAsync()
+    {
+        // حماية إضافية
+        if (string.IsNullOrWhiteSpace(Email) || ResendCooldown || IsBusy)
+            return;
+
+        Error = null;
+        IsBusy = true;
+
+        try
+        {
+            await AuthApi.ResendCodeAsync(Email.Trim());
+
+            // اقفل 30 ثانية مع عداد
+            StartCooldown(30);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void StartCooldown(int seconds)
+    {
+        ResendCooldown = true;
+        ResendSecondsLeft = seconds;
+
+        _timer?.Stop();
+        _timer?.Dispose();
+
+        _timer = new System.Timers.Timer(1000);
+        _timer.AutoReset = true;
+
+        _timer.Elapsed += async (_, _) =>
+        {
+            ResendSecondsLeft--;
+
+            if (ResendSecondsLeft <= 0)
+            {
+                ResendCooldown = false;
+
+                _timer?.Stop();
+                _timer?.Dispose();
+                _timer = null;
+            }
+
+            await InvokeAsync(StateHasChanged);
+        };
+
+        _timer.Start();
+    }
+
+    public void Dispose()
+    {
+        _timer?.Stop();
+        _timer?.Dispose();
+        _timer = null;
+    }
+}

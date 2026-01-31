@@ -1,87 +1,246 @@
 ﻿@page "/rooms"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using EnterpriseChat.Client.Services.Ui
 @using EnterpriseChat.Client.ViewModels
+@using EnterpriseChat.Client.Services.Realtime
 @inject RoomsViewModel VM
+@inject IChatRealtimeClient Realtime
 @inject NavigationManager Nav
+
 @implements IDisposable
 
-<AuthGuard>
-    <div class="rooms-page">
-        <div class="rooms-header">
-            <h2 class="rooms-title">Chats</h2>
-        </div>
-
-        <div class="rooms-toolbar">
-            <input class="rooms-search"
-                   id="roomsSearch"
-                   aria-label="Search chats"
-                   placeholder="Search chats…"
-                   value="@VM.SearchQuery"
-                   @oninput="OnSearch"
-                   autofocus />
-
-
-            <div class="rooms-tabs">
-                <button class="tab @(VM.ActiveFilter == RoomsFilter.All ? "active" : "")"
-                        @onclick="() => VM.SetFilter(RoomsFilter.All)">All</button>
-
-                <button class="tab @(VM.ActiveFilter == RoomsFilter.Unread ? "active" : "")"
-                        @onclick="() => VM.SetFilter(RoomsFilter.Unread)">Unread</button>
-
-                <button class="tab @(VM.ActiveFilter == RoomsFilter.Muted ? "active" : "")"
-                        @onclick="() => VM.SetFilter(RoomsFilter.Muted)">Muted</button>
-
-                <button class="tab @(VM.ActiveFilter == RoomsFilter.Groups ? "active" : "")"
-                        @onclick="() => VM.SetFilter(RoomsFilter.Groups)">Groups</button>
-
-                <button class="tab @(VM.ActiveFilter == RoomsFilter.Private ? "active" : "")"
-                        @onclick="() => VM.SetFilter(RoomsFilter.Private)">Private</button>
-            </div>
-        </div>
-
-        @if (VM.IsLoading)
-        {
-            <ul class="rooms-list">
-                @for (int i = 0; i < 8; i++)
-                {
-                    <li class="room-skeleton">
-                        <div class="sk-avatar"></div>
-                        <div class="sk-lines">
-                            <div class="sk-line w-60"></div>
-                            <div class="sk-line w-90"></div>
-                        </div>
-                    </li>
-                }
-            </ul>
-        }
-        else if (VM.IsEmpty)
-        {
-            <div class="rooms-empty">
-                <div class="rooms-empty-title">No conversations yet</div>
-                <div class="rooms-empty-sub">Start a new chat from Users (Phase 3) — or wait for messages.</div>
-            </div>
-        }
-        else
-        {
-            <ul class="rooms-list">
-                @foreach (var room in VM.VisibleRooms)
-                {
-                    <RoomListItem Room="room" OnOpen="Open" />
-                }
-            </ul>
-        }
+<div class="rooms-page">
+    <div class="rooms-header">
+        <h2 class="rooms-title">Chats</h2>
     </div>
-</AuthGuard>
+
+    <div class="rooms-toolbar">
+        <input class="rooms-search"
+               id="roomsSearch"
+               aria-label="Search chats"
+               placeholder="Search chats…"
+               value="@VM.SearchQuery"
+               @oninput="OnSearch"
+               autofocus />
+
+        <div class="rooms-tabs">
+            <button class="tab @(VM.ActiveFilter == RoomsFilter.All ? "active" : "")"
+                    @onclick="() => VM.SetFilter(RoomsFilter.All)">
+                All
+            </button>
+
+            <button class="tab @(VM.ActiveFilter == RoomsFilter.Unread ? "active" : "")"
+                    @onclick="() => VM.SetFilter(RoomsFilter.Unread)">
+                Unread
+            </button>
+
+            <button class="tab @(VM.ActiveFilter == RoomsFilter.Muted ? "active" : "")"
+                    @onclick="() => VM.SetFilter(RoomsFilter.Muted)">
+                Muted
+            </button>
+
+            <button class="tab @(VM.ActiveFilter == RoomsFilter.Groups ? "active" : "")"
+                    @onclick="() => VM.SetFilter(RoomsFilter.Groups)">
+                Groups
+            </button>
+
+            <button class="tab @(VM.ActiveFilter == RoomsFilter.Private ? "active" : "")"
+                    @onclick="() => VM.SetFilter(RoomsFilter.Private)">
+                Private
+            </button>
+        </div>
+    </div>
+
+    @if (VM.IsLoading)
+    {
+        <ul class="rooms-list">
+            @for (int i = 0; i < 8; i++)
+            {
+                <li class="room-skeleton">
+                    <div class="sk-avatar"></div>
+                    <div class="sk-lines">
+                        <div class="sk-line w-60"></div>
+                        <div class="sk-line w-90"></div>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+    else if (VM.IsEmpty)
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-title">No conversations yet</div>
+            <div class="rooms-empty-sub">Start a new chat from Users — or wait for messages.</div>
+        </div>
+    }
+    else
+    {
+        <ul class="rooms-list">
+            @foreach (var room in VM.VisibleRooms)
+            {
+                <RoomListItem @key="room.Id"
+                              Room="room"
+                              IsOnline="@(room.Type == "Private" && room.OtherUserId != null
+                                                                  && _onlineMap.TryGetValue(room.OtherUserId.Value, out var on)
+                                                                      ? on
+                                                                      : (bool?)null)"
+                      LastSeenText="@(GetLastSeenText(room))"
+                      IsTyping="@(room.Type == "Private" && room.OtherUserId != null
+                                                          && _typingMap.Contains(room.OtherUserId.Value))" />
+                }
+        </ul>
+    }
+</div>
 
 @code {
     private CancellationTokenSource? _searchCts;
 
+    // presence state
+    private readonly Dictionary<Guid, bool> _onlineMap = new();
+    private readonly Dictionary<Guid, DateTime> _lastSeenMap = new();
+
+    // typing in rooms list:
+    // NOTE: Rooms page مش بتنضم لكل الرومات، فغالبًا مش هيوصل typing events.
+    // هنسيبها جاهزة، ولما تعمل JoinRoomsList() في السيرفر هتشتغل تلقائيًا.
+    private readonly HashSet<Guid> _typingMap = new();
+
+    private bool _realtimeSubscribed;
+
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            await Realtime.ConnectAsync();
+            Console.WriteLine("[RoomsPage] SignalR Connected successfully, OnlineUsers count: " + (Realtime.State.OnlineUsers?.Count ?? 0));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[RoomsPage] SignalR Connect FAILED: " + ex.Message);
+        }
         VM.Changed += OnVmChanged;
+
+        // subscribe realtime events (مرة واحدة)
+        SubscribeRealtime();
+
+        // load rooms
         await VM.LoadAsync();
+
+        // connect realtime (حتى لو VM عمل connect - ConnectAsync عندك safe)
+        try
+        {
+            await Realtime.ConnectAsync();
+        }
+        catch
+        {
+            // ignore – الصفحة هتشتغل عادي بس بدون presence realtime
+        }
+
+        // initial snapshot for online users
+        ApplyOnlineSnapshot();
+
+        await InvokeAsync(StateHasChanged);
     }
 
-    private void Open(Guid roomId) => Nav.NavigateTo($"/chat/{roomId}");
+    private void SubscribeRealtime()
+    {
+        if (_realtimeSubscribed) return;
+        _realtimeSubscribed = true;
+
+        Realtime.UserOnline += OnUserOnline;
+        Realtime.UserOffline += OnUserOffline;
+
+        // typing (غالبًا مش هيوصل لحد ما تعمل JoinRoomsList)
+        Realtime.TypingStarted += OnTypingStarted;
+        Realtime.TypingStopped += OnTypingStopped;
+        Realtime.RoomUpdated += OnRoomUpdatedDirect;
+
+        // لو حصل reconnect نعيد snapshot
+        Realtime.Reconnected += OnRealtimeReconnected;
+    }
+
+    private void UnsubscribeRealtime()
+    {
+        if (!_realtimeSubscribed) return;
+        _realtimeSubscribed = false;
+
+        Realtime.UserOnline -= OnUserOnline;
+        Realtime.UserOffline -= OnUserOffline;
+
+        Realtime.TypingStarted -= OnTypingStarted;
+        Realtime.TypingStopped -= OnTypingStopped;
+
+        Realtime.Reconnected -= OnRealtimeReconnected;
+    }
+
+    private void OnRealtimeReconnected()
+    {
+        ApplyOnlineSnapshot();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplyOnlineSnapshot()
+    {
+        // snapshot من السيرفر: GetOnlineUsers جوا ConnectAsync
+        var set = Realtime.State.OnlineUsers?.ToHashSet() ?? new HashSet<Guid>();
+
+        // هنحدّث بس الـ users اللي ظاهرين في rooms
+        foreach (var r in VM.Rooms.Where(x => x.Type == "Private" && x.OtherUserId != null))
+        {
+            var uid = r.OtherUserId!.Value;
+            var isOnline = set.Contains(uid);
+
+            _onlineMap[uid] = isOnline;
+            if (isOnline)
+                _lastSeenMap.Remove(uid);
+        }
+    }
+
+    private void OnUserOnline(Guid userId)
+    {
+        _onlineMap[userId] = true;
+        _lastSeenMap.Remove(userId);
+
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnUserOffline(Guid userId)
+    {
+        _onlineMap[userId] = false;
+        _lastSeenMap[userId] = DateTime.Now;
+
+        // لو كان typing شغال نخليه يقف
+        _typingMap.Remove(userId);
+
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTypingStarted(Guid roomId, Guid userId)
+    {
+        // rooms list: typing يظهر فقط للـ private users
+        _typingMap.Add(userId);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTypingStopped(Guid roomId, Guid userId)
+    {
+        _typingMap.Remove(userId);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string? GetLastSeenText(RoomListItemModel room)
+    {
+        if (room.Type != "Private" || room.OtherUserId == null) return null;
+
+        var id = room.OtherUserId.Value;
+
+        if (_onlineMap.TryGetValue(id, out var on) && on)
+            return null;
+
+        if (_lastSeenMap.TryGetValue(id, out var dt))
+            return $"Last seen {dt:HH:mm}";
+
+        return "Offline";
+    }
 
     private void OnSearch(ChangeEventArgs e)
     {
@@ -101,17 +260,30 @@
                 if (!ct.IsCancellationRequested)
                     VM.SetSearch(q);
             }
-            catch { /* ignored */ }
+            catch { }
         }, ct);
     }
 
-    private void OnVmChanged() => InvokeAsync(StateHasChanged);
+    private void OnVmChanged()
+    {
+        // لو rooms اتغيرت (RoomUpdated) اعمل snapshot للظاهرين
+        ApplyOnlineSnapshot();
+        _ = InvokeAsync(StateHasChanged);
+    }
 
+   
+    private void OnRoomUpdatedDirect(RoomUpdatedModel upd)
+    {
+        Console.WriteLine($"[RoomsPage] RoomUpdated DIRECT RECEIVED: RoomId={upd.RoomId}");
+        _ = InvokeAsync(StateHasChanged); // لو الـ VM مش كفاية
+    }
     public void Dispose()
     {
         VM.Changed -= OnVmChanged;
+
+        UnsubscribeRealtime();
+
         _searchCts?.Cancel();
         _searchCts?.Dispose();
     }
 }
-

@@ -48,3 +48,10 @@ code {
             border: 2px solid transparent;
             background-clip: content-box;
         }
+
+
+.muted {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.4;
+}

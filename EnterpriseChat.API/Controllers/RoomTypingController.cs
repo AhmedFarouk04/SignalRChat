@@ -19,16 +19,26 @@ public sealed class RoomTypingController : BaseController
     }
 
     [HttpPost("{roomId:guid}/typing/start")]
-    public async Task<IActionResult> StartTyping(Guid roomId, [FromBody] StartTypingRequest request, CancellationToken ct)
+    public async Task<IActionResult> StartTyping(
+    Guid roomId,
+    [FromBody] StartTypingRequest? request,
+    CancellationToken ct)
     {
-        if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
-        if (request is null) return BadRequest("Request body is required.");
+        if (roomId == Guid.Empty)
+            return BadRequest("RoomId is required.");
 
-        var ttl = TimeSpan.FromSeconds(Math.Clamp(request.TtlSeconds, 1, 30));
-        var started = await _typing.StartTypingAsync(new RoomId(roomId), GetCurrentUserId(), ttl);
+        var ttlSeconds = request?.TtlSeconds ?? 5;
+        var ttl = TimeSpan.FromSeconds(Math.Clamp(ttlSeconds, 1, 30));
 
-        return Ok(new { started });
+        var started = await _typing.StartTypingAsync(
+            new RoomId(roomId),
+            GetCurrentUserId(),
+            ttl
+        );
+
+        return Ok(new { started, ttlSeconds });
     }
+
 
     [HttpPost("{roomId:guid}/typing/stop")]
     public async Task<IActionResult> StopTyping(Guid roomId, CancellationToken ct)

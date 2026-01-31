@@ -1,0 +1,367 @@
+﻿@page "/groups/{RoomId:guid}/settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using EnterpriseChat.Application.DTOs
+@using EnterpriseChat.Client.Services.Http
+
+@inject GroupsApi GroupsApi
+@inject UsersApi UsersApi
+@inject NavigationManager Nav
+
+<h2 style="margin:0 0 12px 0;">Group settings</h2>
+
+@if (loading)
+{
+    <div class="rooms-empty"><div class="rooms-empty-title">Loading…</div></div>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="auth-error">@error</div>
+}
+else if (group is null)
+{
+    <div class="rooms-empty"><div class="rooms-empty-title">Not found</div></div>
+}
+else
+{
+    <div class="rooms-page">
+        <div class="rooms-toolbar" style="display:flex; gap:12px; flex-wrap:wrap;">
+            <input class="rooms-search" placeholder="Rename group…" @bind="newName" />
+            <button type="button" class="mini-btn" disabled="@busy" @onclick="RenameAsync">Save</button>
+        </div>
+
+        <div style="margin-top:16px;">
+            <h3 style="margin:0 0 8px 0;">Add members</h3>
+            <input class="rooms-search" placeholder="Search users…" @bind="search" @bind:event="oninput" />
+
+            @if (searchResults.Count > 0)
+            {
+                <ul class="rooms-list" style="margin-top:10px;">
+                    @foreach (var u in searchResults)
+                    {
+                        <li class="user-row">
+                            <div class="user-left">
+                                <div class="room-main">
+                                    <div class="room-title">@u.DisplayName</div>
+                                    <div class="room-preview">@u.Email</div>
+                                </div>
+                            </div>
+
+                            <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => AddMemberAsync(u.Id))">Add</button>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div style="margin-top:16px;">
+            <h3 style="margin:0 0 8px 0;">Members</h3>
+
+            <ul class="rooms-list">
+                @foreach (var m in group.Members
+                            .OrderByDescending(x => x.IsOwner)
+                            .ThenByDescending(x => x.IsAdmin)
+                            .ThenBy(x => x.DisplayName))
+                {
+                    <li class="user-row">
+                        <div class="user-left">
+                            <div class="room-main">
+                                <div class="room-title">
+                                    @m.DisplayName
+                                    @if (m.IsOwner)
+                                    {
+                                        <span style="opacity:.7;"> (Owner)</span>
+                                    }
+                                    else if (m.IsAdmin)
+                                    {
+
+                                        <span style="opacity:.7;"> (Admin)</span>
+                                    }
+                                </div>
+                                <div class="room-preview">Joined: @m.JoinedAt.ToLocalTime()</div>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            @if (!m.IsOwner)
+                            {
+                                <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => ToggleAdminAsync(m.UserId, m.IsAdmin))">
+                                    @(m.IsAdmin ? "Demote" : "Promote")
+                                </button>
+
+                                <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => TransferOwnerAsync(m.UserId))">
+                                    Transfer owner
+                                </button>
+
+                                <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => RemoveMemberAsync(m.UserId))">
+                                    Remove
+                                </button>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <div style="margin-top:18px; display:flex; gap:12px; flex-wrap:wrap;">
+            <button type="button" class="auth-btn secondary" disabled="@busy" @onclick="LeaveAsync_help">Leave group</button>
+            <button type="button" class="auth-btn secondary" disabled="@busy" @onclick="DeleteAsync_help">Delete group</button>
+            <button type="button" class="auth-btn" @onclick="@(() => Nav.NavigateTo("/chat/" + RoomId))">Back</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid RoomId { get; set; }
+
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+
+    private GroupDetailsDto? group;
+    private string newName = "";
+
+    private readonly List<EnterpriseChat.Client.Models.UserModel> searchResults = new();
+    private CancellationTokenSource? _cts;
+    private string _search = "";
+    private string search
+    {
+        get => _search;
+        set
+        {
+            if (_search == value) return;
+            _search = value;
+            _ = DebouncedSearchAsync();
+        }
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await DebouncedSearchAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            group = await GroupsApi.GetGroupAsync(RoomId);
+            if (group != null) newName = group.Name;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RenameAsync()
+    {
+        if (group is null) return;
+
+        var name = (newName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await GroupsApi.UpdateGroupAsync(RoomId, name);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DebouncedSearchAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var ct = _cts.Token;
+
+        searchResults.Clear();
+
+        var q = (search ?? "").Trim();
+        if (q.Length < 2 || group is null)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(250, ct);
+            if (ct.IsCancellationRequested) return;
+
+            var res = await UsersApi.SearchAsync(search.Trim(), 25, ct);
+
+            var current = group.Members.Select(x => x.UserId).ToHashSet();
+
+            searchResults.AddRange(
+                res
+                    .Where(d => !current.Contains(d.Id))
+                    .Select(d => new EnterpriseChat.Client.Models.UserModel
+                    {
+                        Id = d.Id,
+                        DisplayName = d.DisplayName
+                    })
+            );
+
+        }
+        catch { }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AddMemberAsync(Guid userId)
+    {
+        busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await GroupsApi.AddMemberAsync(RoomId, userId);
+            search = "";
+            searchResults.Clear();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RemoveMemberAsync(Guid userId)
+    {
+        busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await GroupsApi.RemoveMemberAsync(RoomId, userId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ToggleAdminAsync(Guid userId, bool isAdmin)
+    {
+        busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            if (isAdmin) await GroupsApi.DemoteAdminAsync(RoomId, userId);
+            else await GroupsApi.PromoteAdminAsync(RoomId, userId);
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task TransferOwnerAsync(Guid userId)
+    {
+        busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await GroupsApi.TransferOwnerAsync(RoomId, userId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LeaveAsync_help()
+    {
+        busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await GroupsApi.LeaveGroupAsync(RoomId);
+            Nav.NavigateTo("/rooms");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DeleteAsync_help()
+    {
+        busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await GroupsApi.DeleteGroupAsync(RoomId);
+            Nav.NavigateTo("/rooms");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

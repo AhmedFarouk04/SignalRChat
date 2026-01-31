@@ -1,6 +1,7 @@
 ﻿using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Enums;
+using EnterpriseChat.Domain.Interfaces;
 using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Handlers;

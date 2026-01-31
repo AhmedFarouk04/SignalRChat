@@ -68,8 +68,37 @@ public sealed class SendMessageCommandHandler
         };
 
         if (_broadcaster is not null)
+        {
+            // 1) ابعت الرسالة الجديدة للـ recipients
             await _broadcaster.BroadcastMessageAsync(dto, recipients);
+
+            // 2) ابعت RoomUpdated للـ recipients (+1 unread)
+            var preview = dto.Content.Length > 80 ? dto.Content[..80] + "…" : dto.Content;
+            var updateForRecipients = new RoomUpdatedDto
+            {
+                RoomId = dto.RoomId,
+                MessageId = dto.Id,
+                SenderId = dto.SenderId,
+                Preview = preview,
+                CreatedAt = dto.CreatedAt,
+                UnreadDelta = 1
+            };
+            await _broadcaster.RoomUpdatedAsync(updateForRecipients, recipients);
+
+            // 3) ابعت RoomUpdated للـ sender (+0 unread) عشان preview وترتيب القائمة يتحدث
+            var updateForSender = new RoomUpdatedDto
+            {
+                RoomId = dto.RoomId,
+                MessageId = dto.Id,
+                SenderId = dto.SenderId,
+                Preview = preview,
+                CreatedAt = dto.CreatedAt,
+                UnreadDelta = 0
+            };
+            await _broadcaster.RoomUpdatedAsync(updateForSender, new[] { command.SenderId });
+        }
 
         return dto;
     }
+
 }

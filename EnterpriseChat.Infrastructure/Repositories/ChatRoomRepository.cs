@@ -16,27 +16,30 @@ public sealed class ChatRoomRepository : IChatRoomRepository
         _context = context;
     }
 
-    public async Task AddAsync(ChatRoom room, CancellationToken cancellationToken = default)
-    {
-        await _context.ChatRooms.AddAsync(room, cancellationToken);
-    }
+    public Task AddAsync(ChatRoom room, CancellationToken cancellationToken = default)
+        => _context.ChatRooms.AddAsync(room, cancellationToken).AsTask();
 
     public async Task<ChatRoom?> GetByIdAsync(RoomId roomId, CancellationToken cancellationToken = default)
     {
         return await _context.ChatRooms
-            .FirstOrDefaultAsync(c => c.Id == roomId);
+            .Include(r => r.Members)
+            .FirstOrDefaultAsync(r => r.Id == roomId.Value, cancellationToken);
+    }
+
+    public async Task<ChatRoom?> GetByIdWithMembersAsync(RoomId roomId, CancellationToken cancellationToken = default)
+    {
+        return await _context.ChatRooms
+            .Include(r => r.Members)
+            .FirstOrDefaultAsync(r => r.Id == roomId.Value, cancellationToken);
     }
 
     public async Task<bool> ExistsAsync(RoomId roomId, CancellationToken cancellationToken = default)
     {
         return await _context.ChatRooms
-            .AnyAsync(x => x.Id.Value == roomId.Value, cancellationToken);
+            .AnyAsync(r => r.Id == roomId.Value, cancellationToken);
     }
 
-    public async Task<ChatRoom?> FindPrivateRoomAsync(
-    UserId a,
-    UserId b,
-    CancellationToken ct = default)
+    public async Task<ChatRoom?> FindPrivateRoomAsync(UserId a, UserId b, CancellationToken ct = default)
     {
         return await _context.ChatRooms
             .Include(r => r.Members)
@@ -46,32 +49,19 @@ public sealed class ChatRoomRepository : IChatRoomRepository
                 r.Members.Any(m => m.UserId == b))
             .FirstOrDefaultAsync(ct);
     }
-    public async Task<IReadOnlyList<ChatRoom>> GetForUserAsync(
-    UserId userId,
-    CancellationToken cancellationToken = default)
+
+    public async Task<IReadOnlyList<ChatRoom>> GetForUserAsync(UserId userId, CancellationToken cancellationToken = default)
     {
         return await _context.ChatRooms
             .Include(r => r.Members)
             .Where(r => r.Members.Any(m => m.UserId == userId))
-            .OrderByDescending(r => r.CreatedAt) 
+            .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<ChatRoom?> GetByIdWithMembersAsync(
-     RoomId roomId,
-     CancellationToken ct = default)
-    {
-        return await _context.ChatRooms
-            .Include(r => r.Members)
-            .FirstOrDefaultAsync(r => r.Id == roomId, ct);
-    }
     public Task DeleteAsync(ChatRoom room, CancellationToken ct = default)
     {
         _context.ChatRooms.Remove(room);
         return Task.CompletedTask;
     }
-
-
-
-
 }

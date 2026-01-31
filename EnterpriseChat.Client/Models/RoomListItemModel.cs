@@ -9,10 +9,10 @@ public sealed class RoomListItemModel
     public Guid? OtherUserId { get; init; }
     public string? OtherDisplayName { get; init; }
 
-    public int UnreadCount { get; init; }
-
-    public bool IsMuted { get; init; }
-    public DateTime? LastMessageAt { get; init; }
-    public string? LastMessagePreview { get; init; }
-    public Guid? LastMessageId { get; init; }
+    // ✅ realtime fields (mutable)
+    public int UnreadCount { get; set; }
+    public bool IsMuted { get; set; }
+    public DateTime? LastMessageAt { get; set; }
+    public string? LastMessagePreview { get; set; }
+    public Guid? LastMessageId { get; set; }
 }

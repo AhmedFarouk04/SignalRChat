@@ -1,6 +1,7 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Enums;
+using EnterpriseChat.Domain.Interfaces;
 using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Queries;

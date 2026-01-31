@@ -47,3 +47,13 @@
     justify-content: center;
 }
 
+.room-preview, .room-sub, .last-seen {
+    display: block;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.last-seen {
+    white-space: normal;
+}

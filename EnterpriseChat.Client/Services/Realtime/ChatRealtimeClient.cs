@@ -1,5 +1,7 @@
-﻿using EnterpriseChat.Client.Authentication.Abstractions;
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Models;
+using EnterpriseChat.Client.Services.Ui;
 using Microsoft.AspNetCore.SignalR.Client;
 using static System.Net.WebRequestMethods;
 
@@ -9,7 +11,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 {
     private readonly ITokenStore _tokenStore;
     private readonly HttpClient _http;
-
+    private readonly RoomFlagsStore _flags;
 
     private HubConnection? _connection;
 
@@ -23,6 +25,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action<Guid>? MessageDelivered;
     public event Action<Guid>? MessageRead;
     public event Action<MessageModel>? MessageReceived;
+    public event Action<Guid, bool>? RoomMuteChanged;
 
     public event Action<Guid>? UserOnline;
     public event Action<Guid>? UserOffline;
@@ -36,13 +39,15 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
     public event Action? Disconnected;
     public event Action? Reconnected;
+    public event Action<RoomUpdatedModel>? RoomUpdated;
+    public event Action<Guid, bool>? UserBlockChanged;
 
-    public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http)
+    public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http, RoomFlagsStore flags)
     {
         _tokenStore = tokenStore;
         _http = http;
+        _flags = flags;
     }
-
 
     public async Task ConnectAsync()
     {
@@ -88,8 +93,6 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
         var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers");
         State.OnlineUsers = onlineUsers;
-
-        Reconnected?.Invoke();
     }
 
     public async Task DisconnectAsync()
@@ -152,8 +155,25 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     private void RegisterHandlers()
     {
         _connection!.On<MessageModel>("MessageReceived", msg => MessageReceived?.Invoke(msg));
+
+
         _connection.On<Guid>("MessageDelivered", id => MessageDelivered?.Invoke(id));
         _connection.On<Guid>("MessageRead", id => MessageRead?.Invoke(id));
+
+        _connection.On<RoomUpdatedModel>("RoomUpdated", upd => RoomUpdated?.Invoke(upd));
+
+
+        _connection.On<Guid, bool>("RoomMuteChanged", (rid, muted) =>
+        {
+            _flags.SetMuted(rid, muted);
+            RoomMuteChanged?.Invoke(rid, muted);
+        });
+
+        _connection.On<Guid, bool>("UserBlockChanged", (uid, blocked) =>
+        {
+            _flags.SetBlocked(uid, blocked);
+            UserBlockChanged?.Invoke(uid, blocked);
+        });
 
         _connection.On<Guid>("UserOnline", id =>
         {
@@ -171,9 +191,16 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
             UserOffline?.Invoke(id);
         });
 
-        _connection.On<Guid, int>("RoomPresenceUpdated", (roomId, count) => RoomPresenceUpdated?.Invoke(roomId, count));
-        _connection.On<Guid, Guid>("TypingStarted", (roomId, userId) => TypingStarted?.Invoke(roomId, userId));
-        _connection.On<Guid, Guid>("TypingStopped", (roomId, userId) => TypingStopped?.Invoke(roomId, userId));
-        _connection.On<Guid>("RemovedFromRoom", roomId => RemovedFromRoom?.Invoke(roomId));
+        _connection.On<Guid, int>("RoomPresenceUpdated",
+            (roomId, count) => RoomPresenceUpdated?.Invoke(roomId, count));
+
+        _connection.On<Guid, Guid>("TypingStarted",
+            (roomId, userId) => TypingStarted?.Invoke(roomId, userId));
+
+        _connection.On<Guid, Guid>("TypingStopped",
+            (roomId, userId) => TypingStopped?.Invoke(roomId, userId));
+
+        _connection.On<Guid>("RemovedFromRoom",
+            roomId => RemovedFromRoom?.Invoke(roomId));
     }
 }

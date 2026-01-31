@@ -1,0 +1,204 @@
+﻿@page "/groups/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using EnterpriseChat.Client.Models
+@using EnterpriseChat.Client.Services.Http
+
+@inject UsersApi UsersApi
+@inject GroupsApi GroupsApi
+@inject NavigationManager Nav
+
+<div class="rooms-page">
+    <div class="rooms-header">
+        <h2 class="rooms-title">Create group</h2>
+    </div>
+
+    <div class="rooms-toolbar" style="display:flex; gap:12px; flex-wrap:wrap;">
+        <input class="rooms-search" placeholder="Group name…" @bind="GroupName" />
+        <input class="rooms-search" placeholder="Search users…" @bind="query" @bind:event="oninput" />
+    </div>
+
+    <div class="rooms-empty" style="padding:0; margin-top:12px;">
+        <div class="rooms-empty-sub">Selected: @selected.Count</div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="rooms-empty"><div class="rooms-empty-title">Searching…</div></div>
+    }
+    else if (results.Count == 0)
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-title">No users</div>
+            <div class="rooms-empty-sub">Type to search and select members.</div>
+        </div>
+    }
+    else
+    {
+        <ul class="rooms-list">
+            @foreach (var u in results)
+            {
+                var isSelected = selected.Any(x => x.Id == u.Id);
+
+                <li class="user-row">
+                    <div class="user-left">
+                        <div class="room-avatar"><span>@u.DisplayName.Substring(0, 1).ToUpper()</span></div>
+                        <div class="room-main">
+                            <div class="room-title">@u.DisplayName</div>
+                            <div class="room-preview">@u.Email</div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="mini-btn" @onclick="@(() => Toggle(u))">
+                        @(isSelected ? "Remove" : "Add")
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+
+    <div style="margin-top:14px; display:flex; gap:12px;">
+        <button type="button" class="auth-btn" disabled="@busy" @onclick="CreateAsync">
+            @(busy ? "Creating..." : "Create")
+        </button>
+
+        <button type="button" class="auth-btn secondary" @onclick="@(() => Nav.NavigateTo("/rooms"))">
+            Cancel
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="auth-error" style="margin-top:12px;">@error</div>
+    }
+</div>
+
+@code {
+    private string GroupName = "";
+
+    // ✅ field
+    private string _query = "";
+
+    // ✅ property اسمها query (ده اللي الـ UI بيربط عليه)
+    private string query
+    {
+        get => _query;
+        set
+        {
+            if (_query == value) return;
+            _query = value;
+            _ = DebouncedSearchAsync(); // fire & forget
+        }
+    }
+
+    private bool isLoading;
+    private bool busy;
+    private string? error;
+
+    private readonly List<UserModel> results = new();
+    private readonly List<UserModel> selected = new();
+
+    private CancellationTokenSource? _cts;
+
+    protected override void OnInitialized()
+    {
+        _cts = new CancellationTokenSource();
+    }
+
+    private async Task DebouncedSearchAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var ct = _cts.Token;
+
+        var q = (query ?? "").Trim();
+        if (q.Length < 2)
+        {
+            results.Clear();
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await Task.Delay(250, ct);
+            if (ct.IsCancellationRequested) return;
+
+            results.Clear();
+
+            var res = await UsersApi.SearchAsync(q, 25, ct);
+
+            // ✅ mapping DTO -> UserModel
+            results.AddRange(res.Select(d => new UserModel
+            {
+                Id = d.Id,
+                DisplayName = d.DisplayName,
+                Email = d.Email
+            }));
+
+        }
+        catch
+        {
+            // ignore cancel
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void Toggle(UserModel u)
+    {
+        var existing = selected.FirstOrDefault(x => x.Id == u.Id);
+        if (existing != null) selected.Remove(existing);
+        else selected.Add(u);
+    }
+
+    private async Task CreateAsync()
+    {
+        error = null;
+
+        var name = (GroupName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Group name is required.";
+            return;
+        }
+
+        if (selected.Count == 0)
+        {
+            error = "Pick at least one member.";
+            return;
+        }
+
+        busy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var dto = await GroupsApi.CreateGroupAsync(new GroupsApi.CreateGroupRequest
+            {
+                Name = name,
+                Members = selected.Select(x => x.Id).ToList()
+            });
+
+            Nav.NavigateTo("/chat/" + dto.RoomId);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}
+

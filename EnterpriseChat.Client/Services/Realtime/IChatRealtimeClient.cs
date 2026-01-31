@@ -10,6 +10,8 @@ public interface IChatRealtimeClient
     event Action<Guid>? MessageRead;
     event Action<MessageModel>? MessageReceived;
 
+    event Action<RoomUpdatedModel>? RoomUpdated;
+
     event Action<Guid>? UserOnline;
     event Action<Guid>? UserOffline;
 
@@ -22,6 +24,9 @@ public interface IChatRealtimeClient
 
     event Action? Disconnected;
     event Action? Reconnected;
+
+    event Action<Guid, bool>? RoomMuteChanged;
+    event Action<Guid, bool>? UserBlockChanged;
 
     Task ConnectAsync();
     Task DisconnectAsync();

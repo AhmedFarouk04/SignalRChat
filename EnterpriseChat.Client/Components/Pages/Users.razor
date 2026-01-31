@@ -1,0 +1,159 @@
+﻿@page "/users"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using EnterpriseChat.Application.DTOs
+@using EnterpriseChat.Client.Services.Http
+@inject UsersApi UsersApi
+@inject ChatApi ChatApi
+@inject NavigationManager Nav
+
+<div class="rooms-page">
+    <div class="rooms-header">
+        <h2 class="rooms-title">Users</h2>
+    </div>
+
+    <div class="rooms-toolbar">
+        <input class="rooms-search"
+               placeholder="Search users…"
+               value="@q"
+               @oninput="OnInput"
+               autofocus />
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="auth-error">@error</div>
+    }
+
+    @if (loading)
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-sub">Searching…</div>
+        </div>
+    }
+    else if (string.IsNullOrWhiteSpace(q))
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-title">Start a new chat</div>
+            <div class="rooms-empty-sub">Search for a user then open a private room.</div>
+        </div>
+    }
+    else if (results.Count == 0)
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-title">No results</div>
+            <div class="rooms-empty-sub">Try another name.</div>
+        </div>
+    }
+    else
+    {
+        <ul class="rooms-list">
+            @foreach (var u in results)
+            {
+                <li class="user-row">
+                    <div class="user-left">
+                        <div class="user-avatar">@u.DisplayName[..1].ToUpper()</div>
+
+                        <div class="user-main">
+                            <div class="user-name">@u.DisplayName</div>
+                            @if (!string.IsNullOrWhiteSpace(u.Email))
+                            {
+                                <div class="user-sub">@u.Email</div>
+                            }
+                        </div>
+                    </div>
+
+                    <button class="mini-btn" disabled="@busyStart" @onclick="() => StartPrivate(u.Id)">
+                        Message
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private string q = "";
+    private bool loading;
+    private bool busyStart;
+    private string? error;
+
+    private readonly List<UserDirectoryItemDto> results = new();
+    private CancellationTokenSource? cts;
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        q = e.Value?.ToString() ?? "";
+        _ = DebouncedSearchAsync();
+    }
+
+    private async Task DebouncedSearchAsync()
+    {
+        cts?.Cancel();
+        cts?.Dispose();
+        cts = new CancellationTokenSource();
+        var ct = cts.Token;
+
+        try
+        {
+            await Task.Delay(250, ct);
+            if (ct.IsCancellationRequested) return;
+
+            await SearchAsync(ct);
+        }
+        catch { }
+    }
+
+
+    private async Task SearchAsync(CancellationToken ct)
+    {
+        error = null;
+        loading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            results.Clear();
+            var res = await UsersApi.SearchAsync(q.Trim(), 25, ct);
+            results.AddRange(res);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task StartPrivate(Guid userId)
+    {
+        error = null;
+        busyStart = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var dto = await ChatApi.GetOrCreatePrivateAsync(userId);
+            if (dto == null)
+            {
+                error = "Could not create private room.";
+                return;
+            }
+
+            // dto.Id is roomId
+            Nav.NavigateTo($"/chat/{dto.Id}");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busyStart = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

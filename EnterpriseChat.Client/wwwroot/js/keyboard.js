@@ -4,38 +4,23 @@ let _dotnet = null;
 export function registerEscape(dotnetRef) {
     _dotnet = dotnetRef;
 
-    // لو كان في handler قديم، شيله
     if (_handler) window.removeEventListener("keydown", _handler);
 
     _handler = (e) => {
-        if (e.key === "Escape") {
-            // نادِ Blazor method
-            _dotnet?.invokeMethodAsync("OnGlobalEscape");
-        }
-    };
+        if (e.key !== "Escape") return;
 
-    window.addEventListener("keydown", _handler);
-}
+        // ignore داخل inputs/textarea/contenteditable
+        const t = e.target;
+        const tag = (t && t.tagName) ? t.tagName.toLowerCase() : "";
+        const isEditable =
+            tag === "input" ||
+            tag === "textarea" ||
+            (t && t.isContentEditable);
 
-export function unregisterEscape() {
-    if (_handler) window.removeEventListener("keydown", _handler);
-    _handler = null;
-    _dotnet = null;
-}
-let _handler = null;
-let _dotnet = null;
+        if (isEditable) return;
 
-export function registerEscape(dotnetRef) {
-    _dotnet = dotnetRef;
-
-    // لو كان في handler قديم، شيله
-    if (_handler) window.removeEventListener("keydown", _handler);
-
-    _handler = (e) => {
-        if (e.key === "Escape") {
-            // نادِ Blazor method
-            _dotnet?.invokeMethodAsync("OnGlobalEscape");
-        }
+        e.preventDefault();
+        _dotnet?.invokeMethodAsync("OnGlobalEscape");
     };
 
     window.addEventListener("keydown", _handler);

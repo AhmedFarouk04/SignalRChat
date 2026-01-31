@@ -1,10 +1,13 @@
-﻿using EnterpriseChat.Application.Features.Messaging.Commands;
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using System.Collections.Concurrent;
+using System.Security.Claims;
 
 namespace EnterpriseChat.API.Hubs;
 
@@ -16,6 +19,8 @@ public sealed class ChatHub : Hub
     private readonly IChatRoomRepository _roomRepository;
     private readonly IRoomPresenceService _roomPresence;
     private readonly ITypingService _typing;
+    private static readonly ConcurrentDictionary<string, DateTime> _typingBroadcastGate = new();
+    private static readonly ConcurrentDictionary<string, byte> _joinedRooms = new();
 
     public ChatHub(
         IPresenceService presence,
@@ -52,6 +57,22 @@ public sealed class ChatHub : Hub
 
         await _presence.UserDisconnectedAsync(userId, connectionId);
 
+        // ✅ تحقق هل المستخدم لسه Online (عنده connection تاني)
+        var stillOnline = await _presence.IsOnlineAsync(userId);
+
+        // ✅ شيل join cache
+        var prefix = $"{Context.ConnectionId}:";
+        foreach (var key in _joinedRooms.Keys.Where(k => k.StartsWith(prefix)))
+            _joinedRooms.TryRemove(key, out _);
+
+        // ✅ لو لسه Online: متشيلوش من الرومات ومتبعثش UserOffline
+        if (stillOnline)
+        {
+            await base.OnDisconnectedAsync(exception);
+            return;
+        }
+
+        // ✅ هنا فقط: المستخدم Offline فعلاً
         var affectedRooms = await _roomPresence.RemoveUserFromAllRoomsAsync(userId);
 
         foreach (var rid in affectedRooms)
@@ -61,30 +82,56 @@ public sealed class ChatHub : Hub
                 .SendAsync("RoomPresenceUpdated", rid.Value, count);
         }
 
-        if (!await _presence.IsOnlineAsync(userId))
-            await Clients.Others.SendAsync("UserOffline", userId.Value);
+        await Clients.Others.SendAsync("UserOffline", userId.Value);
 
         await base.OnDisconnectedAsync(exception);
     }
 
+
     public async Task JoinRoom(string roomId)
     {
-        var userId = GetUserId();
+        var user = GetUserId();              // user.Value => Guid
         var rid = new RoomId(Guid.Parse(roomId));
-        var room = await _roomRepository.GetByIdAsync(rid);
 
-        if (room is null || !room.IsMember(userId))
+        var room = await _roomRepository.GetByIdAsync(rid);
+        if (room is null)
             throw new HubException("Access denied.");
 
+        var isOwner = room.OwnerId?.Value == user.Value;
+        // ✅ Guid مقارنة Guid
+        var isMember = room.IsMember(user);
+
+        if (!isOwner && !isMember)
+            throw new HubException("Access denied.");
+
+        var joinKey = $"{Context.ConnectionId}:{roomId}";
+        if (!_joinedRooms.TryAdd(joinKey, 0))
+            return; // already joined (prevents duplicate joins)
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
 
-        await _roomPresence.JoinRoomAsync(rid, userId);
+        await _roomPresence.JoinRoomAsync(rid, user);
 
         var count = await _roomPresence.GetOnlineCountAsync(rid);
-        await Clients.Group(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
+        await Clients.OthersInGroup(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
+        await Clients.Caller.SendAsync("RoomPresenceUpdated", rid.Value, count);
+        await _mediator.Send(new DeliverRoomMessagesCommand(rid, user));
 
-        await _mediator.Send(new DeliverRoomMessagesCommand(rid, userId));
+        // ✅ Reset unread عند اللي دخل الروم (على كل الأجهزة)
+        await Clients.User(user.Value.ToString())
+            .SendAsync("RoomUpdated", new RoomUpdatedDto
+            {
+                RoomId = rid.Value,
+                MessageId = Guid.Empty,
+                SenderId = user.Value,
+                Preview = "",
+                CreatedAt = DateTime.UtcNow,
+                UnreadDelta = int.MinValue
+            });
+
+
     }
+
+
 
     public async Task LeaveRoom(string roomId)
     {
@@ -92,11 +139,12 @@ public sealed class ChatHub : Hub
         var rid = new RoomId(Guid.Parse(roomId));
 
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId);
+        _joinedRooms.TryRemove($"{Context.ConnectionId}:{roomId}", out _);
 
         await _roomPresence.LeaveRoomAsync(rid, userId);
 
         var count = await _roomPresence.GetOnlineCountAsync(rid);
-        await Clients.Group(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
+        await Clients.OthersInGroup(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
     }
 
     public async Task TypingStart(string roomId)
@@ -105,17 +153,27 @@ public sealed class ChatHub : Hub
         var rid = new RoomId(Guid.Parse(roomId));
         var room = await _roomRepository.GetByIdAsync(rid);
 
-        if (room is null || !room.IsMember(userId))
+        if (room is null) return;
+
+        var isOwner = room.OwnerId?.Value == userId.Value;
+        if (!isOwner && !room.IsMember(userId)) return;
+
+        await _typing.StartTypingAsync(rid, userId, TimeSpan.FromSeconds(4));
+
+        // throttle: مرة كل 1 ثانية لكل (room,user)
+        var gateKey = $"{roomId}:{userId.Value}";
+        var now = DateTime.UtcNow;
+
+        if (_typingBroadcastGate.TryGetValue(gateKey, out var last) &&
+            (now - last).TotalMilliseconds < 1000)
             return;
 
-        var first = await _typing.StartTypingAsync(rid, userId, TimeSpan.FromSeconds(4));
+        _typingBroadcastGate[gateKey] = now;
 
-        if (first)
-        {
-            await Clients.OthersInGroup(roomId)
-                .SendAsync("TypingStarted", rid.Value, userId.Value);
-        }
+        await Clients.OthersInGroup(roomId)
+            .SendAsync("TypingStarted", rid.Value, userId.Value);
     }
+
 
     public async Task TypingStop(string roomId)
     {
@@ -155,11 +213,20 @@ public sealed class ChatHub : Hub
             .SendAsync("RemovedFromRoom", roomId);
     }
 
-    private UserId GetUserId()
-    {
-        var id = Context.User?.FindFirst("sub")?.Value
-            ?? throw new HubException("User not authenticated");
 
-        return new UserId(Guid.Parse(id));
-    }
+
+private UserId GetUserId()
+{
+    var raw =
+        Context.User?.FindFirst("sub")?.Value
+        ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? Context.User?.FindFirst("nameid")?.Value;
+
+    if (string.IsNullOrWhiteSpace(raw) || !Guid.TryParse(raw, out var id) || id == Guid.Empty)
+        throw new HubException("User not authenticated");
+
+    return new UserId(id);
+}
+
+
 }

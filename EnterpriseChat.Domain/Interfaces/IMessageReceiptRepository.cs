@@ -13,4 +13,7 @@ public interface IMessageReceiptRepository
     Task AddAsync(
         MessageReceipt receipt,
         CancellationToken cancellationToken);
+
+    Task<int> TryMarkDeliveredAsync(MessageId messageId, UserId userId, CancellationToken ct = default);
+
 }

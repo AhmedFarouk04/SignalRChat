@@ -1,0 +1,109 @@
+﻿@page "/blocked"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using EnterpriseChat.Application.DTOs
+@using EnterpriseChat.Client.Services.Http
+@inject ModerationApi Mod
+@inject NavigationManager Nav
+
+<div class="rooms-page">
+    <div class="rooms-header">
+        <h2 class="rooms-title">Blocked users</h2>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="auth-error">@error</div>
+    }
+
+    @if (loading)
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-sub">Loading…</div>
+        </div>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-title">No blocked users</div>
+            <div class="rooms-empty-sub">You haven’t blocked anyone.</div>
+        </div>
+    }
+    else
+    {
+        <ul class="rooms-list">
+            @foreach (var b in items)
+            {
+                <li class="user-row">
+                    <div class="user-left">
+                        <div class="user-avatar">@b.DisplayName[..1].ToUpper()</div>
+                        <div class="user-main">
+                            <div class="user-name">@b.DisplayName</div>
+                            <div class="user-sub">Blocked @b.CreatedAt.ToLocalTime()</div>
+                        </div>
+                    </div>
+
+                    <button class="mini-btn" disabled="@busy" @onclick="() => Unblock(b.UserId)">
+                        Unblock
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private bool loading;
+    private bool busy;
+    private string? error;
+    private readonly List<BlockedUserDto> items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        error = null;
+        loading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            items.Clear();
+            items.AddRange(await Mod.GetBlockedAsync());
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task Unblock(Guid userId)
+    {
+        busy = true;
+        error = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await Mod.UnblockAsync(userId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

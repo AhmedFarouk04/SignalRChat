@@ -1,0 +1,20 @@
+﻿@page "/logout"
+@layout EnterpriseChat.Client.Components.Layout.AuthLayout
+
+@inject EnterpriseChat.Client.Authentication.Abstractions.ITokenStore TokenStore
+@inject EnterpriseChat.Client.Authentication.Services.JwtAuthStateProvider AuthProvider
+@inject NavigationManager Nav
+
+<div class="auth-head">
+    <h2>Signing out…</h2>
+    <p>Please wait.</p>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await TokenStore.ClearAsync();
+        AuthProvider.Notify();
+        Nav.NavigateTo("/login", true);
+    }
+}

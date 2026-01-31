@@ -20,7 +20,8 @@ public sealed class UnitOfWork : IUnitOfWork
 
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
-        await _context.SaveChangesAsync(cancellationToken);
+        // ✅ مهم: ما تربطش commit بـ request token
+        await _context.SaveChangesAsync(CancellationToken.None);
 
         var domainEvents = _context.ChangeTracker
             .Entries()
@@ -29,13 +30,10 @@ public sealed class UnitOfWork : IUnitOfWork
             .ToList();
 
         if (domainEvents.Any())
-        {
             await _dispatcher.DispatchAsync(domainEvents, cancellationToken);
-        }
 
         foreach (var entry in _context.ChangeTracker.Entries<Message>())
-        {
             entry.Entity.ClearDomainEvents();
-        }
     }
+
 }

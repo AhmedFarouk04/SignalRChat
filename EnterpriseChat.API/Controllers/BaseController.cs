@@ -10,15 +10,14 @@ public abstract class BaseController : ControllerBase
 {
     protected UserId GetCurrentUserId()
     {
-        var userIdClaim =
+        var raw =
             User.FindFirst("sub")?.Value
             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? User.FindFirst("nameid")?.Value;
 
-        if (string.IsNullOrWhiteSpace(userIdClaim))
+        if (string.IsNullOrWhiteSpace(raw) || !Guid.TryParse(raw, out var id) || id == Guid.Empty)
             throw new UnauthorizedAccessException("User not authenticated");
 
-        return new UserId(Guid.Parse(userIdClaim));
+        return new UserId(id);
     }
-
 }

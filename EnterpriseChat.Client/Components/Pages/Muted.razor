@@ -1,0 +1,146 @@
+﻿@page "/muted"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IDisposable
+@inject EnterpriseChat.Client.Services.Ui.RoomFlagsStore Flags
+
+@using EnterpriseChat.Application.DTOs
+@using EnterpriseChat.Client.Services.Http
+@using EnterpriseChat.Client.Services.Rooms
+@inject ModerationApi Mod
+@inject IRoomService Rooms
+@inject NavigationManager Nav
+
+<div class="rooms-page">
+    <div class="rooms-header">
+        <h2 class="rooms-title">Muted rooms</h2>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="auth-error">@error</div>
+    }
+
+    @if (loading)
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-sub">Loading…</div>
+        </div>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="rooms-empty">
+            <div class="rooms-empty-title">No muted rooms</div>
+            <div class="rooms-empty-sub">You haven’t muted any chat.</div>
+        </div>
+    }
+    else
+    {
+        <ul class="rooms-list">
+            @foreach (var x in items)
+            {
+                var title = roomNames.TryGetValue(x.RoomId, out var n) ? n : x.RoomId.ToString();
+
+                <li class="user-row">
+                    <div class="user-left">
+                        <div class="user-avatar">🔕</div>
+                        <div class="user-main">
+                            <div class="user-name">@title</div>
+                            <div class="user-sub">Muted @x.MutedAt.ToLocalTime()</div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="mini-btn" @onclick="@(() => Nav.NavigateTo($"/chat/{x.RoomId}"))">Open</button>
+                        <button class="mini-btn" disabled="@busy" @onclick="() => Unmute(x.RoomId)">Unmute</button>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private bool loading;
+    private bool busy;
+    private string? error;
+
+    private readonly List<MutedRoomDto> items = new();
+    private readonly Dictionary<Guid, string> roomNames = new();
+
+  
+    private void OnRoomMuteChanged(Guid roomId, bool muted)
+    {
+        _ = InvokeAsync(LoadAsync);
+    }
+
+
+   
+    protected override async Task OnInitializedAsync()
+    {
+        Flags.RoomMuteChanged += OnRoomMuteChanged;
+        await LoadAsync();
+    }
+
+    private void OnRoomMuteChanged(Guid roomId)
+    {
+        _ = InvokeAsync(LoadAsync);
+    }
+
+    public void Dispose()
+    {
+        Flags.RoomMuteChanged -= OnRoomMuteChanged;
+    }
+
+    private async Task LoadAsync()
+    {
+        error = null;
+        loading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            items.Clear();
+            roomNames.Clear();
+
+            items.AddRange(await Mod.GetMutedAsync());
+
+            // optional: fetch rooms list to resolve names
+            var rooms = await Rooms.GetRoomsAsync();
+            foreach (var r in rooms)
+                roomNames[r.Id] = string.IsNullOrWhiteSpace(r.OtherDisplayName) ? r.Name : (r.OtherDisplayName ?? r.Name);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task Unmute(Guid roomId)
+    {
+        busy = true;
+        error = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await Mod.UnmuteAsync(roomId);
+            Flags.SetMuted(roomId, false);
+            await LoadAsync();
+        }
+
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

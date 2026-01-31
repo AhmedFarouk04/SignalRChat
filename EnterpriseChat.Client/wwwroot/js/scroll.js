@@ -1,48 +1,39 @@
 ﻿export function scrollToBottom(el) {
+    if (!el) return;
     el.scrollTop = el.scrollHeight;
 }
 
 export function scrollToBottomSmooth(el) {
-    // Smooth فقط لما المستخدم يضغط زر ↓ New (مش auto)
+    if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 }
 
 export function isAtBottom(el) {
+    if (!el) return true;
     return el.scrollHeight - el.scrollTop - el.clientHeight < 5;
 }
+export function registerRoomsSearchShortcuts(inputSelector = 'input[type="search"], .rooms-search input, #roomsSearch') {
+    // الفكرة: Ctrl+K أو / يركز على صندوق البحث في Rooms
+    const handler = (e) => {
+        const isCtrlK = (e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K');
+        const isSlash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
 
-// "/" أو Ctrl+K يركز على search input (لو موجود)
-export function registerRoomsSearchShortcuts(inputId) {
-    if (window.__roomsSearchShortcutsRegistered) return;
-    window.__roomsSearchShortcutsRegistered = true;
+        if (!isCtrlK && !isSlash) return;
 
-    window.addEventListener("keydown", (e) => {
-        // ignore داخل inputs/textarea/contenteditable
-        const t = e.target;
-        const tag = (t && t.tagName) ? t.tagName.toLowerCase() : "";
-        const isEditable =
-            tag === "input" ||
-            tag === "textarea" ||
-            (t && t.isContentEditable);
+        // ما نسرقش الاختصار لو المستخدم جوه input/textarea أصلاً
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea') return;
 
-        // "/" (بدون modifiers)
-        const slash = e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey;
-
-        // Ctrl+K / Cmd+K
-        const ctrlK =
-            (e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey);
-
-        if (isEditable) return;
-        if (!slash && !ctrlK) return;
-
-        const input = document.getElementById(inputId);
-        if (!input) return;
+        const el = document.querySelector(inputSelector);
+        if (!el) return;
 
         e.preventDefault();
-        input.focus();
-        // select existing text for fast replace
-        try {
-            input.select?.();
-        } catch { }
-    });
+        el.focus();
+        if (typeof el.select === 'function') el.select();
+    };
+
+    window.addEventListener('keydown', handler);
+
+    // رجّع disposer علشان لو احتجنا نفكّه
+    return () => window.removeEventListener('keydown', handler);
 }

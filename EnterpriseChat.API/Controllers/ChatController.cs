@@ -1,4 +1,5 @@
 ﻿using EnterpriseChat.API.Contracts.Messaging;
+using EnterpriseChat.API.Hubs;
 using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Features.Messaging.Queries;
@@ -7,9 +8,10 @@ using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Persistence;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+
 
 [Authorize]
 [ApiController]
@@ -17,10 +19,12 @@ using Microsoft.EntityFrameworkCore;
 public sealed class ChatController : BaseController
 {
     private readonly IMediator _mediator;
+    private readonly IHubContext<ChatHub> _hub;
 
-    public ChatController(IMediator mediator)
+    public ChatController(IMediator mediator, IHubContext<ChatHub> hub)
     {
         _mediator = mediator;
+        _hub = hub;
     }
 
 
@@ -83,39 +87,39 @@ public sealed class ChatController : BaseController
 
 
     [HttpPost("private/{userId}")]
-    public async Task<IActionResult> GetOrCreatePrivateChat(
-        Guid userId,
-        CancellationToken ct)
+    public async Task<IActionResult> GetOrCreatePrivateChat(Guid userId, CancellationToken ct)
     {
-        var room = await _mediator.Send(
-            new GetOrCreatePrivateRoomCommand(
-                GetCurrentUserId(),
-                new UserId(userId)),
+        var dto = await _mediator.Send(
+            new GetOrCreatePrivateRoomCommand(GetCurrentUserId(), new UserId(userId)),
             ct);
 
-        return Ok(new { room.Id, room.Type });
+        return Ok(dto); // ✅ { id, type }
     }
+
 
     [HttpPost("block/{userId}")]
     public async Task<IActionResult> BlockUser(Guid userId, CancellationToken ct)
     {
-        await _mediator.Send(
-            new BlockUserCommand(
-                GetCurrentUserId(),
-                new UserId(userId)),
-            ct);
+        var me = GetCurrentUserId();
+
+        await _mediator.Send(new BlockUserCommand(me, new UserId(userId)), ct);
+
+        await _hub.Clients.User(me.Value.ToString())
+            .SendAsync("UserBlockChanged", userId, true, ct);
 
         return NoContent();
     }
 
+
     [HttpPost("mute/{roomId}")]
     public async Task<IActionResult> MuteRoom(Guid roomId, CancellationToken ct)
     {
-        await _mediator.Send(
-            new MuteRoomCommand(
-                new RoomId(roomId),
-                GetCurrentUserId()),
-            ct);
+        var me = GetCurrentUserId();
+
+        await _mediator.Send(new MuteRoomCommand(new RoomId(roomId), me), ct);
+
+        await _hub.Clients.User(me.Value.ToString())
+            .SendAsync("RoomMuteChanged", roomId, true, ct);
 
         return NoContent();
     }
@@ -123,11 +127,12 @@ public sealed class ChatController : BaseController
     [HttpDelete("mute/{roomId}")]
     public async Task<IActionResult> UnmuteRoom(Guid roomId, CancellationToken ct)
     {
-        await _mediator.Send(
-            new UnmuteRoomCommand(
-                new RoomId(roomId),
-                GetCurrentUserId()),
-            ct);
+        var me = GetCurrentUserId();
+
+        await _mediator.Send(new UnmuteRoomCommand(new RoomId(roomId), me), ct);
+
+        await _hub.Clients.User(me.Value.ToString())
+            .SendAsync("RoomMuteChanged", roomId, false, ct);
 
         return NoContent();
     }
@@ -205,12 +210,16 @@ public sealed class ChatController : BaseController
         if (userId == Guid.Empty)
             return BadRequest("UserId is required.");
 
-        await _mediator.Send(
-            new UnblockUserCommand(GetCurrentUserId(), new UserId(userId)),
-            ct);
+        var me = GetCurrentUserId();
+
+        await _mediator.Send(new UnblockUserCommand(me, new UserId(userId)), ct);
+
+        await _hub.Clients.User(me.Value.ToString())
+            .SendAsync("UserBlockChanged", userId, false, ct);
 
         return NoContent();
     }
+
 
     [HttpGet("blocked")]
     [ProducesResponseType(typeof(IReadOnlyList<BlockedUserDto>), StatusCodes.Status200OK)]
@@ -226,33 +235,37 @@ public sealed class ChatController : BaseController
         return Ok(await _mediator.Send(new GetMutedRoomsQuery(GetCurrentUserId()), ct));
     }
 
-    [HttpPost("rooms/{roomId:guid}/attachments")]
-    [RequestSizeLimit(25_000_000)]
-    public async Task<IActionResult> UploadAttachment(
+
+
+[HttpPost("rooms/{roomId:guid}/attachments")]
+[Consumes("multipart/form-data")]
+[RequestSizeLimit(25_000_000)]
+public async Task<IActionResult> UploadAttachment(
     Guid roomId,
     [FromServices] IAttachmentService attachments,
-    IFormFile file,
+    [FromForm] UploadAttachmentForm form,
     CancellationToken ct)
-    {
-        if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
-        if (file is null || file.Length == 0) return BadRequest("File is required.");
+{
+    if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
+    if (form?.File is null || form.File.Length == 0) return BadRequest("File is required.");
 
-        await using var stream = file.OpenReadStream();
+    await using var stream = form.File.OpenReadStream();
 
-        var dto = await attachments.UploadAsync(
-            new RoomId(roomId),
-            GetCurrentUserId(),
-            stream,
-            file.FileName,
-            file.ContentType ?? "application/octet-stream",
-            file.Length,
-            ct);
+    var dto = await attachments.UploadAsync(
+        new RoomId(roomId),
+        GetCurrentUserId(),
+        stream,
+        form.File.FileName,
+        form.File.ContentType ?? "application/octet-stream",
+        form.File.Length,
+        ct);
 
-        return Ok(dto);
-    }
-    
-    
-    [HttpGet("rooms/{roomId:guid}/attachments")]
+    return Ok(dto);
+}
+
+
+
+[HttpGet("rooms/{roomId:guid}/attachments")]
     public async Task<IActionResult> ListRoomAttachments(
     Guid roomId,
     [FromServices] ChatDbContext db,

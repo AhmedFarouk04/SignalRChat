@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using EnterpriseChat.API.Auth;
 
 namespace EnterpriseChat.API.Middleware;
 
@@ -7,9 +8,7 @@ public sealed class ExceptionHandlingMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
 
-    public ExceptionHandlingMiddleware(
-        RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger)
+    public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;
         _logger = logger;
@@ -23,39 +22,51 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception");
-
-            var isNotAuthenticated =
-                ex is UnauthorizedAccessException &&
-                ex.Message.Contains("not authenticated", StringComparison.OrdinalIgnoreCase);
-
-            var (statusCode, title) = ex switch
+            // لو الـ response بدأ، ماينفعش نغيّر status/body
+            if (context.Response.HasStarted)
             {
-                UnauthorizedAccessException when isNotAuthenticated
-                    => ((int)HttpStatusCode.Unauthorized, "Unauthorized"),
+                _logger.LogError(ex, "Exception occurred after response started.");
+                throw; // الأفضل هنا تسيبه يطلع (أو return لو عايز تتجاهله)
+            }
 
-                UnauthorizedAccessException
-                    => ((int)HttpStatusCode.Forbidden, "Forbidden"),
+            var isAuthenticated = context.User?.Identity?.IsAuthenticated == true;
 
-                KeyNotFoundException
-                    => ((int)HttpStatusCode.NotFound, "Not Found"),
+            // Logging مناسب (مش كل حاجة Error)
+            if (ex is AuthException)
+                _logger.LogWarning(ex, "Handled auth exception");
+            else if (ex is UnauthorizedAccessException)
+                _logger.LogWarning(ex, "Forbidden/Unauthorized access");
+            else if (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
+                _logger.LogWarning(ex, "Handled business/validation exception");
+            else
+                _logger.LogError(ex, "Unhandled exception");
 
-                ArgumentException or InvalidOperationException
-                    => ((int)HttpStatusCode.BadRequest, "Bad Request"),
+            var statusCode = ex switch
+            {
+                AuthException aex => NormalizeStatusCode(aex.StatusCode),
 
-                _ => ((int)HttpStatusCode.InternalServerError, "Internal Server Error")
+                // لو مش authenticated فعلاً -> 401
+                UnauthorizedAccessException when !isAuthenticated => (int)HttpStatusCode.Unauthorized,
+                // authenticated بس مش مسموح -> 403
+                UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,
+
+                KeyNotFoundException => (int)HttpStatusCode.NotFound,
+                ArgumentException or InvalidOperationException => (int)HttpStatusCode.BadRequest,
+
+                _ => (int)HttpStatusCode.InternalServerError
             };
 
             context.Response.StatusCode = statusCode;
-            context.Response.ContentType = "application/json";
 
-            await context.Response.WriteAsJsonAsync(new
-            {
-                title,
-                status = statusCode,
-                error = ex.Message
-            });
+            var userMessage = statusCode == 500
+                ? "Something went wrong. Please try again."
+                : ex.Message;
+
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            await context.Response.WriteAsync(userMessage);
         }
-
     }
+
+    private static int NormalizeStatusCode(int code)
+        => code is >= 400 and <= 599 ? code : (int)HttpStatusCode.InternalServerError;
 }

@@ -3,6 +3,7 @@ using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using EnterpriseChat.Domain.Enums;
 
 namespace EnterpriseChat.Infrastructure.Repositories;
 
@@ -36,4 +37,14 @@ public sealed class MessageReceiptRepository
         await _context.MessageReceipts
             .AddAsync(receipt, cancellationToken);
     }
+    public async Task<int> TryMarkDeliveredAsync(MessageId messageId, UserId userId, CancellationToken ct = default)
+    {
+        return await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId && r.UserId == userId && r.Status < MessageStatus.Delivered)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(r => r.Status, MessageStatus.Delivered)
+                .SetProperty(r => r.UpdatedAt, DateTime.UtcNow),
+            ct);
+    }
+
 }

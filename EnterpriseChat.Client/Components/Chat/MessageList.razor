@@ -16,7 +16,6 @@
             var prev = i > 0 ? Messages[i - 1] : null;
             var next = i < Messages.Count - 1 ? Messages[i + 1] : null;
 
-            // Date separator
             var currDate = msg.CreatedAt.ToLocalTime().Date;
             var prevDate = prev?.CreatedAt.ToLocalTime().Date;
             if (prev is null || prevDate != currDate)
@@ -63,6 +62,7 @@
 
     private int lastMessageCount;
     private bool isAtBottom = true;
+    private bool _wasAtBottom = true; // ✅ حالة القاع قبل التغيير
     private bool showNewDivider;
 
     private readonly HashSet<Guid> newIds = new();
@@ -90,7 +90,13 @@
 
         if (firstRender)
         {
-            if (AutoScroll) await Scroll.ScrollToBottomAsync(listRef);
+            if (AutoScroll)
+            {
+                await Scroll.ScrollToBottomAsync(listRef);
+                isAtBottom = true;
+                _wasAtBottom = true;
+            }
+
             lastMessageCount = Messages.Count;
             return;
         }
@@ -100,9 +106,9 @@
         // messages added
         if (Messages.Count > lastMessageCount)
         {
-            isAtBottom = await Scroll.IsAtBottomAsync(listRef);
+            var wasAtBottom = isAtBottom; // ✅ قبل الزيادة
 
-            if (AutoScroll && isAtBottom)
+            if (AutoScroll && wasAtBottom)
             {
                 await Scroll.ScrollToBottomAsync(listRef);
                 showNewDivider = false;
@@ -113,7 +119,6 @@
             }
             else
             {
-                // mark newly arrived messages as "new"
                 for (int i = lastMessageCount; i < Messages.Count; i++)
                     newIds.Add(Messages[i].Id);
 
@@ -121,24 +126,52 @@
             }
         }
 
+
         lastMessageCount = Messages.Count;
     }
+
+    private CancellationTokenSource? _scrollCts;
+    private Guid _lastBottomReportedMessageId = Guid.Empty;
 
     private async Task OnScroll()
     {
         if (listRef.Context is null) return;
 
-        isAtBottom = await Scroll.IsAtBottomAsync(listRef);
+        // Debounce للـ scroll (علشان event بيضرب كتير)
+        _scrollCts?.Cancel();
+        _scrollCts = new CancellationTokenSource();
+        var token = _scrollCts.Token;
 
-        if (isAtBottom)
+        try
         {
-            showNewDivider = false;
-            newIds.Clear();
-
-            if (Messages.Count > 0)
-                await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+            await Task.Delay(80, token); // 60-120ms مناسب
         }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        // احسب هل أنت عند القاع فعلاً
+        var atBottom = await Scroll.IsAtBottomAsync(listRef);
+        var wasBottom = isAtBottom;
+        isAtBottom = atBottom;
+
+        if (!isAtBottom) return;
+
+        // وصلت للقاع الآن (أو رجعت للقاع): امسح new divider
+        showNewDivider = false;
+        newIds.Clear();
+
+        if (Messages.Count == 0) return;
+
+        // امنع تكرار نفس النداء لو نفس آخر رسالة
+        var lastId = Messages[^1].Id;
+        if (lastId == _lastBottomReportedMessageId && wasBottom) return;
+
+        _lastBottomReportedMessageId = lastId;
+        await OnReachedBottom.InvokeAsync(lastId);
     }
+
 
     private async Task ScrollDown()
     {
@@ -146,6 +179,8 @@
 
         await Scroll.ScrollToBottomSmoothAsync(listRef);
         isAtBottom = true;
+        _wasAtBottom = true;
+
         showNewDivider = false;
         newIds.Clear();
 

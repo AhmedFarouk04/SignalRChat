@@ -151,12 +151,45 @@ namespace EnterpriseChat.Infrastructure.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Email")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("EmailOtpAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EmailOtpExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EmailOtpHash")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("EmailOtpLastSentAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("DisplayName");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("Username")
+                        .IsUnique();
 
                     b.ToTable("Users", (string)null);
                 });

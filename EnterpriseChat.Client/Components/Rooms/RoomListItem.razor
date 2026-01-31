@@ -2,20 +2,38 @@
 @using Microsoft.AspNetCore.Components.Routing
 
 <li>
-    <NavLink class="room-item"
+    <NavLink class="room-link"
              ActiveClass="active"
              href="@($"/chat/{Room.Id}")"
              Match="NavLinkMatch.Prefix">
 
-        <div class="room-avatar">
-            <span>@Room.Name[..1].ToUpper()</span>
-        </div>
+        @if (Room.Type == "Group")
+        {
+            <div class="room-avatar group" aria-label="Group chat">👥</div>
+        }
+        else
+        {
+            <div class="room-avatar private" aria-label="Private chat">
+                <span class="avatar-text">@GetAvatarText()</span>
+
+                @if (IsOnline == true)
+                {
+                    <span class="online-dot" title="Online" aria-label="Online"></span>
+                }
+            </div>
+
+        }
 
         <div class="room-main">
             <div class="room-top">
                 <div class="room-title">@Room.Name</div>
 
                 <div class="room-meta">
+                    @if (IsTyping)
+                    {
+                        <span class="typing-dot" title="Typing…" aria-label="Typing"></span>
+                    }
+
                     @if (Room.IsMuted)
                     {
                         <span class="mute" title="Muted" aria-label="Muted">🔕</span>
@@ -33,9 +51,13 @@
                 </div>
             </div>
 
-            <div class="room-preview">
-                @(string.IsNullOrWhiteSpace(Room.LastMessagePreview) ? "Tap to open chat" : Room.LastMessagePreview)
-            </div>
+            @* ✅ ما نعرضش أي preview لو فاضي (نلغي Tap to open chat) *@
+            @if (!string.IsNullOrWhiteSpace(Room.LastMessagePreview))
+            {
+                <div class="room-preview" title="@Room.LastMessagePreview">
+                    @Truncate(Room.LastMessagePreview, 60)
+                </div>
+            }
         </div>
 
     </NavLink>
@@ -43,6 +65,9 @@
 
 @code {
     [Parameter, EditorRequired] public RoomListItemModel Room { get; set; } = default!;
+    [Parameter] public bool? IsOnline { get; set; } // null = unknown/loading
+    [Parameter] public string? LastSeenText { get; set; }
+    [Parameter] public bool IsTyping { get; set; }
 
     private static string FormatTime(DateTime utc)
     {
@@ -51,5 +76,23 @@
         if (dt.Date == today) return dt.ToShortTimeString();
         if (dt.Date == today.AddDays(-1)) return "Yesterday";
         return dt.ToString("dd MMM");
+    }
+
+    private string GetAvatarText()
+    {
+        // Private → أول حرف من اسم الشخص
+        if (Room.Type == "Private" && !string.IsNullOrWhiteSpace(Room.OtherDisplayName))
+            return Room.OtherDisplayName.Substring(0, 1).ToUpper();
+
+        // Group/Other fallback
+        return Room.Name.Substring(0, 1).ToUpper();
+    }
+
+    private static string Truncate(string? text, int max)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        text = text.Trim();
+        if (text.Length <= max) return text;
+        return text.Substring(0, max - 1) + "…";
     }
 }

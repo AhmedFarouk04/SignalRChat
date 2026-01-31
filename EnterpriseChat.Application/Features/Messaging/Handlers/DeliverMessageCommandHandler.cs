@@ -13,41 +13,41 @@ public sealed class DeliverMessageCommandHandler
     private readonly IMessageRepository _messageRepo;
     private readonly IRoomAuthorizationService _auth;
     private readonly IUnitOfWork _uow;
-
+    private readonly IMessageBroadcaster? _broadcaster;
     public DeliverMessageCommandHandler(
         IMessageReceiptRepository receiptRepo,
         IMessageRepository messageRepo,
         IRoomAuthorizationService auth,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IMessageBroadcaster? broadcaster)
     {
         _receiptRepo = receiptRepo;
         _messageRepo = messageRepo;
         _auth = auth;
         _uow = uow;
+        _broadcaster = broadcaster;
     }
 
     public async Task<Unit> Handle(DeliverMessageCommand command, CancellationToken ct)
     {
-        var message = await _messageRepo.GetByIdAsync(command.MessageId.Value, ct);
-        if (message is null)
-            return Unit.Value;
+        var info = await _messageRepo.GetRoomAndSenderAsync(command.MessageId, ct);
+        if (info is null) return Unit.Value;
 
-        await _auth.EnsureUserIsMemberAsync(message.RoomId, command.UserId, ct);
+        await _auth.EnsureUserIsMemberAsync(info.Value.RoomId, command.UserId, ct);
 
-        var receipt = await _receiptRepo.GetAsync(command.MessageId, command.UserId, ct);
-        if (receipt is null)
-        {
-            message.MarkDelivered(command.UserId);
-            await _uow.CommitAsync(ct);
-            return Unit.Value;
-        }
+        var affected = await _receiptRepo.TryMarkDeliveredAsync(command.MessageId, command.UserId, ct);
+        if (affected == 0) return Unit.Value;
 
-        if (receipt.Status >= MessageStatus.Delivered)
-            return Unit.Value;
-
-        receipt.MarkDelivered();
         await _uow.CommitAsync(ct);
+
+        // ✅ جديد: ابعت Delivered للـ SENDER (مش الrecipient)
+        if (_broadcaster is not null)
+        {
+            await _broadcaster.MessageDeliveredAsync(command.MessageId, info.Value.SenderId); // SenderId من info
+        }
 
         return Unit.Value;
     }
+
+
 }

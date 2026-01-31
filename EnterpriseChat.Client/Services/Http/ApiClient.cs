@@ -47,6 +47,15 @@ public sealed class ApiClient : IApiClient
 
         return await res.Content.ReadFromJsonAsync<T>(JsonOptions, ct);
     }
+    public async Task<byte[]> GetBytesAsync(string url, CancellationToken ct = default)
+    {
+        await AttachTokenAsync();
+
+
+        using var res = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        await EnsureSuccessOrThrow(res);
+        return await res.Content.ReadAsByteArrayAsync(ct);
+    }
 
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string url, TRequest body, CancellationToken ct = default)
     {
@@ -142,7 +151,8 @@ public sealed class ApiClient : IApiClient
     }
     public async Task<ApiFile> GetFileAsync(string url, CancellationToken ct = default)
     {
-        await AttachTokenAsync(ct);
+        await AttachTokenAsync();
+
 
         using var res = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         await EnsureSuccessOrThrow(res);

@@ -1,4 +1,5 @@
 ﻿using EnterpriseChat.Application.Interfaces;
+using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -14,29 +15,25 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
         _context = context;
     }
 
-    public async Task EnsureUserIsMemberAsync(
-        RoomId roomId,
-        UserId userId,
-        CancellationToken ct = default)
+    public async Task EnsureUserIsMemberAsync(RoomId roomId, UserId userId, CancellationToken ct = default)
     {
         var room = await _context.ChatRooms
+            .AsNoTracking()
             .Include(r => r.Members)
             .FirstOrDefaultAsync(r => r.Id == roomId, ct);
 
         if (room is null)
             throw new InvalidOperationException("Room not found.");
 
-        var isMember = room.Members.Any(m => m.UserId.Value == userId.Value);
+        var isMember = room.Members.Any(m => m.UserId == userId);
         if (!isMember)
             throw new UnauthorizedAccessException("User is not a member of this room.");
     }
 
-    public async Task EnsureUserIsOwnerAsync(
-        RoomId roomId,
-        UserId userId,
-        CancellationToken ct = default)
+    public async Task EnsureUserIsOwnerAsync(RoomId roomId, UserId userId, CancellationToken ct = default)
     {
         var room = await _context.ChatRooms
+            .AsNoTracking()
             .Include(r => r.Members)
             .FirstOrDefaultAsync(r => r.Id == roomId, ct);
 
@@ -44,30 +41,28 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
             throw new InvalidOperationException("Room not found.");
 
         var isOwner =
-            (room.OwnerId != null && room.OwnerId.Value == userId.Value) ||
-            room.Members.Any(m => m.UserId.Value == userId.Value && m.IsOwner);
+            (room.OwnerId != null && room.OwnerId == userId) ||
+            room.Members.Any(m => m.UserId == userId && m.IsOwner);
 
         if (!isOwner)
             throw new UnauthorizedAccessException("Only room owner can perform this action.");
     }
 
-    public async Task EnsureUserIsAdminAsync(
-        RoomId roomId,
-        UserId userId,
-        CancellationToken ct = default)
+    public async Task EnsureUserIsAdminAsync(RoomId roomId, UserId userId, CancellationToken ct = default)
     {
         var room = await _context.ChatRooms
+            .AsNoTracking()
             .Include(r => r.Members)
             .FirstOrDefaultAsync(r => r.Id == roomId, ct);
 
         if (room is null)
             throw new InvalidOperationException("Room not found.");
 
-        if (room.OwnerId != null && room.OwnerId.Value == userId.Value)
+        if (room.OwnerId != null && room.OwnerId == userId)
             return;
 
         var isAdmin = room.Members.Any(m =>
-            m.UserId.Value == userId.Value &&
+            m.UserId == userId &&
             (m.IsAdmin || m.IsOwner));
 
         if (!isAdmin)

@@ -14,10 +14,8 @@
             {
                 <span class="status @StatusClass" title="@TooltipText">@StatusIcon</span>
 
-                @if (Message.Status == MessageStatus.Failed)
-                {
-                    <button class="retry-btn" @onclick="Retry">Retry</button>
-                }
+                
+
             }
         </div>
     }
@@ -49,10 +47,11 @@
         MessageStatus.Pending => "…",
         MessageStatus.Sent => "✓",
         MessageStatus.Delivered => "✓✓",
-        MessageStatus.Read => "✓✓",
+        MessageStatus.Read => "✓✓ 👁",
         MessageStatus.Failed => "!",
         _ => ""
     };
+
 
     private string StatusClass => Message.Status switch
     {

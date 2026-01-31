@@ -3,21 +3,53 @@ using Microsoft.JSInterop;
 
 namespace EnterpriseChat.Client.Services.JsInterop;
 
-public sealed class ScrollService : IScrollService
+public sealed class ScrollService : IScrollService, IAsyncDisposable
 {
-    private readonly IJSRuntime _js;
+    private readonly Lazy<Task<IJSObjectReference>> _module;
 
     public ScrollService(IJSRuntime js)
     {
-        _js = js;
+        _module = new(() => js.InvokeAsync<IJSObjectReference>(
+            "import", "./js/scroll.js").AsTask());
     }
 
-    public Task ScrollToBottomAsync(ElementReference el)
-        => _js.InvokeVoidAsync("scrollToBottom", el).AsTask();
+    public async Task ScrollToBottomAsync(ElementReference el)
+    {
+        var m = await _module.Value;
+        await m.InvokeVoidAsync("scrollToBottom", el);
+    }
 
-    public Task ScrollToBottomSmoothAsync(ElementReference el)
-        => _js.InvokeVoidAsync("scrollToBottomSmooth", el).AsTask();
+    public async Task ScrollToBottomSmoothAsync(ElementReference el)
+    {
+        var m = await _module.Value;
+        await m.InvokeVoidAsync("scrollToBottomSmooth", el);
+    }
 
-    public Task<bool> IsAtBottomAsync(ElementReference el)
-        => _js.InvokeAsync<bool>("isAtBottom", el).AsTask();
+    private static int _atBottomCalls;
+    private static DateTime _atBottomLog = DateTime.UtcNow;
+
+    public async Task<bool> IsAtBottomAsync(ElementReference el)
+    {
+        _atBottomCalls++;
+        var now = DateTime.UtcNow;
+        if ((now - _atBottomLog).TotalSeconds >= 2)
+        {
+            Console.WriteLine($"[JS IsAtBottom] last2s={_atBottomCalls}");
+            _atBottomCalls = 0;
+            _atBottomLog = now;
+        }
+
+        var m = await _module.Value;
+        return await m.InvokeAsync<bool>("isAtBottom", el);
+    }
+
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module.IsValueCreated)
+        {
+            var m = await _module.Value;
+            await m.DisposeAsync();
+        }
+    }
 }

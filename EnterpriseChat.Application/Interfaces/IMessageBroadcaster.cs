@@ -16,4 +16,7 @@ public interface IMessageBroadcaster
     Task BroadcastMessageAsync(
         MessageDto message,
         IEnumerable<UserId> recipients);
+
+    Task RoomUpdatedAsync(RoomUpdatedDto update, IEnumerable<UserId> users);
+
 }

@@ -1,5 +1,5 @@
 ﻿@page "/chat/{RoomId:guid}"
-
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using EnterpriseChat.Client.ViewModels
 @using EnterpriseChat.Client.Models
 @using Microsoft.JSInterop
@@ -7,16 +7,21 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @implements IDisposable
+@inject RoomsViewModel RoomsVM
 
-<AuthGuard>
+<div class="chat-page">
+
     <TopBar Room="@VM.Room"
             MembersCount="@(VM.GroupMembers?.Members.Count ?? 0)"
             OnlineCount="@VM.OnlineUsers.Count"
             OtherUser="@VM.OtherUser"
             IsMuted="@VM.IsMuted"
+            IsBlocked="@VM.IsBlocked"
             OnMuteToggle="ToggleMute"
             OnBlock="BlockOtherUser"
+            OnUnblock="UnblockOtherUser"
             OnMembers="OpenMembers" />
+
 
     @if (VM.UiError != null)
     {
@@ -32,58 +37,104 @@
     }
     else
     {
-        @* Presence bar: online فقط (Group) *@
-        @if (VM.Room.Type == "Group")
-        {
-            <PresenceBar OnlineUsers="@VM.OnlineUsers" />
-        }
+        <div class="chat-body">
 
-        @if (VM.IsDisconnected)
-        {
-            <div class="connection-banner">Reconnecting…</div>
-        }
+            @if (VM.Room.Type == "Group")
+            {
+                <PresenceBar OnlineUsers="@VM.OnlineUsers" />
+            }
 
-        <MessageList Messages="@VM.Messages"
-                     CurrentUserId="@VM.CurrentUserId"
-                     OnRetry="RetrySend"
-                     OnReachedBottom="HandleReachedBottom" />
+            @if (VM.IsDisconnected)
+            {
+                <div class="connection-banner">Reconnecting…</div>
+            }
 
-        <TypingIndicator TypingUsers="@VM.TypingUsers" />
+            <div class="chat-messages">
+                <MessageList Messages="@VM.Messages"
+                             CurrentUserId="@VM.CurrentUserId"
+                             OnRetry="RetrySend"
+                             OnReachedBottom="HandleReachedBottom" />
 
-        @if (VM.IsOtherDeleted)
-        {
-            <div class="blocked-banner">This user is no longer available.</div>
-        }
-        else if (VM.IsBlocked)
-        {
-            <div class="blocked-banner">You blocked this user. Unblock to send messages.</div>
-        }
-        else
-        {
-            <ChatInput OnSend="Send"
-                       OnUserTyping="NotifyTyping" />
-        }
+                <TypingIndicator TypingUsers="@VM.TypingUsers" />
+            </div>
 
-        @* Members Drawer (مش جوه شرط ChatInput) *@
-        @if (_membersOpen && VM.Room?.Type == "Group")
-        {
-            <MembersDrawer IsOpen="_membersOpen"
-                           Members="@VM.GetAllMembersForDrawer()"
-                           OwnerId="@(VM.GroupMembers?.OwnerId ?? Guid.Empty)"
-                           CanManageMembers="@(VM.GroupMembers?.OwnerId == VM.CurrentUserId)"
-                           OnRemove="RemoveMember"
-                           OnClose="CloseMembers" />
-        }
+            <div class="chat-actions-row">
+                <button type="button" class="mini-btn" @onclick="OpenAttachments">📎 Attachments</button>
+
+                @if (VM.Room?.Type == "Group")
+                {
+                    <button type="button" class="mini-btn"
+                            @onclick="@(() => Nav.NavigateTo($"/groups/{RoomId}/settings"))">
+                        ⚙️ Group settings
+                    </button>
+                }
+            </div>
+
+            @if (_attachmentsOpen)
+            {
+                <div class="drawer-backdrop" @onclick="CloseAttachments"></div>
+
+                <aside class="drawer" role="dialog" aria-modal="true" aria-label="Attachments drawer" tabindex="0">
+                    <div class="drawer-header">
+                        <div>
+                            <div class="drawer-name">Attachments</div>
+                            <div class="drawer-sub">Room files</div>
+                        </div>
+
+                        <button class="icon-btn" title="Close" @onclick="CloseAttachments" autofocus>✕</button>
+                    </div>
+
+                    <div class="drawer-list">
+                        <ChatAttachments RoomId="RoomId" />
+                    </div>
+                </aside>
+            }
+
+            <div class="chat-input">
+                @if (VM.IsOtherDeleted)
+                {
+                    <div class="blocked-banner">This user is no longer available.</div>
+                }
+                else if (VM.IsBlocked)
+                {
+                    <div class="blocked-banner">You blocked this user. Unblock to send messages.</div>
+                }
+                else
+                {
+                    <ChatInput OnSend="Send"
+                               OnUserTyping="NotifyTyping" />
+                }
+            </div>
+
+            @if (_membersOpen && VM.Room?.Type == "Group")
+            {
+                <MembersDrawer IsOpen="_membersOpen"
+                               Members="@VM.GetAllMembersForDrawer()"
+                               OwnerId="@(VM.GroupMembers?.OwnerId ?? Guid.Empty)"
+                               CanManageMembers="@(VM.GroupMembers?.OwnerId == VM.CurrentUserId)"
+                               OnRemove="RemoveMember"
+                               OnClose="CloseMembers" />
+            }
+        </div>
     }
-</AuthGuard>
+</div>
 
 @code {
     [Parameter] public Guid RoomId { get; set; }
 
     private bool _membersOpen;
-
     private DotNetObjectReference<ChatPageInterop>? _objRef;
     private bool _escapeRegistered;
+    private bool _attachmentsOpen;
+    private bool _renderQueued;
+
+    private void OpenAttachments() => _attachmentsOpen = true;
+    private void CloseAttachments() => _attachmentsOpen = false;
+
+    private CancellationTokenSource? _readCts;
+    private Guid _lastSentReadId = Guid.Empty;
+
+    private IJSObjectReference? _chatModule;
 
     protected override async Task OnInitializedAsync()
     {
@@ -98,11 +149,43 @@
     {
         if (firstRender && !_escapeRegistered)
         {
-            // سجل Global Escape مرة واحدة
             _objRef = DotNetObjectReference.Create(new ChatPageInterop(this));
-            await JS.InvokeVoidAsync("registerEscape", _objRef);
+
+            _chatModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./js/chatPage.js");
+
+            await _chatModule.InvokeVoidAsync("registerEscape", _objRef);
+
             _escapeRegistered = true;
         }
+    }
+
+    public void Dispose()
+    {
+        VM.Changed -= OnVmChanged;
+
+        _readCts?.Cancel();
+        _readCts?.Dispose();
+
+        _ = Task.Run(async () =>
+        {
+            try { await VM.DisposeAsync(); } catch { }
+        });
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (_chatModule != null)
+                    await _chatModule.InvokeVoidAsync("unregisterEscape");
+
+                if (_chatModule != null)
+                    await _chatModule.DisposeAsync();
+            }
+            catch { }
+        });
+
+        _objRef?.Dispose();
     }
 
     private Task Send(string text) => VM.SendAsync(RoomId, text);
@@ -110,9 +193,36 @@
     private Task NotifyTyping() => VM.NotifyTypingAsync(RoomId);
 
     private Task HandleReachedBottom(Guid lastMessageId)
-        => lastMessageId == Guid.Empty
-            ? Task.CompletedTask
-            : VM.MarkRoomReadAsync(RoomId, lastMessageId);
+    {
+        if (lastMessageId == Guid.Empty) return Task.CompletedTask;
+        if (lastMessageId == _lastSentReadId) return Task.CompletedTask;
+
+        _readCts?.Cancel();
+        _readCts?.Dispose();
+        _readCts = new CancellationTokenSource();
+        var ct = _readCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(400, ct);
+                if (ct.IsCancellationRequested) return;
+
+                _lastSentReadId = lastMessageId;
+
+                // ✅ نبلغ السيرفر
+                await VM.MarkRoomReadAsync(RoomId, lastMessageId);
+
+                // ✅ نصفر badge فورًا بدون refresh
+                await InvokeAsync(() => RoomsVM.MarkRoomAsReadLocal(RoomId, lastMessageId));
+            }
+            catch { }
+        }, ct);
+
+        return Task.CompletedTask;
+    }
+
 
     private Task RemoveMember(Guid userId) => VM.RemoveMemberAsync(RoomId, userId);
 
@@ -130,19 +240,25 @@
 
     private void CloseMembers() => _membersOpen = false;
 
-    private void OnVmChanged() => InvokeAsync(StateHasChanged);
-
-    public void Dispose()
+    private void OnVmChanged()
     {
-        VM.Changed -= OnVmChanged;
-        _ = VM.DisposeAsync();
+        if (_renderQueued) return;
+        _renderQueued = true;
 
-        // unregister global escape
-        _ = JS.InvokeVoidAsync("unregisterEscape");
-        _objRef?.Dispose();
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Task.Delay(50);
+                StateHasChanged();
+            }
+            finally
+            {
+                _renderQueued = false;
+            }
+        });
     }
 
-    // Wrapper class عشان DotNetObjectReference يبقى stable
     private sealed class ChatPageInterop
     {
         private readonly Chat _page;
@@ -151,10 +267,27 @@
         [JSInvokable]
         public Task OnGlobalEscape()
         {
-            if (_page._membersOpen)
-                _page.CloseMembers();
+            var changed = false;
 
-            return Task.CompletedTask;
+            if (_page._attachmentsOpen)
+            {
+                _page.CloseAttachments();
+                changed = true;
+            }
+
+            if (_page._membersOpen)
+            {
+                _page.CloseMembers();
+                changed = true;
+            }
+
+            return changed ? _page.InvokeAsync(_page.StateHasChanged) : Task.CompletedTask;
         }
     }
+
+    private Task UnblockOtherUser()
+    => VM.OtherUser == null
+        ? Task.CompletedTask
+        : VM.UnblockUserAsync(VM.OtherUser.Id);
+
 }

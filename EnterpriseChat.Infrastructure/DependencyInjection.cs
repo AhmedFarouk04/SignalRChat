@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IAttachmentService, LocalAttachmentService>();
 
         services.AddScoped<IUserLookupService, UserLookupService>();
+        services.AddScoped<IRoomDetailsReader, RoomDetailsReader>();
 
         return services;
     }

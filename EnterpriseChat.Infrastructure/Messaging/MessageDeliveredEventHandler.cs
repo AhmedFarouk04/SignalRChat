@@ -1,23 +1,26 @@
 ﻿using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Events;
+using EnterpriseChat.Domain.Interfaces;
 
-public sealed class MessageDeliveredEventHandler
-    : IDomainEventHandler<MessageDeliveredEvent>
+namespace EnterpriseChat.Infrastructure.Messaging;
+
+public sealed class MessageDeliveredEventHandler : IDomainEventHandler<MessageDeliveredEvent>
 {
     private readonly IMessageBroadcaster _broadcaster;
+    private readonly IMessageRepository _messages;
 
-    public MessageDeliveredEventHandler(
-        IMessageBroadcaster broadcaster)
+    public MessageDeliveredEventHandler(IMessageBroadcaster broadcaster, IMessageRepository messages)
     {
         _broadcaster = broadcaster;
+        _messages = messages;
     }
 
-    public async Task Handle(
-        MessageDeliveredEvent domainEvent,
-        CancellationToken ct)
+    public async Task Handle(MessageDeliveredEvent e, CancellationToken ct)
     {
-        await _broadcaster.MessageDeliveredAsync(
-            domainEvent.MessageId,
-            domainEvent.UserId);
+        var msg = await _messages.GetByIdAsync(e.MessageId.Value, ct);
+        if (msg is null) return;
+
+        // ✅ ابعت للـ sender
+        await _broadcaster.MessageDeliveredAsync(e.MessageId, msg.SenderId);
     }
 }

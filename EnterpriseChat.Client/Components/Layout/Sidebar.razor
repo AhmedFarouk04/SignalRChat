@@ -9,15 +9,36 @@
 
 <ul class="sidebar-menu">
     <li>
-        <NavLink class="sidebar-link"
-                 ActiveClass="active"
-                 href="/rooms"
-                 Match="NavLinkMatch.All">
-            <span class="ico">💬</span>
-            <span>Rooms</span>
+        <NavLink class="sidebar-link" ActiveClass="active" href="/rooms" Match="NavLinkMatch.All">
+            <span class="ico">💬</span><span>Rooms</span>
         </NavLink>
     </li>
+    <li>
+        <NavLink class="sidebar-link" ActiveClass="active" href="/groups/new" Match="NavLinkMatch.Prefix">
+            <span class="ico">👥</span><span>Create group</span>
+        </NavLink>
+    </li>
+    <li>
+        <NavLink class="sidebar-link" ActiveClass="active" href="/users" Match="NavLinkMatch.Prefix">
+            <span class="ico">👤</span><span>Users</span>
+        </NavLink>
+    </li>
+
+    <li>
+        <NavLink class="sidebar-link" ActiveClass="active" href="/muted" Match="NavLinkMatch.Prefix">
+            <span class="ico">🔕</span><span>Muted</span>
+        </NavLink>
+    </li>
+
+    <li>
+        <NavLink class="sidebar-link" ActiveClass="active" href="/blocked" Match="NavLinkMatch.Prefix">
+            <span class="ico">🚫</span><span>Blocked</span>
+        </NavLink>
+    </li>
+   
+
 </ul>
+
 
 <div class="sidebar-footer">
     <button class="logout-btn" type="button" @onclick="Logout">

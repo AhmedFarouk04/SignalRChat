@@ -1,14 +1,22 @@
-﻿<CascadingAuthenticationState>
+﻿@using Microsoft.AspNetCore.Components.Authorization
+
+<CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData"
-                                DefaultLayout="@typeof(MainLayout)">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <Authorizing>
+                    <div style="padding:20px;color:var(--text-secondary);">Checking session…</div>
+                </Authorizing>
+
+                <NotAuthorized>
+                    <RedirectToLogin />
+                </NotAuthorized>
             </AuthorizeRouteView>
         </Found>
 
         <NotFound>
             <LayoutView Layout="@typeof(MainLayout)">
-                <h3>Page not found</h3>
+                <div style="padding:20px;color:var(--text-secondary);">Not found.</div>
             </LayoutView>
         </NotFound>
     </Router>

@@ -1,65 +1,71 @@
 ﻿@page "/login"
+@layout EnterpriseChat.Client.Components.Layout.AuthLayout
 
-@using EnterpriseChat.Client.Authentication.Abstractions
-@using EnterpriseChat.Client.Authentication.Services
-@inject ITokenStore TokenStore
-@inject JwtAuthStateProvider AuthProvider
+@using EnterpriseChat.Client.Contracts.Auth
+@using EnterpriseChat.Client.Services.Http
+@using System.Web
+
+@inject AuthApi AuthApi
+@inject EnterpriseChat.Client.Authentication.Abstractions.ITokenStore TokenStore
+@inject EnterpriseChat.Client.Authentication.Services.JwtAuthStateProvider AuthProvider
 @inject NavigationManager Nav
 
-<div class="login-page">
-    <div class="login-card">
-        <h2>Login (Dev)</h2>
-        <p class="muted">
-            Paste a JWT token (must contain <code>sub</code> as a GUID).
-        </p>
+<h2>Welcome back</h2>
+<p class="muted">Login with your username or email.</p>
 
-        <textarea class="token-box"
-                  placeholder="Paste JWT here..."
-                  @bind="token"></textarea>
+<input class="auth-input" placeholder="Email or username" @bind="Identifier" />
+<input class="auth-input" placeholder="Password" type="password" @bind="Password" />
 
-        @if (!string.IsNullOrWhiteSpace(error))
-        {
-            <div class="login-error">@error</div>
-        }
+<button class="auth-btn" @onclick="DoLoginAsync" disabled="@IsBusy">
+    @(IsBusy ? "Logging in..." : "Login")
+</button>
 
-        <div class="login-actions">
-            <button class="btn" @onclick="DoLogin">Login</button>
-            <button class="btn ghost" @onclick="Clear">Logout / Clear</button>
-        </div>
-    </div>
+@if (!string.IsNullOrWhiteSpace(Error))
+{
+    <div class="auth-error">@Error</div>
+}
+
+<div class="auth-links">
+    <a href="/register">Create account</a>
+    <a href="/verify-email">I have a code</a>
 </div>
 
+
 @code {
-    private string token = "";
-    private string? error;
+    private string Identifier = "";
+    private string Password = "";
+    private bool IsBusy;
+    private string? Error;
 
-    private async Task DoLogin()
+    private async Task DoLoginAsync()
     {
-        error = null;
-        var t = (token ?? "").Trim();
+        Error = null;
+        IsBusy = true;
 
-        if (string.IsNullOrWhiteSpace(t))
+        try
         {
-            error = "Token is required.";
-            return;
-        }
+            var dto = await AuthApi.LoginAsync(new LoginRequest
+            {
+                Identifier = Identifier.Trim(),
+                Password = Password
+            });
 
-        if (t.Split('.').Length != 3)
+            await TokenStore.SetAsync(dto.AccessToken);
+            AuthProvider.Notify();
+
+            var uri = new Uri(Nav.Uri);
+            var qs = HttpUtility.ParseQueryString(uri.Query);
+            var returnUrl = qs.Get("returnUrl") ?? "/rooms";
+            Nav.NavigateTo(returnUrl, true);
+
+        }
+        catch (Exception ex)
         {
-            error = "This doesn't look like a JWT (expected 3 parts).";
-            return;
+            Error = ex.Message;
         }
-
-        await TokenStore.SetAsync(t);
-        AuthProvider.Notify();
-        Nav.NavigateTo("/rooms", true);
-    }
-
-    private async Task Clear()
-    {
-        token = "";
-        error = null;
-        await TokenStore.ClearAsync();
-        AuthProvider.Notify();
+        finally
+        {
+            IsBusy = false;
+        }
     }
 }
