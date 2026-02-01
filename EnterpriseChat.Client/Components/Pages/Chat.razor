@@ -52,6 +52,8 @@
             <div class="chat-messages">
                 <MessageList Messages="@VM.Messages"
                              CurrentUserId="@VM.CurrentUserId"
+                             Room="@VM.Room"
+                             GroupMembers="@(VM.GroupMembers?.Members ?? new())"
                              OnRetry="RetrySend"
                              OnReachedBottom="HandleReachedBottom" />
 

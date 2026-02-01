@@ -13,9 +13,6 @@
             @if (IsMine)
             {
                 <span class="status @StatusClass" title="@TooltipText">@StatusIcon</span>
-
-                
-
             }
         </div>
     }
@@ -26,7 +23,7 @@
     [Parameter] public Guid CurrentUserId { get; set; }
     [Parameter] public EventCallback<MessageModel> OnRetry { get; set; }
 
-    [Parameter] public string GroupPosition { get; set; } = "single"; // single|start|mid|end
+    [Parameter] public string GroupPosition { get; set; } = "single";
     [Parameter] public bool ShowMeta { get; set; } = true;
     [Parameter] public bool IsNew { get; set; }
 
@@ -40,8 +37,6 @@
         _ => "g-single"
     };
 
-    private Task Retry() => OnRetry.InvokeAsync(Message);
-
     private string StatusIcon => Message.Status switch
     {
         MessageStatus.Pending => "…",
@@ -52,24 +47,23 @@
         _ => ""
     };
 
-
-    private string StatusClass => Message.Status switch
+    private string StatusClass => ((int)Message.Status) switch
     {
-        MessageStatus.Pending => "pending",
-        MessageStatus.Sent => "sent",
-        MessageStatus.Delivered => "delivered",
-        MessageStatus.Read => "read",
-        MessageStatus.Failed => "failed",
+        (int)MessageStatus.Pending => "pending",
+        (int)MessageStatus.Sent => "sent",
+        (int)MessageStatus.Delivered => "delivered",
+        (int)MessageStatus.Read => "read",
+        (int)MessageStatus.Failed => "failed",
         _ => ""
     };
 
-    private string TooltipText => Message.Status switch
+    private string TooltipText => ((int)Message.Status) switch
     {
-        MessageStatus.Pending => "Sending…",
-        MessageStatus.Sent => "Sent",
-        MessageStatus.Delivered => "Delivered",
-        MessageStatus.Read => "Read",
-        MessageStatus.Failed => "Failed",
+        (int)MessageStatus.Pending => "Sending…",
+        (int)MessageStatus.Sent => "Sent",
+        (int)MessageStatus.Delivered => "Delivered",
+        (int)MessageStatus.Read => "Read",
+        (int)MessageStatus.Failed => "Failed",
         _ => ""
     };
 }

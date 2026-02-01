@@ -67,20 +67,17 @@ public sealed class RoomsViewModel
         {
             Rooms = await _roomService.GetRoomsAsync();
 
-            // ✅ hydrate store من السيرفر أول مرة
             foreach (var r in Rooms)
                 _flags.SetUnread(r.Id, r.UnreadCount);
 
             try { await _rt.ConnectAsync(); } catch { }
 
-            // ✅ جديد: cache user id مرة واحدة (مع handling لـ nullable)
             var userId = await _currentUser.GetUserIdAsync();
             if (userId.HasValue)
             {
                 _cachedUserId = userId.Value;
                 _userIdCached = true;
             }
-            // لو null (نادرًا، مش authenticated كويس)، هيسكيب mark delivered – مش مشكلة كبيرة
 
             ApplyFilter();
         }

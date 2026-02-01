@@ -289,3 +289,38 @@
     padding: 0 7px;
     background: rgba(96,165,250,.2);
 }
+.rooms-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* ✅ ياخد full height من .content */
+    padding: 14px;
+}
+
+.rooms-toolbar {
+    flex-shrink: 0; /* ✅ الsearch + tabs متقلش */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.rooms-list {
+    flex: 1; /* ✅ ياخد الباقي كله */
+    overflow-y: auto; /* ✅ scroll لو الrooms كتير */
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* لو في empty أو skeleton */
+.rooms-empty,
+.loading-screen { /* لو موجود */
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}

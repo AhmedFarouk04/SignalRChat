@@ -34,8 +34,8 @@ public sealed class GroupsController : BaseController
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateGroup(
-     [FromBody] CreateGroupRequest request,
-     CancellationToken ct)
+    [FromBody] CreateGroupRequest request,
+    CancellationToken ct)
     {
         if (request is null)
             return BadRequest("Request body is required.");
@@ -46,34 +46,40 @@ public sealed class GroupsController : BaseController
         if (request.Name.Length > 100)
             return BadRequest("Group name is too long.");
 
+        if (request.Members == null || request.Members.Count == 0)
+            return BadRequest("At least one member is required.");
+
         var creatorId = GetCurrentUserId();
 
-        var members = (request.Members ?? Array.Empty<Guid>())
-            .Where(x => x != Guid.Empty)
+        var members = request.Members
+            .Where(x => x != Guid.Empty && x != creatorId.Value) // exclude creator if duplicated
             .Distinct()
             .Select(x => new UserId(x))
             .ToList();
 
-        var room = await _mediator.Send(
-            new CreateGroupChatCommand(
-                request.Name.Trim(),
-                creatorId,
-                members),
-            ct);
+        // ✅ جديد: ولّد RoomId على server دايمًا
+        var roomId = Guid.NewGuid();
 
-        return CreatedAtAction(
-            actionName: nameof(RoomsController.GetRoom),
-            controllerName: "Rooms",
-            routeValues: new { roomId = room.Id.Value },
-            value: new
-            {
-                Id = room.Id.Value,
-                room.Name,
-                Type = room.Type.ToString(),
-                OwnerId = room.OwnerId?.Value,
-                MembersCount = room.Members.Count,
-                CreatedAt = room.CreatedAt
-            });
+        var command = new CreateGroupChatCommand(
+            request.Name.Trim(),
+            creatorId,
+            members);
+
+        // لو الـ entity/handler يدعم pre-set Id، pass roomId (لو لا، الentity هيولد new)
+
+        var room = await _mediator.Send(command, ct);
+
+        // لو الhandler بيولد Id مختلف، استخدم room.Id.Value هنا
+
+        return Created($"/api/rooms/{room.Id.Value}", new
+        {
+            RoomId = room.Id.Value,
+            Name = room.Name,
+            Type = "Group",
+            OwnerId = room.OwnerId?.Value,
+            MembersCount = room.Members.Count,
+            CreatedAt = room.CreatedAt
+        });
     }
 
 

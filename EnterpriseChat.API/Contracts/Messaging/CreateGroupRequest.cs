@@ -5,6 +5,8 @@
     {
         public string Name { get; init; } = string.Empty;
         public IReadOnlyCollection<Guid> Members { get; init; } = [];
+    
+    
     }
 
 }

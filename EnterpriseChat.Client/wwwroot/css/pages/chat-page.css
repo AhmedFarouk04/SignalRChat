@@ -539,3 +539,44 @@ body.drawer-open {
 .chat-input {
     flex: 0 0 auto;
 }
+.chat-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.messages-container { /* أو الclass بتاع messages list */
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+}
+
+.input-bar {
+    flex-shrink: 0;
+}
+.read-avatars {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+}
+
+.mini-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6a5cff, #4f8cff);
+    color: white;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+}
+
+.more-read {
+    font-size: 11px;
+    color: var(--text-secondary);
+}

@@ -10,4 +10,6 @@ public sealed class MessageDto
     public string Content { get; init; } = string.Empty;
     public MessageStatus Status { get; init; }
     public DateTime CreatedAt { get; init; }
+
+    public List<MessageReceiptDto> Receipts { get; set; } // userId + status + timestamp
 }

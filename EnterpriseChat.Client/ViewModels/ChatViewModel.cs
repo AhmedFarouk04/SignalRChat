@@ -21,6 +21,7 @@ public sealed class ChatViewModel
     private readonly ModerationApi _mod;
 
 
+
     private DateTime _lastTyping;
     private Guid? _currentRoomId;
     private bool _eventsRegistered;
@@ -73,6 +74,10 @@ public sealed class ChatViewModel
     public bool IsDisconnected { get; private set; }
     public bool IsOtherDeleted { get; private set; }
     public bool IsRemoved { get; private set; }
+
+    public int DeliveredCount { get; set; } // عدد اللي delivered
+    public int ReadCount { get; set; } // عدد اللي read
+    public int TotalRecipients { get; set; } // MembersCount - 1 (بدون sender)
 
     private int _changedCount;
     private DateTime _lastLog = DateTime.UtcNow;
@@ -139,21 +144,32 @@ public sealed class ChatViewModel
 
             // ✅ messages
             Messages.AddRange(await _chatService.GetMessagesAsync(roomId));
+
+            // ✅ جديد: حساب TotalRecipients + fix comparisons مع cast
             var myId = CurrentUserId;
+            var memberCount = Room.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
+
+            foreach (var msg in Messages)
+            {
+                msg.TotalRecipients = memberCount;
+
+                // لو Receipts مش populated (من DTO)، هنا map لو لازم – بس افترض GetMessages بيرجع Receipts
+            }
+
+            // mark delivered مع cast لfix error
             var toDeliver = Messages
-                .Where(m => m.SenderId != myId && m.Status < MessageStatus.Delivered)
+                .Where(m => m.SenderId != myId && (int)m.Status < (int)MessageStatus.Delivered)
                 .Select(m => m.Id)
                 .ToList();
 
             if (toDeliver.Any())
             {
-                // fire-and-forget كلها
                 _ = Task.Run(async () =>
                 {
                     foreach (var id in toDeliver)
                     {
                         try { await _chatService.MarkMessageDeliveredAsync(id); }
-                        catch { /* silent */ }
+                        catch { }
                     }
                 });
             }
@@ -655,7 +671,7 @@ public sealed class ChatViewModel
         // ✅ لو الرسالة جاية من شخص تاني وأنا فاتح نفس الروم:
         if (_currentRoomId == message.RoomId && message.SenderId != CurrentUserId)
         {
-            if (message.Status < MessageStatus.Delivered)
+            if ((int)message.Status < (int)MessageStatus.Delivered)
             {
                 _ = Task.Run(async () =>
                 {

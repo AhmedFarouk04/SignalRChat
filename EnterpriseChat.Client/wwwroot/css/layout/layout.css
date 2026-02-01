@@ -1,7 +1,17 @@
 ﻿.app-layout {
     display: flex;
     height: 100vh;
-    overflow: hidden;
+    overflow: hidden; /* خليها hidden عشان double scroll متعملش */
+}
+
+.sidebar {
+    width: 240px;
+    background: var(--bg-sidebar);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-subtle);
+    overflow-y: auto; /* ✅ جديد: لو الsidebar طويل (future) يscroll */
 }
 
 .main {
@@ -9,15 +19,18 @@
     display: flex;
     flex-direction: column;
     background: var(--bg-app);
+    overflow: hidden; /* خليها hidden */
 }
 
 .content {
     flex: 1;
     padding: 16px;
+    overflow-y: auto; /* ✅ أهم تغيير: auto بدل hidden – الcontent هيscroll دلوقتي */
     display: flex;
     flex-direction: column;
-    overflow: hidden;
 }
+
+/* Mobile */
 @media (max-width: 860px) {
     .sidebar {
         display: none;

@@ -16,27 +16,30 @@ public sealed class MessageReadRepository : IMessageReadRepository
         _context = context;
     }
 
-    public async Task<IReadOnlyList<MessageReadDto>> GetMessagesAsync(
-        RoomId roomId,
-        int skip,
-        int take,
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MessageReadDto>> GetMessagesAsync(RoomId roomId, int skip, int take, CancellationToken ct)
     {
-        return await _context.Messages
-            .AsNoTracking()
+        var messages = await _context.Messages
             .Where(m => m.RoomId == roomId)
             .OrderByDescending(m => m.CreatedAt)
             .Skip(skip)
             .Take(take)
+            .Include(m => m.Receipts) // مهم: Include الـ Receipts
             .Select(m => new MessageReadDto
             {
                 Id = m.Id.Value,
                 RoomId = m.RoomId.Value,
                 SenderId = m.SenderId.Value,
                 Content = m.Content,
-                Status = MessageStatus.Sent,
-                CreatedAt = m.CreatedAt
+                Status = MessageStatus.Sent, // أو calculate لو لازم
+                CreatedAt = m.CreatedAt,
+                Receipts = m.Receipts.Select(r => new MessageReceiptDto
+                {
+                    UserId = r.UserId.Value,
+                    Status = r.Status // Delivered or Read
+                }).ToList()
             })
-            .ToListAsync(cancellationToken);
+            .ToListAsync(ct);
+
+        return messages;
     }
 }
