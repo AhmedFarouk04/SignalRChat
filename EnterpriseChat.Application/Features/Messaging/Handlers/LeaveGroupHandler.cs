@@ -22,8 +22,8 @@ public sealed class LeaveGroupCommandHandler : IRequestHandler<LeaveGroupCommand
     {
         await _auth.EnsureUserIsMemberAsync(command.RoomId, command.RequesterId, ct);
 
-        var room = await _repo.GetByIdAsync(command.RoomId, ct)
-            ?? throw new InvalidOperationException("Room not found.");
+        var room = await _repo.GetByIdWithMembersAsync(command.RoomId, ct)
+     ?? throw new InvalidOperationException("Room not found.");
 
         if (room.Type != RoomType.Group)
             throw new InvalidOperationException("Only group rooms allowed.");

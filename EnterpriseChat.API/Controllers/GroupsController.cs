@@ -1,13 +1,15 @@
 ﻿using EnterpriseChat.API.Contracts.Messaging;
+using EnterpriseChat.API.Hubs; // namespace بتاع ChatHub
 using EnterpriseChat.API.Messaging;
+using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
-using EnterpriseChat.Application.Features.Messaging.Handlers;
 using EnterpriseChat.Application.Features.Messaging.Queries;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR; // للـ IHubContext
 
 namespace EnterpriseChat.API.Controllers;
 
@@ -17,18 +19,13 @@ namespace EnterpriseChat.API.Controllers;
 public sealed class GroupsController : BaseController
 {
     private readonly IMediator _mediator;
+    private readonly IHubContext<ChatHub> _hubContext; // جديد
 
-    public GroupsController(IMediator mediator)
+    public GroupsController(IMediator mediator, IHubContext<ChatHub> hubContext)
     {
         _mediator = mediator;
+        _hubContext = hubContext;
     }
-
-
-
-
-
-
-
 
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
@@ -68,6 +65,29 @@ public sealed class GroupsController : BaseController
         // لو الـ entity/handler يدعم pre-set Id، pass roomId (لو لا، الentity هيولد new)
 
         var room = await _mediator.Send(command, ct);
+        // broadcast RoomUpdated للـ creator + كل members عشان الـ room يضاف ويطلع فوق (LastMessageAt = now)
+        var now = DateTime.UtcNow;
+        var updatedDto = new RoomUpdatedDto
+        {
+            RoomId = room.Id.Value,
+            MessageId = Guid.Empty,
+            SenderId = creatorId.Value,
+            Preview = "",
+            CreatedAt = now,
+            UnreadDelta = int.MinValue, // معناها "reset/initialize"
+            RoomName = room.Name,
+            RoomType = "Group"
+        };
+
+
+
+
+        await _hubContext.Clients.User(creatorId.Value.ToString()).SendAsync("RoomUpdated", updatedDto);
+
+        foreach (var memberId in members.Select(m => m.Value))
+        {
+            await _hubContext.Clients.User(memberId.ToString()).SendAsync("RoomUpdated", updatedDto);
+        }
 
         // لو الhandler بيولد Id مختلف، استخدم room.Id.Value هنا
 
@@ -83,88 +103,49 @@ public sealed class GroupsController : BaseController
     }
 
 
-
-
-
-    [HttpGet("{roomId}/members")]
-    public async Task<IActionResult> GetMembers(Guid roomId, CancellationToken ct)
-    {
-        return Ok(await _mediator.Send(
-            new GetGroupMembersQuery(
-                new RoomId(roomId),
-                GetCurrentUserId()),
-            ct));
-    }
-
     [HttpPost("{roomId}/members/{userId}")]
-    public async Task<IActionResult> AddMember(
-     Guid roomId,
-     Guid userId,
-     CancellationToken ct)
+    public async Task<IActionResult> AddMember(Guid roomId, Guid userId, CancellationToken ct)
     {
-        if (roomId == Guid.Empty)
-            return BadRequest("RoomId is required.");
+        await _mediator.Send(new AddMemberToGroupCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
 
-        if (userId == Guid.Empty)
-            return BadRequest("UserId is required.");
-
-        await _mediator.Send(
-            new AddMemberToGroupCommand(
-                new RoomId(roomId),
-                new UserId(userId),
-                GetCurrentUserId()),
-            ct);
+        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("MemberAdded", roomId, userId);
 
         return NoContent();
     }
-
 
     [HttpDelete("{roomId}/members/{userId}")]
-    public async Task<IActionResult> RemoveMember(
-        Guid roomId,
-        Guid userId,
-        CancellationToken ct)
+    public async Task<IActionResult> RemoveMember(Guid roomId, Guid userId, CancellationToken ct)
     {
-        await _mediator.Send(
-            new RemoveMemberFromGroupCommand(
-                new RoomId(roomId),
-                new UserId(userId),
-                GetCurrentUserId()),
-            ct);
+        await _mediator.Send(new RemoveMemberFromGroupCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
+
+        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("MemberRemoved", roomId, userId);
+        await _hubContext.Clients.User(userId.ToString()).SendAsync("RemovedFromRoom", roomId);
 
         return NoContent();
     }
-
-
-
-
     [HttpDelete("{roomId:guid}/leave")]
     public async Task<IActionResult> Leave(Guid roomId, CancellationToken ct)
     {
         var requesterId = GetCurrentUserId();
-        var command = new LeaveGroupCommand(new RoomId(roomId), requesterId);
 
+        await _mediator.Send(new LeaveGroupCommand(new RoomId(roomId), requesterId), ct);
 
-        await _mediator.Send(command, ct);
-       
-        
+        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("MemberLeft", roomId, requesterId.Value);
+        await _hubContext.Clients.User(requesterId.Value.ToString()).SendAsync("RemovedFromRoom", roomId);
+
         return NoContent();
     }
-
 
 
     [HttpDelete("{roomId:guid}")]
     public async Task<IActionResult> DeleteGroup(Guid roomId, CancellationToken ct)
     {
-        await _mediator.Send(
-            new DeleteGroupCommand(
-                new RoomId(roomId),
-                GetCurrentUserId()),
-            ct);
+        await _mediator.Send(new DeleteGroupCommand(new RoomId(roomId), GetCurrentUserId()), ct);
+
+        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("GroupDeleted", roomId);
 
         return NoContent();
     }
-
 
     // GET api/groups/{roomId}/admins
     [HttpGet("{roomId}/admins")]
@@ -181,55 +162,41 @@ public sealed class GroupsController : BaseController
     [HttpPost("{roomId}/admins/{userId}")]
     public async Task<IActionResult> PromoteAdmin(Guid roomId, Guid userId, CancellationToken ct)
     {
-        await _mediator.Send(
-            new PromoteGroupAdminCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()),
-            ct);
+        await _mediator.Send(new PromoteGroupAdminCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
+
+        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("AdminPromoted", roomId, userId);
 
         return NoContent();
     }
-
     // DELETE api/groups/{roomId}/admins/{userId}
     [HttpDelete("{roomId}/admins/{userId}")]
     public async Task<IActionResult> DemoteAdmin(Guid roomId, Guid userId, CancellationToken ct)
     {
-        await _mediator.Send(
-            new DemoteGroupAdminCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()),
-            ct);
+        await _mediator.Send(new DemoteGroupAdminCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
+
+        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("AdminDemoted", roomId, userId);
 
         return NoContent();
     }
-
     // POST api/groups/{roomId}/owner/{userId}
     [HttpPost("{roomId:guid}/owner/{userId:guid}")]
     public async Task<IActionResult> TransferOwnership(Guid roomId, Guid userId, CancellationToken ct)
     {
-        if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
-        if (userId == Guid.Empty) return BadRequest("UserId is required.");
+        await _mediator.Send(new TransferGroupOwnershipCommand(new RoomId(roomId), GetCurrentUserId(), new UserId(userId)), ct);
 
-        await _mediator.Send(
-            new TransferGroupOwnershipCommand(
-                new RoomId(roomId),
-                GetCurrentUserId(),
-                new UserId(userId)),
-            ct);
+        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("OwnerTransferred", roomId, userId);
 
         return NoContent();
     }
-
     [HttpPut("{roomId:guid}")]
     public async Task<IActionResult> Rename(Guid roomId, [FromBody] RenameGroupRequest request, CancellationToken ct)
     {
-        if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
-        if (request is null) return BadRequest("Request body is required.");
-        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
+        await _mediator.Send(new RenameGroupCommand(new RoomId(roomId), GetCurrentUserId(), request.Name), ct);
 
-        await _mediator.Send(
-            new RenameGroupCommand(new RoomId(roomId), GetCurrentUserId(), request.Name),
-            ct);
+        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("GroupRenamed", roomId, request.Name.Trim());
 
         return NoContent();
     }
-
     [HttpGet("{roomId:guid}")]
     public async Task<IActionResult> GetGroup(Guid roomId, CancellationToken ct)
     {
@@ -241,6 +208,14 @@ public sealed class GroupsController : BaseController
 
         return Ok(dto);
     }
-
+    [HttpGet("{roomId}/members")]
+    public async Task<IActionResult> GetMembers(Guid roomId, CancellationToken ct)
+    {
+        return Ok(await _mediator.Send(
+            new GetGroupMembersQuery(
+                new RoomId(roomId),
+                GetCurrentUserId()),
+            ct));
+    }
 
 }

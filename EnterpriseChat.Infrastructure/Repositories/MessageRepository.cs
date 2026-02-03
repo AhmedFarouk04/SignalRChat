@@ -7,7 +7,7 @@ using EnterpriseChat.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-using EnterpriseChat.Domain.Common; // عشان MessageReadInfo
+using EnterpriseChat.Domain.Common;
 
 namespace EnterpriseChat.Infrastructure.Repositories;
 
@@ -168,41 +168,41 @@ GROUP BY m.RoomId";
         return results.ToDictionary(r => r.RoomId, r => r.Count);
     }
 
-    public async Task<Dictionary<Guid, Message?>> GetLastMessagesAsync(
-        IEnumerable<Guid> roomIds,
-        CancellationToken ct = default)
-    {
-        var ids = roomIds.Distinct().ToList();
-        if (ids.Count == 0) return new Dictionary<Guid, Message?>();
-        var json = JsonSerializer.Serialize(ids);
-        var sql = @"
-WITH Ranked AS (
-    SELECT
-        m.Id,
-        m.RoomId,
-        m.SenderId,
-        m.Content,
-        m.CreatedAt,
-        ROW_NUMBER() OVER (PARTITION BY m.RoomId ORDER BY m.CreatedAt DESC, m.Id DESC) AS rn
-    FROM Messages m
-    INNER JOIN OPENJSON(@json) WITH (RoomId UNIQUEIDENTIFIER '$') j ON m.RoomId = j.RoomId
-)
-SELECT
-    m.Id,
-    m.RoomId,
-    m.SenderId,
-    m.Content,
-    m.CreatedAt
-FROM Ranked m
-WHERE m.rn = 1";
-        var paramJson = new Microsoft.Data.SqlClient.SqlParameter("@json", json);
-        var messages = await _context.Messages
-            .FromSqlRaw(sql, paramJson)
-            .AsNoTracking()
-            .ToListAsync(ct);
-        return messages
-            .ToDictionary(m => m.RoomId.Value, m => m);
-    }
+//    public async Task<Dictionary<Guid, Message?>> GetLastMessagesAsync(
+//        IEnumerable<Guid> roomIds,
+//        CancellationToken ct = default)
+//    {
+//        var ids = roomIds.Distinct().ToList();
+//        if (ids.Count == 0) return new Dictionary<Guid, Message?>();
+//        var json = JsonSerializer.Serialize(ids);
+//        var sql = @"
+//WITH Ranked AS (
+//    SELECT
+//        m.Id,
+//        m.RoomId,
+//        m.SenderId,
+//        m.Content,
+//        m.CreatedAt,
+//        ROW_NUMBER() OVER (PARTITION BY m.RoomId ORDER BY m.CreatedAt DESC, m.Id DESC) AS rn
+//    FROM Messages m
+//    INNER JOIN OPENJSON(@json) WITH (RoomId UNIQUEIDENTIFIER '$') j ON m.RoomId = j.RoomId
+//)
+//SELECT
+//    m.Id,
+//    m.RoomId,
+//    m.SenderId,
+//    m.Content,
+//    m.CreatedAt
+//FROM Ranked m
+//WHERE m.rn = 1";
+//        var paramJson = new Microsoft.Data.SqlClient.SqlParameter("@json", json);
+//        var messages = await _context.Messages
+//            .FromSqlRaw(sql, paramJson)
+//            .AsNoTracking()
+//            .ToListAsync(ct);
+//        return messages
+//            .ToDictionary(m => m.RoomId.Value, m => m);
+//    }
     public async Task<IReadOnlyList<MessageReadInfo>> GetMessageIdsAndSendersUpToAsync(RoomId roomId, DateTime maxCreatedAt, CancellationToken ct = default)
     {
         var result = await _context.Messages // غيّر "Messages" لو الـ DbSet اسمه Message أو غيره
@@ -213,7 +213,84 @@ WHERE m.rn = 1";
 
         return result; // List<MessageReadInfo> هيتحول تلقائيًا لـ IReadOnlyList<MessageReadInfo>
     }
+    public async Task<Dictionary<Guid, LastMessageInfo>> GetLastMessagesAsync(
+    IReadOnlyList<Guid> roomIds,
+    CancellationToken ct)
+    {
+        var ids = roomIds?.Distinct().ToList() ?? new();
+        if (ids.Count == 0) return new Dictionary<Guid, LastMessageInfo>();
+
+        var json = JsonSerializer.Serialize(ids);
+
+        var sql = @"
+WITH Ranked AS (
+    SELECT
+        m.Id,
+        m.RoomId,
+        m.SenderId,
+        m.Content,
+        m.CreatedAt,
+        ROW_NUMBER() OVER (PARTITION BY m.RoomId ORDER BY m.CreatedAt DESC, m.Id DESC) AS rn
+    FROM Messages m
+    INNER JOIN OPENJSON(@json) WITH (RoomId UNIQUEIDENTIFIER '$') j
+        ON m.RoomId = j.RoomId
+)
+SELECT
+    r.RoomId,
+    r.Id        AS MessageId,
+    r.SenderId,
+    r.Content,
+    r.CreatedAt,
+    ISNULL(x.MaxStatus, 1) AS MaxStatus
+FROM Ranked r
+OUTER APPLY (
+    SELECT MAX(CAST(rr.Status AS int)) AS MaxStatus
+    FROM MessageReceipts rr
+    WHERE rr.MessageId = r.Id
+) x
+WHERE r.rn = 1
+";
+
+        var paramJson = new SqlParameter("@json", json);
+
+        // ✅ نقرأ النتيجة كـ DTO بسيط
+        var rows = await _context.Database
+            .SqlQueryRaw<LastMessageRow>(sql, paramJson)
+            .ToListAsync(ct);
+
+        var dict = new Dictionary<Guid, LastMessageInfo>();
+
+        foreach (var r in rows)
+        {
+            dict[r.RoomId] = new LastMessageInfo
+            {
+                RoomId = new RoomId(r.RoomId),
+                Id = MessageId.From(r.MessageId),
+                SenderId = new UserId(r.SenderId),
+                Content = r.Content,
+                CreatedAt = r.CreatedAt,
+                ComputedStatusForSender = (MessageStatus)r.MaxStatus
+            };
+        }
+
+        return dict;
+    }
+
+    // ✅ DTO للـ raw sql
+   
+
+
+
 }
 
 // ✅ DTO بسيط للـ unread counts (record عشان يكون lightweight)
 public record UnreadDto(Guid RoomId, int Count);
+public sealed class LastMessageRow
+{
+    public Guid RoomId { get; set; }
+    public Guid MessageId { get; set; }
+    public Guid SenderId { get; set; }
+    public string Content { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public int MaxStatus { get; set; } // int من DB
+}

@@ -1,17 +1,30 @@
-﻿export function scrollToBottom(el) {
+﻿export function scrollToBottom(idOrEl) {
+    const el = (typeof idOrEl === "string")
+        ? document.getElementById(idOrEl)
+        : idOrEl;
+
     if (!el) return;
     el.scrollTop = el.scrollHeight;
 }
 
-export function scrollToBottomSmooth(el) {
+export function isAtBottom(idOrEl) {
+    const el = (typeof idOrEl === "string")
+        ? document.getElementById(idOrEl)
+        : idOrEl;
+
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 5;
+}
+
+export function scrollToBottomSmooth(idOrEl) {
+    const el = (typeof idOrEl === "string")
+        ? document.getElementById(idOrEl)
+        : idOrEl;
+
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 }
 
-export function isAtBottom(el) {
-    if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight < 5;
-}
 export function registerRoomsSearchShortcuts(inputSelector = 'input[type="search"], .rooms-search input, #roomsSearch') {
     // الفكرة: Ctrl+K أو / يركز على صندوق البحث في Rooms
     const handler = (e) => {

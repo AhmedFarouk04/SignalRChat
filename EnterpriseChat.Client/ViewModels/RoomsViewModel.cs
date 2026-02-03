@@ -41,6 +41,7 @@ public sealed class RoomsViewModel
 
         // ✅ جديد: لما تدخل/تخرج من روم
         _flags.ActiveRoomChanged += OnActiveRoomChanged;
+        _rt.GroupRenamed += OnGroupRenamed; // ✅
 
         _rt.MessageReceived += OnMessageReceived;
         _rt.RoomUpdated += OnRoomUpdated;
@@ -131,6 +132,32 @@ public sealed class RoomsViewModel
         });
     }
 
+    private void OnGroupRenamed(Guid roomId, string newName)
+    {
+        var list = Rooms.ToList();
+        var idx = list.FindIndex(r => r.Id == roomId);
+        if (idx < 0) return;
+
+        var r = list[idx];
+        list[idx] = new RoomListItemModel
+        {
+            Id = r.Id,
+            Name = newName,
+            Type = r.Type,
+            OtherUserId = r.OtherUserId,
+            OtherDisplayName = r.OtherDisplayName,
+            IsMuted = r.IsMuted,
+            UnreadCount = r.UnreadCount,
+            LastMessageAt = r.LastMessageAt,
+            LastMessagePreview = r.LastMessagePreview,
+            LastMessageId = r.LastMessageId
+        };
+
+        Rooms = list;
+        ApplyFilter();
+        NotifyChanged();
+    }
+
     // ✅ جديد: أول ما الروم تبقى Active صَفّر unread فورًا (بدون refresh)
     private void OnActiveRoomChanged(Guid? roomId)
     {
@@ -172,43 +199,72 @@ public sealed class RoomsViewModel
 
     private async void OnRoomUpdated(RoomUpdatedModel upd)
     {
-        Console.WriteLine($"[RoomsVM] RoomUpdated RECEIVED: RoomId={upd.RoomId}, Delta={upd.UnreadDelta}, MessageId={upd.MessageId}, Preview='{upd.Preview}', Sender={upd.SenderId}");
-
         var list = Rooms.ToList();
         var idx = list.FindIndex(r => r.Id == upd.RoomId);
-        if (idx < 0) return;
+
+        // ✅ لو الروم مش موجودة: ضيفها
+        if (idx < 0)
+        {
+            string name = upd.RoomName ?? "";
+            string type = upd.RoomType ?? "";
+
+            // لو السيرفر مبعتش الاسم/النوع، هاتهم من API
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(type))
+            {
+                try
+                {
+                    var room = await _roomService.GetRoomAsync(upd.RoomId);
+                    if (room != null)
+                    {
+                        name = string.IsNullOrWhiteSpace(name) ? room.Name : name;
+                        type = string.IsNullOrWhiteSpace(type) ? room.Type : type;
+                    }
+                }
+                catch { }
+            }
+
+            list.Insert(0, new RoomListItemModel
+            {
+                Id = upd.RoomId,
+                Name = string.IsNullOrWhiteSpace(name) ? "Room" : name,
+                Type = string.IsNullOrWhiteSpace(type) ? "Group" : type,
+                UnreadCount = 0,
+                IsMuted = _flags.GetMuted(upd.RoomId),
+                LastMessageAt = upd.CreatedAt,
+                LastMessagePreview = upd.Preview,
+                LastMessageId = (upd.MessageId == Guid.Empty ? null : upd.MessageId)
+            });
+
+            Rooms = list;
+            ApplyFilter();
+            NotifyChanged();
+            return;
+        }
+
+        // باقي كودك زي ما هو (duplicate check + unread logic + update room)
         if (_lastUpdateMessageByRoom.TryGetValue(upd.RoomId, out var lastMsg) && lastMsg == upd.MessageId)
             return;
 
         _lastUpdateMessageByRoom[upd.RoomId] = upd.MessageId;
 
         var r = list[idx];
-
-        // ✅ لو أنا جوه نفس الشات: unread لازم يفضل 0
         var isActive = _flags.ActiveRoomId == upd.RoomId;
-
-        // مصدر الحقيقة: store (مش r.UnreadCount لأن ده ممكن يكون stale)
         var currentUnread = _flags.GetUnread(upd.RoomId);
 
         var nextUnread =
             upd.UnreadDelta < 0 ? 0 :
             (isActive ? 0 : Math.Max(0, currentUnread + upd.UnreadDelta));
 
-        // ✅ حدّث الستور الأول
         _flags.SetUnread(upd.RoomId, nextUnread);
 
-        // ✅ جديد: mark delivered للرسالة الجديدة لو delta >0 (يعني رسالة من غيري)
-        // ✅ جديد: استخدم cached id (بدون await)
         if (upd.UnreadDelta > 0 && upd.MessageId != Guid.Empty && _userIdCached && upd.SenderId != _cachedUserId)
         {
             _ = Task.Run(async () =>
             {
-                try { await _chatService.MarkMessageDeliveredAsync(upd.MessageId); }
-                catch { /* silent */ }
+                try { await _chatService.MarkMessageDeliveredAsync(upd.MessageId); } catch { }
             });
         }
 
-        // ✅ حدّث القائمة
         list[idx] = new RoomListItemModel
         {
             Id = r.Id,

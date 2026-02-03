@@ -33,8 +33,12 @@
     }
     else if (VM.IsRemoved)
     {
-        <div class="chat-error">You were removed from this group.</div>
+        <div class="chat-error">
+            You were removed from this group.
+            <button class="mini-btn" @onclick="@(() => Nav.NavigateTo("/rooms"))">Back to rooms</button>
+        </div>
     }
+
     else
     {
         <div class="chat-body">
@@ -55,7 +59,9 @@
                              Room="@VM.Room"
                              GroupMembers="@(VM.GroupMembers?.Members ?? new())"
                              OnRetry="RetrySend"
-                             OnReachedBottom="HandleReachedBottom" />
+                             OnReachedBottom="HandleReachedBottom"
+                             AutoScroll="true" />
+
 
                 <TypingIndicator TypingUsers="@VM.TypingUsers" />
             </div>
@@ -157,7 +163,7 @@
                 "import", "./js/chatPage.js");
 
             await _chatModule.InvokeVoidAsync("registerEscape", _objRef);
-
+            await JS.InvokeVoidAsync("scrollToBottom", "chat-messages");
             _escapeRegistered = true;
         }
     }
@@ -190,7 +196,11 @@
         _objRef?.Dispose();
     }
 
-    private Task Send(string text) => VM.SendAsync(RoomId, text);
+    private Task Send(string text)
+    {
+        Console.WriteLine($"[Chat.razor] Send fired: '{text}'");
+        return VM.SendAsync(RoomId, text);
+    }
     private Task RetrySend(MessageModel msg) => VM.SendAsync(RoomId, msg.Content);
     private Task NotifyTyping() => VM.NotifyTypingAsync(RoomId);
 
@@ -242,7 +252,8 @@
 
     private void CloseMembers() => _membersOpen = false;
 
-    private void OnVmChanged()
+
+    private async void OnVmChanged()
     {
         if (_renderQueued) return;
         _renderQueued = true;
@@ -251,8 +262,16 @@
         {
             try
             {
-                await Task.Delay(50);
+                await Task.Delay(50); // throttling قديم – خليه
+
                 StateHasChanged();
+
+                // ✅ scroll to bottom كل update (load أو new message)
+                await JS.InvokeVoidAsync("scrollToBottom", "chat-messages");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Scroll error: {ex.Message}");
             }
             finally
             {

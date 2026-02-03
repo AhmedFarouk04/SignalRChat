@@ -1,5 +1,6 @@
-﻿@inherits LayoutComponentBase
-
+﻿@using EnterpriseChat.Client.Services.Realtime
+@inherits LayoutComponentBase
+@inject IChatRealtimeClient Realtime
 <div class="app-layout">
     <aside class="sidebar">
         <Sidebar />
@@ -13,3 +14,9 @@
 </div>
 
 <ToastHost />
+@code{
+    protected override async Task OnInitializedAsync()
+{
+    await Realtime.ConnectAsync(); // connect global مرة واحدة لكل الـ app
+}
+}

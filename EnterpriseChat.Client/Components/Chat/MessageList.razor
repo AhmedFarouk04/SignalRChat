@@ -36,7 +36,6 @@
 
             <MessageBubble Message="msg"
                            CurrentUserId="CurrentUserId"
-                           Room="Room"
                            GroupMembers="GroupMembers"
                            OnRetry="OnRetry"
                            GroupPosition="@pos"
@@ -90,35 +89,24 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (listRef.Context is null) return;
-
-        if (firstRender)
+        // لو مفيش رسائل مفيش حاجة
+        if (Messages.Count == 0)
         {
-            if (AutoScroll)
-            {
-                await Scroll.ScrollToBottomAsync(listRef);
-                isAtBottom = true;
-                _wasAtBottom = true;
-            }
-
-            lastMessageCount = Messages.Count;
+            lastMessageCount = 0;
             return;
         }
 
-        if (Messages.Count == lastMessageCount) return;
-
+        // لو زاد عدد الرسائل
         if (Messages.Count > lastMessageCount)
         {
-            var wasAtBottom = isAtBottom;
-
-            if (AutoScroll && wasAtBottom)
+            // لو كنت تحت، انزل تحت تلقائي
+            if (AutoScroll && isAtBottom)
             {
-                await Scroll.ScrollToBottomAsync(listRef);
+                try { await Scroll.ScrollToBottomAsync(listRef); } catch { }
                 showNewDivider = false;
                 newIds.Clear();
 
-                if (Messages.Count > 0)
-                    await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+                await OnReachedBottom.InvokeAsync(Messages[^1].Id);
             }
             else
             {
@@ -127,17 +115,17 @@
 
                 showNewDivider = true;
             }
-        }
 
-        lastMessageCount = Messages.Count;
+            lastMessageCount = Messages.Count;
+        }
     }
+
 
     private CancellationTokenSource? _scrollCts;
     private Guid _lastBottomReportedMessageId = Guid.Empty;
 
     private async Task OnScroll()
     {
-        if (listRef.Context is null) return;
 
         _scrollCts?.Cancel();
         _scrollCts = new CancellationTokenSource();
@@ -172,7 +160,6 @@
 
     private async Task ScrollDown()
     {
-        if (listRef.Context is null) return;
 
         await Scroll.ScrollToBottomSmoothAsync(listRef);
         isAtBottom = true;

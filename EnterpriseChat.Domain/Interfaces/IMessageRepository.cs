@@ -1,6 +1,7 @@
 ﻿using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Domain.Common;
+
 public interface IMessageRepository
 {
     Task AddAsync(Message message, CancellationToken cancellationToken = default);
@@ -24,12 +25,14 @@ public interface IMessageRepository
     Task<int> GetUnreadCountAsync(RoomId roomId, UserId userId, CancellationToken ct);
 
     // ✅ bulk methods على Guid مباشرة
-    Task<Dictionary<Guid, Message?>> GetLastMessagesAsync(IEnumerable<Guid> roomIds, CancellationToken ct = default);
 
     Task<Dictionary<Guid, int>> GetUnreadCountsAsync(
         IEnumerable<Guid> roomIds,
         UserId userId,
         CancellationToken ct = default);
+    Task<Dictionary<Guid, LastMessageInfo>> GetLastMessagesAsync(
+    IReadOnlyList<Guid> roomIds,
+    CancellationToken ct);
 
     Task<IReadOnlyList<MessageReadInfo>> GetMessageIdsAndSendersUpToAsync(RoomId roomId, DateTime maxCreatedAt, CancellationToken ct = default);
 

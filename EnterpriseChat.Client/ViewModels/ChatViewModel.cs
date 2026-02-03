@@ -6,6 +6,7 @@ using EnterpriseChat.Client.Services.Realtime;
 using EnterpriseChat.Client.Services.Rooms;
 using EnterpriseChat.Client.Services.Ui;
 using EnterpriseChat.Domain.ValueObjects;
+using Microsoft.JSInterop;
 
 
 namespace EnterpriseChat.Client.ViewModels;
@@ -109,7 +110,6 @@ public sealed class ChatViewModel
         IsOtherDeleted = false;
         UiError = null;
 
-        // ✅ خلي قيم الحالة دايمًا تتظبط من الستور أولاً
         _currentRoomId = roomId;
         _flags.SetActiveRoom(roomId);
         IsMuted = _flags.GetMuted(roomId);
@@ -130,33 +130,76 @@ public sealed class ChatViewModel
                 return;
             }
 
-            if (Room.Type == "Private" && OtherUser != null)
+            // ✅ load group members first لو group (عشان TotalRecipients)
+            GroupMembersModel? groupMembers = null;
+            if (Room.Type == "Group")
             {
-                try
+                var dto = await _chatService.GetGroupMembersAsync(roomId);
+                groupMembers = new GroupMembersModel
                 {
-                    var blocked = await _mod.GetBlockedAsync();
-                    _flags.SetBlockedUsers(blocked.Select(b => b.UserId));
-                    IsBlocked = _flags.GetBlocked(OtherUser.Id);
-                }
-                catch { }
+                    OwnerId = dto.OwnerId,
+                    Members = dto.Members.Select(m => new UserModel
+                    {
+                        Id = m.Id,
+                        DisplayName = m.DisplayName ?? "User"
+                    }).ToList()
+                };
+                GroupMembers = groupMembers;
+            }
+            else
+            {
+                GroupMembers = null;
             }
 
+            // ✅ private other user
+            if (Room.Type == "Private")
+            {
+                if (Room.OtherUserId == null)
+                {
+                    IsOtherDeleted = true;
+                    OtherUser = null;
+                }
+                else
+                {
+                    OtherUser = new UserModel
+                    {
+                        Id = Room.OtherUserId.Value,
+                        DisplayName = Room.OtherDisplayName ?? "User",
+                        IsOnline = false
+                    };
+                    IsBlocked = _flags.GetBlocked(OtherUser.Id);
+                }
+            }
+            else
+            {
+                OtherUser = null;
+            }
 
-            // ✅ messages
-            Messages.AddRange(await _chatService.GetMessagesAsync(roomId));
+            // ✅ load messages (مرة واحدة)
+            // ✅ load messages – take 200
+            var loaded = (await _chatService.GetMessagesAsync(roomId, 0, 200)).ToList();
 
-            // ✅ جديد: حساب TotalRecipients + fix comparisons مع cast
+            Messages.Clear();
+
+            // لو الـ API بيرجع newest first وعايز oldest first:
+            loaded.Reverse();
+
+            Messages.AddRange(loaded);
+
+            NotifyChanged();
+
+            // ✅ scroll to bottom فوري بعد load (عشان يشوف آخر الرسائل)
+
+            // ✅ حساب TotalRecipients بعد load members
             var myId = CurrentUserId;
-            var memberCount = Room.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
+            var memberCount = Room.Type == "Group" ? (groupMembers?.Members.Count ?? 1) - 1 : 1;
 
             foreach (var msg in Messages)
             {
                 msg.TotalRecipients = memberCount;
-
-                // لو Receipts مش populated (من DTO)، هنا map لو لازم – بس افترض GetMessages بيرجع Receipts
             }
 
-            // mark delivered مع cast لfix error
+            // mark delivered
             var toDeliver = Messages
                 .Where(m => m.SenderId != myId && (int)m.Status < (int)MessageStatus.Delivered)
                 .Select(m => m.Id)
@@ -173,101 +216,30 @@ public sealed class ChatViewModel
                     }
                 });
             }
-            NotifyChanged();
 
-            // ✅ group members / other user
-            if (Room.Type == "Group")
-            {
-                var dto = await _chatService.GetGroupMembersAsync(roomId);
-                GroupMembers = new GroupMembersModel
-                {
-                    OwnerId = dto.OwnerId,
-                    Members = dto.Members.Select(m => new UserModel
-                    {
-                        Id = m.Id,
-                        DisplayName = m.DisplayName
-                    }).ToList()
-                };
-            }
-            else
-            {
-                GroupMembers = null;
-            }
-
-            if (Room.Type == "Private")
-            {
-                if (Room.OtherUserId == null)
-                {
-                    IsOtherDeleted = true;
-                    OtherUser = null;
-                }
-                else
-                {
-                    OtherUser = new UserModel
-                    {
-                        Id = Room.OtherUserId.Value,
-                        DisplayName = Room.OtherDisplayName ?? "User",
-                        IsOnline = false
-                    };
-
-                    // ✅ sync block مع الستور
-                    IsBlocked = _flags.GetBlocked(OtherUser.Id);
-
-                }
-            }
-            else
-            {
-                OtherUser = null;
-            }
-
-            // ✅ subscribe للستور بعد ما عرفنا room + other user
+            // subscribe + realtime + mark read + presence
             _flags.RoomMuteChanged += OnRoomMuteChanged;
             _flags.UserBlockChanged += OnUserBlockChanged;
 
             RegisterRealtimeEvents(roomId);
 
-            // ✅ realtime connect + join
             await _realtime.ConnectAsync();
             await _realtime.JoinRoomAsync(roomId);
 
-            // ✅ صفّر unread فور الدخول (مرة واحدة) + بعد Join
-            var lastMsg = Messages
-                .OrderByDescending(m => m.CreatedAt)
-                .FirstOrDefault();
-
+            var lastMsg = Messages.OrderByDescending(m => m.CreatedAt).FirstOrDefault();
             if (lastMsg != null)
             {
-                try
-                {
-                    await MarkRoomReadAsync(roomId, lastMsg.Id);
-                }
+                try { await MarkRoomReadAsync(roomId, lastMsg.Id); }
                 catch { }
             }
 
-            // ✅ صفر محليًا فورًا (القائمة)
             _flags.SetUnread(roomId, 0);
 
-
-            if (Room?.Type == "Private")
-            {
-                try
-                {
-                    var blocked = await _mod.GetBlockedAsync();
-                    _flags.SetBlockedUsers(blocked.Select(b => b.UserId));
-                }
-                catch { /* ignore preload errors */ }
-            }
-
-            // ✅ snapshot presence للـ private chat (بدون refresh)
             if (Room?.Type == "Private" && OtherUser is not null)
             {
                 var set = _realtime.State.OnlineUsers?.ToHashSet() ?? new HashSet<Guid>();
                 OtherUser.IsOnline = set.Contains(OtherUser.Id);
-
-                if (OtherUser.IsOnline)
-                    OtherUser.LastSeen = null;
-
-                NotifyChanged();
+                if (OtherUser.IsOnline) OtherUser.LastSeen = null;
             }
 
             if (Room.Type == "Group" && GroupMembers is not null)
@@ -308,7 +280,14 @@ public sealed class ChatViewModel
         _realtime.Disconnected += OnDisconnected;
         _realtime.Reconnected += OnReconnected;
         _realtime.RemovedFromRoom += OnRemovedFromRoom;
-
+        _realtime.GroupRenamed += OnGroupRenamed;
+        _realtime.MemberAdded += OnMemberAdded;
+        _realtime.MemberRemoved += OnMemberRemoved;
+        _realtime.MemberLeft += OnMemberRemoved; // نفس handler
+        _realtime.GroupDeleted += OnGroupDeleted;
+        _realtime.AdminPromoted += OnMemberRoleChanged;
+        _realtime.AdminDemoted += OnMemberRoleChanged;
+        _realtime.OwnerTransferred += OnOwnerTransferred;
         _eventsRegistered = true;
     }
 
@@ -331,7 +310,14 @@ public sealed class ChatViewModel
         _realtime.Reconnected -= OnReconnected;
         _realtime.RemovedFromRoom -= OnRemovedFromRoom;
         _realtime.RoomMuteChanged -= OnRoomMuteChanged;
-
+        _realtime.GroupRenamed -= OnGroupRenamed;
+        _realtime.MemberAdded -= OnMemberAdded;
+        _realtime.MemberRemoved -= OnMemberRemoved;
+        _realtime.MemberLeft -= OnMemberRemoved;
+        _realtime.GroupDeleted -= OnGroupDeleted;
+        _realtime.AdminPromoted -= OnMemberRoleChanged;
+        _realtime.AdminDemoted -= OnMemberRoleChanged;
+        _realtime.OwnerTransferred -= OnOwnerTransferred;
         _eventsRegistered = false;
         _eventsRoomId = null;
     }
@@ -344,7 +330,68 @@ public sealed class ChatViewModel
         NotifyChanged();
     }
 
+    private async void OnGroupRenamed(Guid roomId, string newName)
+    {
+        if (_currentRoomId != roomId) return;
+        // مش نعدل Room.Name مباشرة (init-only)، نreload الـ room بدل كده
+        await RefreshRoomStateAsync(roomId);
+    }
 
+    private async void OnMemberAdded(Guid roomId, Guid userId)
+    {
+        if (_currentRoomId != roomId) return;
+        await RefreshGroupMembersAsync();
+        RebuildPresenceFromRealtime();
+        NotifyChanged();
+    }
+
+    private async void OnMemberRemoved(Guid roomId, Guid userId)
+    {
+        if (_currentRoomId != roomId) return;
+        GroupMembers?.Members.RemoveAll(m => m.Id == userId);
+        RebuildPresenceFromRealtime();
+        NotifyChanged();
+    }
+
+    private void OnGroupDeleted(Guid roomId)
+    {
+        if (_currentRoomId == roomId)
+        {
+            UiError = "This group has been deleted.";
+            NotifyChanged();
+        }
+    }
+
+    private async void OnMemberRoleChanged(Guid roomId, Guid userId)
+    {
+        if (_currentRoomId != roomId) return;
+        await RefreshGroupMembersAsync();
+    }
+
+    private async void OnOwnerTransferred(Guid roomId, Guid newOwnerId)
+    {
+        if (_currentRoomId != roomId) return;
+        await RefreshGroupMembersAsync();
+    }
+
+    private async Task RefreshGroupMembersAsync()
+    {
+        if (Room?.Type == "Group" && _currentRoomId.HasValue)
+        {
+            var dto = await _chatService.GetGroupMembersAsync(_currentRoomId.Value);
+            GroupMembers = new GroupMembersModel
+            {
+                OwnerId = dto.OwnerId,
+                Members = dto.Members.Select(m => new UserModel
+                {
+                    Id = m.Id,
+                    DisplayName = m.DisplayName ?? "User"
+                }).ToList()
+            };
+            RebuildPresenceFromRealtime();
+            NotifyChanged();
+        }
+    }
     private void RebuildPresenceFromRealtime()
     {
         if (GroupMembers is null) return;
@@ -394,6 +441,8 @@ public sealed class ChatViewModel
 
     public async Task SendAsync(Guid roomId, string text)
     {
+        Console.WriteLine($"[VM] SendAsync fired room={roomId} text='{text}'");
+
         if (IsMuted)
         {
             _toasts.Warning("Muted", "This chat is muted. Unmute to send messages.");
@@ -664,22 +713,10 @@ public sealed class ChatViewModel
         }
         else
         {
-            Messages.Add(message);
+            Messages.Add(message); // add to end (newest last)
         }
 
         NotifyChanged();
-        // ✅ لو الرسالة جاية من شخص تاني وأنا فاتح نفس الروم:
-        if (_currentRoomId == message.RoomId && message.SenderId != CurrentUserId)
-        {
-            if ((int)message.Status < (int)MessageStatus.Delivered)
-            {
-                _ = Task.Run(async () =>
-                {
-                    try { await _chatService.MarkMessageDeliveredAsync(message.Id); }
-                    catch { }
-                });
-            }
-        }
     }
 
     private void OnMessageDelivered(Guid messageId)

@@ -10,13 +10,16 @@ public sealed class GetGroupMembersQueryHandler
 {
     private readonly IChatRoomRepository _roomRepository;
     private readonly IRoomAuthorizationService _auth;
+    private readonly IUserLookupService _users; // ✅ موجود عندك
 
     public GetGroupMembersQueryHandler(
         IChatRoomRepository roomRepository,
-        IRoomAuthorizationService auth)
+        IRoomAuthorizationService auth,
+        IUserLookupService users)
     {
         _roomRepository = roomRepository;
         _auth = auth;
+        _users = users;
     }
 
     public async Task<GroupMembersDto> Handle(GetGroupMembersQuery request, CancellationToken ct)
@@ -30,12 +33,18 @@ public sealed class GetGroupMembersQueryHandler
         if (room.OwnerId is null)
             throw new InvalidOperationException("Group room owner not set.");
 
-        return new GroupMembersDto(
-            room.OwnerId.Value,
-            room.Members.Select(m =>
-                new GroupMemberDto(
-                    m.UserId.Value,
-                    $"User {m.UserId.Value.ToString()[..6]}"
-                )).ToList());
+        var members = new List<GroupMemberDto>(room.Members.Count);
+
+        foreach (var m in room.Members)
+        {
+            var id = m.UserId.Value;
+
+            var displayName = await _users.GetDisplayNameAsync(id, ct)
+                ?? $"User {id.ToString("N")[..6]}";
+
+            members.Add(new GroupMemberDto(id, displayName));
+        }
+
+        return new GroupMembersDto(room.OwnerId.Value, members);
     }
 }

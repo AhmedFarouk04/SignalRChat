@@ -6,14 +6,16 @@ using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Handlers;
 
-public sealed class RenameGroupCommandHandler
-    : IRequestHandler<RenameGroupCommand, Unit>
+public sealed class RenameGroupCommandHandler : IRequestHandler<RenameGroupCommand, Unit>
 {
     private readonly IChatRoomRepository _rooms;
     private readonly IRoomAuthorizationService _auth;
     private readonly IUnitOfWork _uow;
 
-    public RenameGroupCommandHandler(IChatRoomRepository rooms, IRoomAuthorizationService auth, IUnitOfWork uow)
+    public RenameGroupCommandHandler(
+        IChatRoomRepository rooms,
+        IRoomAuthorizationService auth,
+        IUnitOfWork uow)
     {
         _rooms = rooms;
         _auth = auth;
@@ -31,8 +33,8 @@ public sealed class RenameGroupCommandHandler
             throw new InvalidOperationException("Only group rooms can be renamed.");
 
         room.Rename(request.Name);
-
         await _uow.CommitAsync(ct);
+
         return Unit.Value;
     }
 }

@@ -213,9 +213,23 @@ public sealed class ChatHub : Hub
             .SendAsync("RemovedFromRoom", roomId);
     }
 
+    public async Task GroupRenamed(Guid roomId, string newName)
+    {
+        await Clients.Group(roomId.ToString()).SendAsync("GroupRenamed", roomId, newName);
+    }
 
+    public async Task MemberAdded(Guid roomId, Guid userId, string displayName)
+    {
+        await Clients.Group(roomId.ToString()).SendAsync("MemberAdded", roomId, userId, displayName);
+    }
 
-private UserId GetUserId()
+    public async Task MemberRemoved(Guid roomId, Guid userId)
+    {
+        await Clients.Group(roomId.ToString()).SendAsync("MemberRemoved", roomId, userId);
+        await Clients.User(userId.ToString()).SendAsync("RemovedFromRoom", roomId);
+    }
+
+    private UserId GetUserId()
 {
     var raw =
         Context.User?.FindFirst("sub")?.Value

@@ -37,7 +37,6 @@ public sealed class GetMyRoomsQueryHandler
 
         // ✅ ابعت RoomId list مش Guid
         var roomIds = myRooms.Select(r => r.Id.Value).ToList();
-
         var lastByRoom = await _messages.GetLastMessagesAsync(roomIds, ct);
         var unreadByRoom = await _messages.GetUnreadCountsAsync(roomIds, query.CurrentUserId, ct);
 
@@ -49,6 +48,7 @@ public sealed class GetMyRoomsQueryHandler
             lastByRoom.TryGetValue(room.Id.Value, out var lastMsg);
             unreadByRoom.TryGetValue(room.Id.Value, out var unreadCount);
 
+            // last message info
             DateTime? lastAt = lastMsg?.CreatedAt;
             Guid? lastId = lastMsg?.Id.Value;
 
@@ -56,10 +56,20 @@ public sealed class GetMyRoomsQueryHandler
             if (!string.IsNullOrWhiteSpace(preview) && preview.Length > 60)
                 preview = preview[..60];
 
+            // NEW fields for rooms UI (status)
+            Guid? lastSenderId = lastMsg?.SenderId.Value;
+            MessageStatus? lastStatus = null;
+
+            // status meaningful only if I'm sender of last message
+            if (lastMsg != null && lastMsg.SenderId.Value == query.CurrentUserId.Value)
+                lastStatus = lastMsg.ComputedStatusForSender;
+
+            // defaults
             string name = room.Name ?? "Chat";
             Guid? otherUserId = null;
             string? otherDisplayName = null;
 
+            // private naming
             if (room.Type == RoomType.Private)
             {
                 var otherMember = room.Members
@@ -80,6 +90,7 @@ public sealed class GetMyRoomsQueryHandler
                 }
             }
 
+            // ✅ ONE result.Add فقط
             result.Add(new RoomListItemDto
             {
                 Id = room.Id.Value,
@@ -91,7 +102,11 @@ public sealed class GetMyRoomsQueryHandler
                 IsMuted = mutedRoomIds.Contains(room.Id.Value),
                 LastMessageAt = lastAt,
                 LastMessageId = lastId,
-                LastMessagePreview = preview
+                LastMessagePreview = preview,
+
+                // ✅ NEW
+                LastMessageSenderId = lastSenderId,
+                LastMessageStatus = lastStatus
             });
         }
 

@@ -31,4 +31,14 @@ public sealed class RoomId : IEquatable<RoomId>
 
     public static explicit operator RoomId(Guid value)
         => new(value);
+
+    // ✅ جديد: operators ضروريين لEF translation
+    public static bool operator ==(RoomId? left, RoomId? right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left is null || right is null) return false;
+        return left.Value == right.Value;
+    }
+
+    public static bool operator !=(RoomId? left, RoomId? right) => !(left == right);
 }

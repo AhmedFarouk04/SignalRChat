@@ -1,4 +1,4 @@
-﻿namespace EnterpriseChat.Application.DTOs;
+﻿using EnterpriseChat.Domain.Enums;
 
 public sealed class RoomListItemDto
 {
@@ -6,16 +6,17 @@ public sealed class RoomListItemDto
     public string Name { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
 
-    // Private chat only
     public Guid? OtherUserId { get; init; }
     public string? OtherDisplayName { get; init; }
 
     public int UnreadCount { get; init; }
-
-
     public bool IsMuted { get; init; }
+
     public DateTime? LastMessageAt { get; init; }
     public string? LastMessagePreview { get; init; }
     public Guid? LastMessageId { get; init; }
 
+    // ✅ NEW
+    public Guid? LastMessageSenderId { get; init; }
+    public MessageStatus? LastMessageStatus { get; init; } // only meaningful when last msg is mine
 }

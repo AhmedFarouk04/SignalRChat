@@ -5,18 +5,19 @@
 
     @foreach (var member in Members)
     {
+        var displayName = string.IsNullOrWhiteSpace(member.DisplayName)
+        ? "User " + member.Id.ToString().Substring(0, 6)
+        : member.DisplayName;
+
         <div class="member-row">
             <span class="avatar">
-                @member.DisplayName[..1].ToUpper()
+                @(string.IsNullOrWhiteSpace(member.DisplayName) ? "?" : member.DisplayName[..1].ToUpper())
             </span>
-
-            <span>@member.DisplayName</span>
-
+            <span>@displayName</span>
             @if (member.Id == OwnerId)
             {
                 <span class="badge owner">Owner</span>
             }
-
             @if (CanManageMembers && member.Id != OwnerId)
             {
                 <button @onclick="() => OnRemove.InvokeAsync(member.Id)">

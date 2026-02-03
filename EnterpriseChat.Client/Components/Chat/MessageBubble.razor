@@ -22,7 +22,8 @@
     [Parameter] public MessageModel Message { get; set; } = default!;
     [Parameter] public Guid CurrentUserId { get; set; }
     [Parameter] public EventCallback<MessageModel> OnRetry { get; set; }
-
+    [Parameter] public RoomModel? Room { get; set; }
+    [Parameter] public List<UserModel> GroupMembers { get; set; } = new();
     [Parameter] public string GroupPosition { get; set; } = "single";
     [Parameter] public bool ShowMeta { get; set; } = true;
     [Parameter] public bool IsNew { get; set; }

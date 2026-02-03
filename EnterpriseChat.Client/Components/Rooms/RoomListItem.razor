@@ -55,9 +55,17 @@
             @if (!string.IsNullOrWhiteSpace(Room.LastMessagePreview))
             {
                 <div class="room-preview" title="@Room.LastMessagePreview">
+                    @if (IsMyLastMessage && Room.LastMessageStatus.HasValue)
+                    {
+                        <span class="room-last-status" title="@StatusTooltip(Room.LastMessageStatus.Value)">
+                            @StatusIcon(Room.LastMessageStatus.Value)
+                        </span>
+                        <span>&nbsp;</span>
+                    }
                     @Truncate(Room.LastMessagePreview, 60)
                 </div>
             }
+
         </div>
 
     </NavLink>
@@ -68,6 +76,28 @@
     [Parameter] public bool? IsOnline { get; set; } // null = unknown/loading
     [Parameter] public string? LastSeenText { get; set; }
     [Parameter] public bool IsTyping { get; set; }
+    // ✅ we can't know current user id هنا، فنعتمد على إن السيرفر بيبعت status فقط لو last msg is mine
+    private bool IsMyLastMessage => Room.LastMessageStatus.HasValue;
+
+    private static string StatusIcon(MessageStatus st) => st switch
+    {
+        MessageStatus.Pending => "…",
+        MessageStatus.Sent => "✓",
+        MessageStatus.Delivered => "✓✓",
+        MessageStatus.Read => "✓✓ 👁",
+        MessageStatus.Failed => "!",
+        _ => ""
+    };
+
+    private static string StatusTooltip(MessageStatus st) => st switch
+    {
+        MessageStatus.Pending => "Sending…",
+        MessageStatus.Sent => "Sent",
+        MessageStatus.Delivered => "Delivered",
+        MessageStatus.Read => "Read",
+        MessageStatus.Failed => "Failed",
+        _ => ""
+    };
 
     private static string FormatTime(DateTime utc)
     {

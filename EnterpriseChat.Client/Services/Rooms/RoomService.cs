@@ -27,8 +27,15 @@ public sealed class RoomService : IRoomService
             IsMuted = d.IsMuted,
             LastMessageAt = d.LastMessageAt,
             LastMessagePreview = d.LastMessagePreview,
-            LastMessageId = d.LastMessageId
+            LastMessageId = d.LastMessageId,
+
+            // ✅ NEW (هنا بالظبط)
+            LastMessageSenderId = d.LastMessageSenderId,
+            LastMessageStatus = d.LastMessageStatus.HasValue
+         ? (EnterpriseChat.Client.Models.MessageStatus)d.LastMessageStatus.Value
+         : null,
         }).ToList();
+
     }
     public Task<RoomModel?> GetRoomAsync(Guid roomId)
         => _api.GetAsync<RoomModel>(ApiEndpoints.Room(roomId));

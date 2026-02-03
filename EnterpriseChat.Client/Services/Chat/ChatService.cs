@@ -3,6 +3,8 @@ using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Http;
 using System.Text;
 using System.Text.Json;
+using ServerStatus = EnterpriseChat.Domain.Enums.MessageStatus;
+using ClientStatus = EnterpriseChat.Client.Models.MessageStatus;
 
 namespace EnterpriseChat.Client.Services.Chat;
 
@@ -16,7 +18,31 @@ public sealed class ChatService : IChatService
     }
 
     public async Task<IReadOnlyList<MessageModel>> GetMessagesAsync(Guid roomId, int skip = 0, int take = 50)
-        => await _api.GetAsync<IReadOnlyList<MessageModel>>(ApiEndpoints.RoomMessages(roomId, skip, take)) ?? [];
+    {
+        var dtos = await _api.GetAsync<IReadOnlyList<MessageReadDto>>(ApiEndpoints.RoomMessages(roomId, skip, take))
+                   ?? [];
+
+        // السيرفر بيرجع newest-first (desc)، والـ UI غالبًا محتاج ascending
+        var ordered = dtos.OrderBy(m => m.CreatedAt);
+
+        return ordered.Select(m => new MessageModel
+        {
+            Id = m.Id,
+            RoomId = m.RoomId,
+            SenderId = m.SenderId,
+            Content = m.Content,
+            CreatedAt = m.CreatedAt,
+
+            Status = (MessageStatus)(int)m.Status, // ✅ cast آمن لو الأرقام مطابقة
+
+            Receipts = (m.Receipts ?? new()).Select(r => new MessageReceiptModel
+            {
+                UserId = r.UserId,
+                Status = (ClientStatus)(int)r.Status
+            }).ToList()
+        }).ToList();
+    }
+
 
     public Task<MessageDto?> SendMessageAsync(Guid roomId, string content)
         => _api.PostAsync<object, MessageDto>(ApiEndpoints.SendMessage, new

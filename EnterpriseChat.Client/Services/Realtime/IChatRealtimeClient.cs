@@ -28,6 +28,15 @@ public interface IChatRealtimeClient
     event Action<Guid, bool>? RoomMuteChanged;
     event Action<Guid, bool>? UserBlockChanged;
 
+    event Action<Guid, string>? GroupRenamed;
+    event Action<Guid, Guid>? MemberAdded;
+    event Action<Guid, Guid>? MemberRemoved;
+    event Action<Guid, Guid>? MemberLeft;
+    event Action<Guid>? GroupDeleted;
+    event Action<Guid, Guid>? AdminPromoted;
+    event Action<Guid, Guid>? AdminDemoted;
+    event Action<Guid, Guid>? OwnerTransferred;
+
     Task ConnectAsync();
     Task DisconnectAsync();
 
@@ -38,4 +47,7 @@ public interface IChatRealtimeClient
     Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId);
 
     Task NotifyTypingAsync(Guid roomId);
+
+
+
 }

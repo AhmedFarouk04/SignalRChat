@@ -19,3 +19,12 @@ export function unregisterEscape() {
     window.removeEventListener("keydown", escapeHandler);
     escapeHandler = null;
 }
+window.scrollToBottom = (idOrEl) => {
+    const el =
+        (typeof idOrEl === "string")
+            ? document.getElementById(idOrEl) || document.querySelector("." + idOrEl)
+            : idOrEl;
+
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+};
