@@ -1,13 +1,12 @@
 ﻿@page "/groups/{RoomId:guid}/settings"
 @attribute [Authorize]
 @using EnterpriseChat.Application.DTOs
-@using EnterpriseChat.Client.Authentication.Abstractions // لـ ICurrentUser
-@using EnterpriseChat.Client.Services.Http // لـ GroupsApi و UsersApi (غير لو namespace مختلف)
-@using EnterpriseChat.Client.Services.Ui // لـ ToastService
+@using EnterpriseChat.Client.Authentication.Abstractions 
+@using EnterpriseChat.Client.Services.Http 
+@using EnterpriseChat.Client.Services.Ui 
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components // لـ NavigationManager و StateHasChanged
-@using Microsoft.AspNetCore.Components.Authorization // لـ Authorize
-@using System // لـ StringComparison
+@using Microsoft.AspNetCore.Components 
+@using Microsoft.AspNetCore.Components.Authorization 
 @inject ICurrentUser CurrentUser
 @inject ToastService Toasts
 @inject GroupsApi GroupsApi
@@ -223,11 +222,15 @@ else
     private async Task RenameAsync() => await ExecuteWithToast(async () => await GroupsApi.UpdateGroupAsync(RoomId, newName.Trim()), "Group renamed");
 
     private async Task AddMemberAsync(Guid userId) => await ExecuteWithToast(async () =>
-    {
-        await GroupsApi.AddMemberAsync(RoomId, userId);
-        search = "";
-        searchResults.Clear();
-    }, "Member added");
+  {
+      await GroupsApi.AddMemberAsync(RoomId, userId);
+
+      // ✅ حمّل الجروب الأول عشان group.Members يتحدث قبل ما تصفّي
+      await LoadAsync();
+
+      searchResults.Clear();
+      _search = ""; // ✅ بدل search= عشان ما يشغل DebouncedSearchAsync
+  }, "Member added");
 
     private async Task RemoveMemberAsync(Guid userId) => await ExecuteWithToast(async () => await GroupsApi.RemoveMemberAsync(RoomId, userId), "Member removed");
 
@@ -270,7 +273,10 @@ else
             var currentIds = group.Members.Select(m => m.UserId).ToHashSet();
             searchResults.AddRange(res.Where(u => !currentIds.Contains(u.Id)).Select(u => new EnterpriseChat.Client.Models.UserModel { Id = u.Id, DisplayName = u.DisplayName, Email = u.Email ?? "" }));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Toasts.Error("Search failed", ex.Message);
+        }
         StateHasChanged();
     }
 }

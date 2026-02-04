@@ -1,4 +1,5 @@
 ﻿using EnterpriseChat.Domain.Enums;
+namespace EnterpriseChat.Application.DTOs;
 
 public sealed class RoomListItemDto
 {

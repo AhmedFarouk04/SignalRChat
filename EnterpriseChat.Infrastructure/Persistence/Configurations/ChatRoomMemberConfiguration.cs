@@ -12,29 +12,33 @@ public sealed class ChatRoomMemberConfiguration
     {
         builder.ToTable("ChatRoomMembers");
 
-        builder.HasKey(x => new
-        {
-            x.RoomId,
-            x.UserId
-        });
+        builder.HasKey(x => new { x.RoomId, x.UserId });
 
         builder.Property(x => x.RoomId)
-            .HasConversion(
-                id => id.Value,
-                value => new RoomId(value))
+            .HasConversion(id => id.Value, value => new RoomId(value))
             .IsRequired();
 
         builder.Property(x => x.UserId)
-            .HasConversion(
-                id => id.Value,
-                value => new UserId(value))
+            .HasConversion(id => id.Value, value => new UserId(value))
             .IsRequired();
 
-        builder.Property(x => x.IsAdmin)   
-           .IsRequired()
-           .HasDefaultValue(false);
+        builder.Property(x => x.IsAdmin)
+            .IsRequired()
+            .HasDefaultValue(false);
 
+        builder.Property(x => x.IsOwner)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(x => x.JoinedAt)
+            .IsRequired();
 
         builder.HasIndex(x => x.UserId);
+
+        // ✅ مهم: اربطها بـ RoomId فقط
+        builder.HasOne<ChatRoom>()
+            .WithMany(r => r.Members)
+            .HasForeignKey(m => m.RoomId);
     }
+
 }

@@ -42,13 +42,15 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action<RoomUpdatedModel>? RoomUpdated;
     public event Action<Guid, bool>? UserBlockChanged;
     public event Action<Guid, string>? GroupRenamed;
-    public event Action<Guid, Guid>? MemberAdded;
+    public event Action<Guid, Guid, string>? MemberAdded;
     public event Action<Guid, Guid>? MemberRemoved;
     public event Action<Guid, Guid>? MemberLeft;
     public event Action<Guid>? GroupDeleted;
     public event Action<Guid, Guid>? AdminPromoted;
     public event Action<Guid, Guid>? AdminDemoted;
     public event Action<Guid, Guid>? OwnerTransferred;
+    public event Action<RoomListItemDto>? RoomUpserted;
+
     public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http, RoomFlagsStore flags)
     {
         _tokenStore = tokenStore;
@@ -169,6 +171,9 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
         _connection.On<RoomUpdatedModel>("RoomUpdated", upd => RoomUpdated?.Invoke(upd));
 
+        _connection.On<RoomListItemDto>("RoomUpserted", dto =>
+      RoomUpserted?.Invoke(dto));
+
 
         _connection.On<Guid, bool>("RoomMuteChanged", (rid, muted) =>
         {
@@ -209,9 +214,13 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
         _connection.On<Guid>("RemovedFromRoom",
             roomId => RemovedFromRoom?.Invoke(roomId));
+      
 
         _connection.On<Guid, string>("GroupRenamed", (roomId, newName) => GroupRenamed?.Invoke(roomId, newName));
-        _connection.On<Guid, Guid>("MemberAdded", (roomId, userId) => MemberAdded?.Invoke(roomId, userId));
+        _connection.On<Guid, Guid, string>("MemberAdded",
+     (roomId, userId, displayName) => MemberAdded?.Invoke(roomId, userId, displayName));
+
+
         _connection.On<Guid, Guid>("MemberRemoved", (roomId, userId) => MemberRemoved?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("MemberLeft", (roomId, userId) => MemberLeft?.Invoke(roomId, userId));
         _connection.On<Guid>("GroupDeleted", roomId => GroupDeleted?.Invoke(roomId));

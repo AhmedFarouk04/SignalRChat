@@ -3,9 +3,12 @@
 
 @using EnterpriseChat.Application.DTOs
 @using EnterpriseChat.Client.Services.Http
+@using EnterpriseChat.Client.Services.Ui
 @inject UsersApi UsersApi
 @inject ChatApi ChatApi
 @inject NavigationManager Nav
+@inject ToastService Toasts
+
 
 <div class="rooms-page">
     <div class="rooms-header">
@@ -101,7 +104,10 @@
 
             await SearchAsync(ct);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Toasts.Error("Search failed", ex.Message);
+        }
     }
 
 

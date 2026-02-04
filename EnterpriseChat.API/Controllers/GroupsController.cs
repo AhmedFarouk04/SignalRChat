@@ -1,15 +1,11 @@
 ﻿using EnterpriseChat.API.Contracts.Messaging;
-using EnterpriseChat.API.Hubs; // namespace بتاع ChatHub
-using EnterpriseChat.API.Messaging;
 using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Features.Messaging.Queries;
-using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR; // للـ IHubContext
 
 namespace EnterpriseChat.API.Controllers;
 
@@ -19,13 +15,12 @@ namespace EnterpriseChat.API.Controllers;
 public sealed class GroupsController : BaseController
 {
     private readonly IMediator _mediator;
-    private readonly IHubContext<ChatHub> _hubContext; // جديد
 
-    public GroupsController(IMediator mediator, IHubContext<ChatHub> hubContext)
+    public GroupsController(IMediator mediator)
     {
         _mediator = mediator;
-        _hubContext = hubContext;
     }
+
 
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
@@ -55,41 +50,17 @@ public sealed class GroupsController : BaseController
             .ToList();
 
         // ✅ جديد: ولّد RoomId على server دايمًا
-        var roomId = Guid.NewGuid();
 
         var command = new CreateGroupChatCommand(
             request.Name.Trim(),
             creatorId,
             members);
 
-        // لو الـ entity/handler يدعم pre-set Id، pass roomId (لو لا، الentity هيولد new)
 
         var room = await _mediator.Send(command, ct);
-        // broadcast RoomUpdated للـ creator + كل members عشان الـ room يضاف ويطلع فوق (LastMessageAt = now)
-        var now = DateTime.UtcNow;
-        var updatedDto = new RoomUpdatedDto
-        {
-            RoomId = room.Id.Value,
-            MessageId = Guid.Empty,
-            SenderId = creatorId.Value,
-            Preview = "",
-            CreatedAt = now,
-            UnreadDelta = int.MinValue, // معناها "reset/initialize"
-            RoomName = room.Name,
-            RoomType = "Group"
-        };
+     
 
 
-
-
-        await _hubContext.Clients.User(creatorId.Value.ToString()).SendAsync("RoomUpdated", updatedDto);
-
-        foreach (var memberId in members.Select(m => m.Value))
-        {
-            await _hubContext.Clients.User(memberId.ToString()).SendAsync("RoomUpdated", updatedDto);
-        }
-
-        // لو الhandler بيولد Id مختلف، استخدم room.Id.Value هنا
 
         return Created($"/api/rooms/{room.Id.Value}", new
         {
@@ -108,8 +79,7 @@ public sealed class GroupsController : BaseController
     {
         await _mediator.Send(new AddMemberToGroupCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
 
-        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("MemberAdded", roomId, userId);
-
+       
         return NoContent();
     }
 
@@ -118,9 +88,7 @@ public sealed class GroupsController : BaseController
     {
         await _mediator.Send(new RemoveMemberFromGroupCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
 
-        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("MemberRemoved", roomId, userId);
-        await _hubContext.Clients.User(userId.ToString()).SendAsync("RemovedFromRoom", roomId);
-
+       
         return NoContent();
     }
     [HttpDelete("{roomId:guid}/leave")]
@@ -130,9 +98,7 @@ public sealed class GroupsController : BaseController
 
         await _mediator.Send(new LeaveGroupCommand(new RoomId(roomId), requesterId), ct);
 
-        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("MemberLeft", roomId, requesterId.Value);
-        await _hubContext.Clients.User(requesterId.Value.ToString()).SendAsync("RemovedFromRoom", roomId);
-
+       
         return NoContent();
     }
 
@@ -142,7 +108,6 @@ public sealed class GroupsController : BaseController
     {
         await _mediator.Send(new DeleteGroupCommand(new RoomId(roomId), GetCurrentUserId()), ct);
 
-        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("GroupDeleted", roomId);
 
         return NoContent();
     }
@@ -164,7 +129,6 @@ public sealed class GroupsController : BaseController
     {
         await _mediator.Send(new PromoteGroupAdminCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
 
-        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("AdminPromoted", roomId, userId);
 
         return NoContent();
     }
@@ -174,7 +138,6 @@ public sealed class GroupsController : BaseController
     {
         await _mediator.Send(new DemoteGroupAdminCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
 
-        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("AdminDemoted", roomId, userId);
 
         return NoContent();
     }
@@ -184,7 +147,6 @@ public sealed class GroupsController : BaseController
     {
         await _mediator.Send(new TransferGroupOwnershipCommand(new RoomId(roomId), GetCurrentUserId(), new UserId(userId)), ct);
 
-        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("OwnerTransferred", roomId, userId);
 
         return NoContent();
     }
@@ -193,7 +155,6 @@ public sealed class GroupsController : BaseController
     {
         await _mediator.Send(new RenameGroupCommand(new RoomId(roomId), GetCurrentUserId(), request.Name), ct);
 
-        await _hubContext.Clients.Group(roomId.ToString()).SendAsync("GroupRenamed", roomId, request.Name.Trim());
 
         return NoContent();
     }

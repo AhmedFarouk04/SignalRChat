@@ -15,15 +15,17 @@ public sealed class DemoteGroupAdminHandler
     private readonly IChatRoomRepository _repo;
     private readonly IRoomAuthorizationService _auth;
     private readonly IUnitOfWork _uow;
-
+    private readonly IMessageBroadcaster _broadcaster;
     public DemoteGroupAdminHandler(
         IChatRoomRepository repo,
         IRoomAuthorizationService auth,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IMessageBroadcaster broadcaster)
     {
         _repo = repo;
         _auth = auth;
         _uow = uow;
+        _broadcaster = broadcaster;
     }
 
     public async Task<Unit> Handle(DemoteGroupAdminCommand command, CancellationToken ct)
@@ -56,6 +58,11 @@ public sealed class DemoteGroupAdminHandler
         member.DemoteFromAdmin();
 
         await _uow.CommitAsync(ct);
+
+        var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+        await _broadcaster.AdminDemotedAsync(room.Id, command.TargetUserId, recipients);
+
         return Unit.Value;
+
     }
 }

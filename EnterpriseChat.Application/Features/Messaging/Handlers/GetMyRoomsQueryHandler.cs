@@ -49,12 +49,14 @@ public sealed class GetMyRoomsQueryHandler
             unreadByRoom.TryGetValue(room.Id.Value, out var unreadCount);
 
             // last message info
-            DateTime? lastAt = lastMsg?.CreatedAt;
+            // last message info
+            DateTime? lastAt = lastMsg?.CreatedAt ?? room.CreatedAt; // ✅ fallback مهم
             Guid? lastId = lastMsg?.Id.Value;
 
             string? preview = lastMsg?.Content;
             if (!string.IsNullOrWhiteSpace(preview) && preview.Length > 60)
                 preview = preview[..60];
+
 
             // NEW fields for rooms UI (status)
             Guid? lastSenderId = lastMsg?.SenderId.Value;

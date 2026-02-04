@@ -15,15 +15,17 @@ public sealed class PromoteGroupAdminHandler
     private readonly IChatRoomRepository _repo;
     private readonly IRoomAuthorizationService _auth;
     private readonly IUnitOfWork _uow;
-
+    private readonly IMessageBroadcaster _broadcaster;
     public PromoteGroupAdminHandler(
         IChatRoomRepository repo,
         IRoomAuthorizationService auth,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IMessageBroadcaster broadcaster)
     {
         _repo = repo;
         _auth = auth;
         _uow = uow;
+        _broadcaster = broadcaster;
     }
 
     public async Task<Unit> Handle(PromoteGroupAdminCommand command, CancellationToken ct)
@@ -54,8 +56,12 @@ public sealed class PromoteGroupAdminHandler
             return Unit.Value;
 
         member.PromoteToAdmin();
-
         await _uow.CommitAsync(ct);
+
+        var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+        await _broadcaster.AdminPromotedAsync(room.Id, command.TargetUserId, recipients);
+
         return Unit.Value;
+
     }
 }

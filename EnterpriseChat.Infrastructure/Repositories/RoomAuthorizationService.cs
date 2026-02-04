@@ -20,7 +20,7 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
         var room = await _context.ChatRooms
             .AsNoTracking()
             .Include(r => r.Members)
-            .FirstOrDefaultAsync(r => r.Id == roomId, ct);
+            .FirstOrDefaultAsync(r => r.Id == roomId.Value, ct);
 
         if (room is null)
             throw new InvalidOperationException("Room not found.");
@@ -35,7 +35,7 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
         var room = await _context.ChatRooms
             .AsNoTracking()
             .Include(r => r.Members)
-            .FirstOrDefaultAsync(r => r.Id == roomId, ct);
+            .FirstOrDefaultAsync(r => r.Id == roomId.Value, ct);
 
         if (room is null)
             throw new InvalidOperationException("Room not found.");
@@ -53,8 +53,7 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
         var room = await _context.ChatRooms
             .AsNoTracking()
             .Include(r => r.Members)
-            .FirstOrDefaultAsync(r => r.Id == roomId, ct);
-
+           .FirstOrDefaultAsync(r => r.Id == roomId.Value, ct);
         if (room is null)
             throw new InvalidOperationException("Room not found.");
 

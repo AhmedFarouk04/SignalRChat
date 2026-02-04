@@ -1,4 +1,5 @@
-﻿using EnterpriseChat.Client.Authentication.Abstractions;
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Chat;
 using EnterpriseChat.Client.Services.Realtime;
@@ -42,9 +43,31 @@ public sealed class RoomsViewModel
         // ✅ جديد: لما تدخل/تخرج من روم
         _flags.ActiveRoomChanged += OnActiveRoomChanged;
         _rt.GroupRenamed += OnGroupRenamed; // ✅
-
+        _rt.RoomUpserted += OnRoomUpserted;
+        _rt.MemberAdded += OnMemberAddedRealtime;
+        _rt.MemberRemoved += OnMemberRemovedRealtime;
         _rt.MessageReceived += OnMessageReceived;
+        _rt.RemovedFromRoom += OnRemovedFromRoom;
         _rt.RoomUpdated += OnRoomUpdated;
+
+    }
+    private void OnRemovedFromRoom(Guid roomId)
+    {
+        var list = Rooms.ToList();
+        var idx = list.FindIndex(r => r.Id == roomId);
+        if (idx < 0) return;
+
+        list.RemoveAt(idx);
+        Rooms = list;
+
+        ApplyFilter();
+        NotifyChanged();
+
+        _toasts.Info("Removed", "You were removed from a room.");
+    }
+    private void OnMemberRemovedRealtime(Guid roomId, Guid userId)
+    {
+        _toasts.Info("Member removed", "A member was removed from the group");
     }
 
     public IReadOnlyList<RoomListItemModel> Rooms { get; private set; } = Array.Empty<RoomListItemModel>();
@@ -108,6 +131,46 @@ public sealed class RoomsViewModel
         ApplyFilter();
         NotifyChanged();
     }
+    private void OnRoomUpserted(RoomListItemDto dto)
+    {
+        var list = Rooms.ToList();
+        var idx = list.FindIndex(r => r.Id == dto.Id);
+
+        // map dto -> RoomListItemModel
+        var model = new RoomListItemModel
+        {
+            Id = dto.Id,
+            Name = dto.Name ?? "Room",
+            Type = dto.Type ?? "Group",
+            OtherUserId = dto.OtherUserId,
+            OtherDisplayName = dto.OtherDisplayName,
+            UnreadCount = dto.UnreadCount,
+            IsMuted = dto.IsMuted,
+            LastMessageAt = dto.LastMessageAt,
+            LastMessagePreview = dto.LastMessagePreview,
+            LastMessageId = dto.LastMessageId,
+            LastMessageSenderId = dto.LastMessageSenderId,
+            LastMessageStatus = dto.LastMessageStatus is null
+   ? null
+    : (MessageStatus?)(int)dto.LastMessageStatus.Value
+        };
+
+        if (idx >= 0) list[idx] = model;
+        else list.Insert(0, model); // ✅ تظهر فوق فورًا
+
+        Rooms = list;
+        ApplyFilter();
+        NotifyChanged();
+    }
+    private void OnMemberAddedRealtime(Guid roomId, Guid userId, string displayName)
+       => _toasts.Success("Member added", $"{displayName} joined");
+
+   
+
+
+
+  
+
 
     private void OnMessageReceived(MessageModel msg)
     {

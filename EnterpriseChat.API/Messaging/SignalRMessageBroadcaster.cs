@@ -46,8 +46,67 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await _hub.Clients.User(userId.Value.ToString())
             .SendAsync("MessageRead", messageId.Value);
     }
+    public async Task MemberLeftAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
+    {
+        var tasks = users.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients.User(u.Value.ToString())
+                .SendAsync("MemberLeft", roomId.Value, memberId.Value));
 
-   public async Task RoomUpdatedAsync(RoomUpdatedDto update, IEnumerable<UserId> users)
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task RemovedFromRoomAsync(RoomId roomId, UserId userId)
+    {
+        await _hub.Clients.User(userId.Value.ToString())
+            .SendAsync("RemovedFromRoom", roomId.Value);
+    }
+
+    public async Task RemovedFromRoomAsync(RoomId roomId, IEnumerable<UserId> users)
+    {
+        var tasks = users.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients.User(u.Value.ToString())
+                .SendAsync("RemovedFromRoom", roomId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task GroupDeletedAsync(RoomId roomId, IEnumerable<UserId> users)
+    {
+        var tasks = users.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients.User(u.Value.ToString())
+                .SendAsync("GroupDeleted", roomId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task AdminPromotedAsync(RoomId roomId, UserId userId, IEnumerable<UserId> users)
+    {
+        var tasks = users.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients.User(u.Value.ToString())
+                .SendAsync("AdminPromoted", roomId.Value, userId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task AdminDemotedAsync(RoomId roomId, UserId userId, IEnumerable<UserId> users)
+    {
+        var tasks = users.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients.User(u.Value.ToString())
+                .SendAsync("AdminDemoted", roomId.Value, userId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task OwnerTransferredAsync(RoomId roomId, UserId newOwnerId, IEnumerable<UserId> users)
+    {
+        var tasks = users.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients.User(u.Value.ToString())
+                .SendAsync("OwnerTransferred", roomId.Value, newOwnerId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task RoomUpdatedAsync(RoomUpdatedDto update, IEnumerable<UserId> users)
 {
     var roomId = new RoomId(update.RoomId);
 
@@ -80,6 +139,43 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
     await Task.WhenAll(tasks);
 }
+    public async Task RoomUpsertedAsync(RoomListItemDto room, IEnumerable<UserId> users)
+    {
+        var roomId = new RoomId(room.Id);
 
+        var tasks = new List<Task>();
+        foreach (var userId in users.DistinctBy(u => u.Value))
+        {
+            if (await _muteRepo.IsMutedAsync(roomId, userId))
+                continue;
+
+            tasks.Add(_hub.Clients.User(userId.Value.ToString())
+                .SendAsync("RoomUpserted", room));
+        }
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task MemberAddedAsync(RoomId roomId, UserId memberId, string displayName, IEnumerable<UserId> users)
+    {
+        var tasks = users.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients.User(u.Value.ToString())
+                .SendAsync("MemberAdded", roomId.Value, memberId.Value, displayName));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
+    {
+        var tasks = users.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients.User(u.Value.ToString())
+                .SendAsync("MemberRemoved", roomId.Value, memberId.Value));
+
+        await Task.WhenAll(tasks);
+
+        // ✅ العضو المتشال لازم يتقاله يتشال من rooms
+        await _hub.Clients.User(memberId.Value.ToString())
+            .SendAsync("RemovedFromRoom", roomId.Value);
+    }
 
 }

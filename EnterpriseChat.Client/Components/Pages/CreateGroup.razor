@@ -3,10 +3,13 @@
 
 @using EnterpriseChat.Client.Models
 @using EnterpriseChat.Client.Services.Http
+@using EnterpriseChat.Client.Services.Ui
 
 @inject UsersApi UsersApi
 @inject GroupsApi GroupsApi
 @inject NavigationManager Nav
+@inject ToastService Toasts
+
 
 <div class="rooms-page">
     <div class="rooms-header">
@@ -142,10 +145,12 @@
             }));
 
         }
-        catch
-        {
-            // ignore cancel
-        }
+        
+        
+        catch (Exception ex)
+             {
+            Toasts.Error("Search failed", ex.Message);
+             }
         finally
         {
             isLoading = false;

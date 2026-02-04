@@ -12,15 +12,18 @@ public sealed class TransferGroupOwnershipCommandHandler
     private readonly IChatRoomRepository _rooms;
     private readonly IRoomAuthorizationService _auth;
     private readonly IUnitOfWork _uow;
+    private readonly IMessageBroadcaster _broadcaster;
 
     public TransferGroupOwnershipCommandHandler(
         IChatRoomRepository rooms,
         IRoomAuthorizationService auth,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        IMessageBroadcaster broadcaster)
     {
         _rooms = rooms;
         _auth = auth;
         _uow = uow;
+        _broadcaster = broadcaster;
     }
 
     public async Task<Unit> Handle(TransferGroupOwnershipCommand request, CancellationToken ct)
@@ -44,8 +47,17 @@ public sealed class TransferGroupOwnershipCommandHandler
         var newOwnerMember = room.Members.First(m => m.UserId.Value == request.NewOwnerId.Value);
         newOwnerMember.PromoteToAdmin();
 
-        
+
         await _uow.CommitAsync(ct);
+
+        var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+
+        await _broadcaster.OwnerTransferredAsync(room.Id, request.NewOwnerId, recipients);
+
+        // اختياري (لو الواجهة بتتابع AdminPromoted):
+        await _broadcaster.AdminPromotedAsync(room.Id, request.NewOwnerId, recipients);
+
         return Unit.Value;
+
     }
 }
