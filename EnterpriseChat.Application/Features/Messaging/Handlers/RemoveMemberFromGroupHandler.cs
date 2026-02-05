@@ -73,24 +73,24 @@ public sealed class RemoveMemberFromGroupHandler
         // ✅ نفّذ الإزالة
         room.RemoveMember(command.MemberId);
         await _uow.CommitAsync(ct);
+        var systemSender = new UserId(Guid.NewGuid());
 
         // ✅ recipients بعد الإزالة = الأعضاء اللي لسه موجودين
+        // بعد Commit الإزالة
+        // بعد the remove commit
         var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
 
-        // ✅ realtime events (موجودة عندك بالفعل)
-        await _broadcaster.MemberRemovedAsync(room.Id, command.MemberId, recipients);
+        var removedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
+        var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
+        var removerName = requesterName;
 
-        // ==========================================================
-        // ✅ WhatsApp-style: System message persisted + realtime
-        // ==========================================================
-        var removedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct)
-                         ?? $"User {command.MemberId.Value.ToString()[..8]}";
+        await _broadcaster.MemberRemovedAsync(room.Id, command.MemberId, command.RequesterId, removerName, recipients);
 
-        var systemSender = new UserId(Guid.Empty);
-        var systemText = $"{removedName} was removed from the group";
+        var systemText = command.MemberId.Value == command.RequesterId.Value
+            ? $"{removedName} left the group"
+            : $"{removedName} was removed by {requesterName}";
 
-        // خليها تتسجل عند باقي الأعضاء فقط (اللي اتشال مش هيقدر يشوف الجروب بعد كده)
-        var sysMsg = new Message(room.Id, systemSender, systemText, recipients);
+        var sysMsg = new Message(room.Id, command.RequesterId, systemText, recipients);
         await _messages.AddAsync(sysMsg, ct);
         await _uow.CommitAsync(ct);
 
@@ -98,26 +98,26 @@ public sealed class RemoveMemberFromGroupHandler
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = Guid.Empty,
+            SenderId = command.RequesterId.Value, // هنا أيضاً
             Content = sysMsg.Content,
             CreatedAt = sysMsg.CreatedAt
         };
-
-        // 1) ابعت الرسالة داخل الشات لباقي الأعضاء
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        // 2) حدّث ترتيب الغرف + preview بدون unread
-        var preview = msgDto.Content.Length > 80 ? msgDto.Content[..80] + "…" : msgDto.Content;
+        // RoomUpdated same as above
+
+
+        var preview = systemText.Length > 80 ? systemText[..80] + "…" : systemText;
         await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
         {
             RoomId = msgDto.RoomId,
             MessageId = msgDto.Id,
-            SenderId = msgDto.SenderId,
+            SenderId = command.RequesterId.Value,
             Preview = preview,
             CreatedAt = msgDto.CreatedAt,
             UnreadDelta = 0
         }, recipients);
 
-        return Unit.Value;
+        return Unit.Value; // ← أضف هذا السطر
     }
 }

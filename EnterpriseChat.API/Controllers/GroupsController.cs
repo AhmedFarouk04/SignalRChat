@@ -44,10 +44,10 @@ public sealed class GroupsController : BaseController
         var creatorId = GetCurrentUserId();
 
         var members = request.Members
-            .Where(x => x != Guid.Empty && x != creatorId.Value) // exclude creator if duplicated
-            .Distinct()
-            .Select(x => new UserId(x))
-            .ToList();
+      .Where(x => x != Guid.Empty && x != creatorId.Value)  // فلتر empty + duplicate creator
+      .Distinct()
+      .Select(x => new UserId(x))
+      .ToList();
 
         // ✅ جديد: ولّد RoomId على server دايمًا
 

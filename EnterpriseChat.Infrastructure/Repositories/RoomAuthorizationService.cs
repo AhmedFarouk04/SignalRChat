@@ -23,11 +23,11 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
             .FirstOrDefaultAsync(r => r.Id == roomId.Value, ct);
 
         if (room is null)
-            throw new InvalidOperationException("Room not found.");
+            throw new InvalidOperationException($"Room {roomId.Value} not found.");
 
         var isMember = room.Members.Any(m => m.UserId == userId);
         if (!isMember)
-            throw new UnauthorizedAccessException("User is not a member of this room.");
+            throw new UnauthorizedAccessException($"User {userId.Value} is not a member of room {roomId.Value}.");
     }
 
     public async Task EnsureUserIsOwnerAsync(RoomId roomId, UserId userId, CancellationToken ct = default)

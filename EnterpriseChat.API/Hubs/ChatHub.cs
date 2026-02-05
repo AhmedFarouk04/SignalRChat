@@ -87,28 +87,42 @@ public sealed class ChatHub : Hub
         await base.OnDisconnectedAsync(exception);
     }
 
-
+    // حط هذا السطر في أي مكان داخل الكلاس
+    public async Task MemberRemoved(Guid roomId, Guid userId, string removerName)
+    {
+        await Clients.Group(roomId.ToString())
+            .SendAsync("MemberRemoved", roomId, userId, removerName);
+    }
     public async Task JoinRoom(string roomId)
     {
-        var user = GetUserId();              // user.Value => Guid
+        var user = GetUserId();
         var rid = new RoomId(Guid.Parse(roomId));
 
         var room = await _roomRepository.GetByIdAsync(rid);
         if (room is null)
-            throw new HubException("Access denied.");
+            throw new HubException("Room not found.");
 
+        // التحقق من العضوية أو الدعوة الحديثة
         var isOwner = room.OwnerId?.Value == user.Value;
-        // ✅ Guid مقارنة Guid
         var isMember = room.IsMember(user);
 
+        // إذا لم يكن عضو حالياً، ابحث إذا تمت دعوته خلال الـ 5 دقائق الماضية
         if (!isOwner && !isMember)
-            throw new HubException("Access denied.");
+        {
+            // التحقق من الإضافة الحديثة (ضمن 5 دقائق)
+            var recentlyAdded = room.Members
+                .Any(m => m.UserId == user &&
+                         m.JoinedAt > DateTime.UtcNow.AddMinutes(-5));
+
+            if (!recentlyAdded)
+                throw new HubException("Access denied.");
+        }
 
         var joinKey = $"{Context.ConnectionId}:{roomId}";
         if (!_joinedRooms.TryAdd(joinKey, 0))
-            return; // already joined (prevents duplicate joins)
-        await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
+            return;
 
+        await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
         await _roomPresence.JoinRoomAsync(rid, user);
 
         var count = await _roomPresence.GetOnlineCountAsync(rid);
@@ -116,7 +130,6 @@ public sealed class ChatHub : Hub
         await Clients.Caller.SendAsync("RoomPresenceUpdated", rid.Value, count);
         await _mediator.Send(new DeliverRoomMessagesCommand(rid, user));
 
-        // ✅ Reset unread عند اللي دخل الروم (على كل الأجهزة)
         await Clients.User(user.Value.ToString())
             .SendAsync("RoomUpdated", new RoomUpdatedDto
             {
@@ -127,8 +140,6 @@ public sealed class ChatHub : Hub
                 CreatedAt = DateTime.UtcNow,
                 UnreadDelta = int.MinValue
             });
-
-
     }
 
 
@@ -223,11 +234,7 @@ public sealed class ChatHub : Hub
         await Clients.Group(roomId.ToString()).SendAsync("MemberAdded", roomId, userId, displayName);
     }
 
-    public async Task MemberRemoved(Guid roomId, Guid userId)
-    {
-        await Clients.Group(roomId.ToString()).SendAsync("MemberRemoved", roomId, userId);
-        await Clients.User(userId.ToString()).SendAsync("RemovedFromRoom", roomId);
-    }
+   
 
     private UserId GetUserId()
 {

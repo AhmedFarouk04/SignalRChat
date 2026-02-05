@@ -1,4 +1,8 @@
-﻿using EnterpriseChat.Application.DTOs;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
@@ -22,14 +26,12 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
     public async Task BroadcastMessageAsync(MessageDto message, IEnumerable<UserId> recipients)
     {
-        // ✅ في private chat recipients غالبًا واحد، بس برضه نخليها bulk-safe
         var tasks = recipients.Select(r =>
             _hub.Clients.User(r.Value.ToString())
                 .SendAsync("MessageReceived", message));
 
         await Task.WhenAll(tasks);
     }
-
 
     public async Task MessageDeliveredAsync(
         MessageId messageId,
@@ -46,6 +48,7 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await _hub.Clients.User(userId.Value.ToString())
             .SendAsync("MessageRead", messageId.Value);
     }
+
     public async Task MemberLeftAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
     {
         var tasks = users.DistinctBy(u => u.Value)
@@ -107,43 +110,41 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
     }
 
     public async Task RoomUpdatedAsync(RoomUpdatedDto update, IEnumerable<UserId> users)
-{
-    var roomId = new RoomId(update.RoomId);
-
-    // ✅ لو تقدر: اعمل bulk muted مرة واحدة بدل IsMutedAsync لكل مستخدم
-    // لو مش عندك: سيبها foreach زي ما كانت
-    var tasks = new List<Task>();
-
-    foreach (var userId in users)
     {
-        if (await _muteRepo.IsMutedAsync(roomId, userId))
-            continue;
+        var roomId = new RoomId(update.RoomId);
+        var tasks = new List<Task>();
 
-        var delta = update.UnreadDelta < 0
-            ? update.UnreadDelta
-            : (userId.Value == update.SenderId ? 0 : update.UnreadDelta);
-
-        var perUserUpdate = new RoomUpdatedDto
+        foreach (var userId in users)
         {
-            RoomId = update.RoomId,
-            MessageId = update.MessageId,
-            SenderId = update.SenderId,
-            Preview = update.Preview,
-            CreatedAt = update.CreatedAt,
-            UnreadDelta = delta
-        };
+            if (await _muteRepo.IsMutedAsync(roomId, userId))
+                continue;
 
-        tasks.Add(_hub.Clients.User(userId.Value.ToString())
-            .SendAsync("RoomUpdated", perUserUpdate));
+            var delta = update.UnreadDelta < 0
+                ? update.UnreadDelta
+                : (userId.Value == update.SenderId ? 0 : update.UnreadDelta);
+
+            var perUserUpdate = new RoomUpdatedDto
+            {
+                RoomId = update.RoomId,
+                MessageId = update.MessageId,
+                SenderId = update.SenderId,
+                Preview = update.Preview,
+                CreatedAt = update.CreatedAt,
+                UnreadDelta = delta
+            };
+
+            tasks.Add(_hub.Clients.User(userId.Value.ToString())
+                .SendAsync("RoomUpdated", perUserUpdate));
+        }
+
+        await Task.WhenAll(tasks);
     }
 
-    await Task.WhenAll(tasks);
-}
     public async Task RoomUpsertedAsync(RoomListItemDto room, IEnumerable<UserId> users)
     {
         var roomId = new RoomId(room.Id);
-
         var tasks = new List<Task>();
+
         foreach (var userId in users.DistinctBy(u => u.Value))
         {
             if (await _muteRepo.IsMutedAsync(roomId, userId))
@@ -158,24 +159,42 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
     public async Task MemberAddedAsync(RoomId roomId, UserId memberId, string displayName, IEnumerable<UserId> users)
     {
-        var tasks = users.DistinctBy(u => u.Value)
-            .Select(u => _hub.Clients.User(u.Value.ToString())
+        var tasks = new List<Task>();
+
+        foreach (var userId in users.DistinctBy(u => u.Value))
+        {
+            if (await _muteRepo.IsMutedAsync(roomId, userId))
+                continue;
+
+            tasks.Add(_hub.Clients.User(userId.Value.ToString())
                 .SendAsync("MemberAdded", roomId.Value, memberId.Value, displayName));
+        }
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task MemberRemovedAsync(RoomId roomId, UserId memberId, UserId? removerId, string? removerName, IEnumerable<UserId> users)
+    {
+        var tasks = new List<Task>();
+
+        foreach (var userId in users.DistinctBy(u => u.Value))
+        {
+            if (await _muteRepo.IsMutedAsync(roomId, userId))
+                continue;
+
+            tasks.Add(_hub.Clients.User(userId.Value.ToString())
+                .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName));
+        }
+
+        // ✅ أضف هذا الـ Call للمجموعة
+        await _hub.Clients.Group(roomId.Value.ToString())
+            .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName);
 
         await Task.WhenAll(tasks);
     }
 
     public async Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
     {
-        var tasks = users.DistinctBy(u => u.Value)
-            .Select(u => _hub.Clients.User(u.Value.ToString())
-                .SendAsync("MemberRemoved", roomId.Value, memberId.Value));
-
-        await Task.WhenAll(tasks);
-
-        // ✅ العضو المتشال لازم يتقاله يتشال من rooms
-        await _hub.Clients.User(memberId.Value.ToString())
-            .SendAsync("RemovedFromRoom", roomId.Value);
+        await MemberRemovedAsync(roomId, memberId, null, null, users);
     }
-
 }

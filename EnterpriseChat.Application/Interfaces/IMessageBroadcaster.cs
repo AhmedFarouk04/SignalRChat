@@ -15,9 +15,11 @@ public interface IMessageBroadcaster
 
     // Group membership realtime
     Task MemberAddedAsync(RoomId roomId, UserId memberId, string displayName, IEnumerable<UserId> users);
-    Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users);
-
+    Task MemberRemovedAsync(RoomId roomId, UserId memberId, UserId? removerId, string? removerName, IEnumerable<UserId> users);
     // ✅ NEW: leave semantics
+
+    // حط بجانب Method القديمة
+    Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users); // keep old
     Task MemberLeftAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users);
 
     // ✅ NEW: remove room from someone’s rooms list

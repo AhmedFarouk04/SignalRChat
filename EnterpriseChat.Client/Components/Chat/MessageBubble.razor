@@ -1,22 +1,53 @@
 ﻿@using EnterpriseChat.Client.Models
 
-<div class="msg @(IsMine ? "mine" : "theirs") @(GroupPosClass) @(IsNew ? "new" : "")">
-    <div class="msg-body">
-        <div class="msg-text">@Message.Content</div>
-    </div>
+@{
+    var systemType = GetSystemMessageType();
+    var isSystem = !string.IsNullOrEmpty(systemType);
+    var systemIcon = GetSystemIcon(systemType);
 
-    @if (ShowMeta)
-    {
-        <div class="msg-meta">
-            <span class="time">@Message.CreatedAt.ToLocalTime().ToShortTimeString()</span>
+    // System time should always exist in DOM (so hover works even if ShowMeta=false)
+    var showSystemTime = isSystem;
+}
 
-            @if (IsMine)
-            {
-                <span class="status @StatusClass" title="@TooltipText">@StatusIcon</span>
-            }
+@if (isSystem)
+{
+    <div class="system-message-container">
+        <div class="system-message @systemType">
+            <div class="system-content">
+                @if (!string.IsNullOrEmpty(systemIcon))
+                {
+                    <span class="system-icon">@systemIcon</span>
+                }
+
+                <span class="system-text">@GetSystemMessageText()</span>
+
+                @if (showSystemTime)
+                {
+                    <span class="system-time">@Message.CreatedAt.ToLocalTime().ToString("h:mm tt")</span>
+                }
+            </div>
         </div>
-    }
-</div>
+    </div>
+}
+else
+{
+    <div class="msg @(IsMine ? "mine" : "theirs") @GroupPosClass @(IsNew ? "new" : "")">
+        <div class="msg-body">
+            <div class="msg-text">@Message.Content</div>
+        </div>
+
+        @if (ShowMeta)
+        {
+            <div class="msg-meta">
+                <span class="time">@Message.CreatedAt.ToLocalTime().ToString("h:mm tt")</span>
+                @if (IsMine)
+                {
+                    <span class="status @StatusClass" title="@TooltipText">@StatusIcon</span>
+                }
+            </div>
+        }
+    </div>
+}
 
 @code {
     [Parameter] public MessageModel Message { get; set; } = default!;
@@ -26,7 +57,7 @@
     [Parameter] public List<UserModel> GroupMembers { get; set; } = new();
     [Parameter] public string GroupPosition { get; set; } = "single";
     [Parameter] public bool ShowMeta { get; set; } = true;
-    [Parameter] public bool IsNew { get; set; }
+    [Parameter] public bool IsNew { get; set; } = false;
 
     private bool IsMine => Message.SenderId == CurrentUserId;
 
@@ -48,23 +79,61 @@
         _ => ""
     };
 
-    private string StatusClass => ((int)Message.Status) switch
+    private string StatusClass => Message.Status switch
     {
-        (int)MessageStatus.Pending => "pending",
-        (int)MessageStatus.Sent => "sent",
-        (int)MessageStatus.Delivered => "delivered",
-        (int)MessageStatus.Read => "read",
-        (int)MessageStatus.Failed => "failed",
+        MessageStatus.Pending => "pending",
+        MessageStatus.Sent => "sent",
+        MessageStatus.Delivered => "delivered",
+        MessageStatus.Read => "read",
+        MessageStatus.Failed => "failed",
         _ => ""
     };
 
-    private string TooltipText => ((int)Message.Status) switch
+    private string TooltipText => Message.Status switch
     {
-        (int)MessageStatus.Pending => "Sending…",
-        (int)MessageStatus.Sent => "Sent",
-        (int)MessageStatus.Delivered => "Delivered",
-        (int)MessageStatus.Read => "Read",
-        (int)MessageStatus.Failed => "Failed",
+        MessageStatus.Pending => "Sending…",
+        MessageStatus.Sent => "Sent",
+        MessageStatus.Delivered => "Delivered",
+        MessageStatus.Read => "Read",
+        MessageStatus.Failed => "Failed",
         _ => ""
     };
+
+    private string GetSystemMessageType()
+    {
+        var lower = (Message.Content ?? "").ToLower();
+
+        if (lower.Contains("created") || lower.Contains("created the group"))
+            return "create";
+        else if (lower.Contains("added") || lower.Contains("joined"))
+            return "join";
+        else if (lower.Contains("removed"))
+            return "remove";
+        else if (lower.Contains("left") || lower.Contains("leave"))
+            return "leave";
+        else if (lower.Contains("rename") || lower.Contains("changed"))
+            return "rename";
+        else
+            return "";
+    }
+
+    private string GetSystemIcon(string type) => type switch
+    {
+        "create" => "🏗️",
+        "join" => "➕",
+        "remove" => "➖",
+        "leave" => "👋",
+        "rename" => "✏️",
+        _ => ""
+    };
+
+    private string GetSystemMessageText()
+    {
+        return (Message.Content ?? "")
+            .Replace("was added", "added")
+            .Replace("was removed", "removed")
+            .Replace("created the group", "created group")
+            .Replace("was added by", "added by")
+            .Replace("was removed by", "removed by");
+    }
 }

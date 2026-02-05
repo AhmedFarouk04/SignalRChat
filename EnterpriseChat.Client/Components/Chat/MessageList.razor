@@ -82,11 +82,19 @@
     private static string FormatDateLabel(DateTime date)
     {
         var today = DateTime.Now.Date;
-        if (date == today) return "Today";
-        if (date == today.AddDays(-1)) return "Yesterday";
-        return date.ToString("ddd, dd MMM");
-    }
+        if (date == today) return "TODAY";
+        if (date == today.AddDays(-1)) return "YESTERDAY";
 
+        // إذا كانت في نفس الأسبوع
+        if (date > today.AddDays(-7))
+            return date.ToString("dddd").ToUpper(); // "MONDAY", "TUESDAY", etc.
+
+        // إذا كانت في نفس السنة
+        if (date.Year == today.Year)
+            return date.ToString("MMM dd").ToUpper(); // "MAR 15"
+
+        return date.ToString("MMM dd, yyyy").ToUpper(); // "MAR 15, 2024"
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // لو مفيش رسائل مفيش حاجة

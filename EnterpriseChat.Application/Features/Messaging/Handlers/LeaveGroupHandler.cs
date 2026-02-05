@@ -55,18 +55,15 @@ public sealed class LeaveGroupCommandHandler : IRequestHandler<LeaveGroupCommand
 
         // ✅ recipients بعد الخروج = باقي الأعضاء
         var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+        var leaverName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
 
         // ✅ استخدم الموجود عندك بدل MemberLeftAsync/RemovedFromRoomAsync
         // هيوصل event "MemberRemoved" للباقي + "RemovedFromRoom" للي خرج (من SignalRMessageBroadcaster)
-        await _broadcaster.MemberRemovedAsync(room.Id, command.RequesterId, recipients);
+        await _broadcaster.MemberRemovedAsync(room.Id, command.RequesterId, command.RequesterId, leaverName, recipients);        // ✅ WhatsApp-style: System message persisted + realtime
+                                                                                                                                 // ==========================================================
 
-        // ==========================================================
-        // ✅ WhatsApp-style: System message persisted + realtime
-        // ==========================================================
-        var leaverName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct)
-                        ?? $"User {command.RequesterId.Value.ToString()[..8]}";
 
-        var systemSender = new UserId(Guid.Empty);
+        var systemSender = new UserId(Guid.NewGuid()); // أو command.RequesterId
         var systemText = $"{leaverName} left the group";
 
         var sysMsg = new Message(room.Id, systemSender, systemText, recipients);
@@ -77,7 +74,7 @@ public sealed class LeaveGroupCommandHandler : IRequestHandler<LeaveGroupCommand
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = Guid.Empty,
+            SenderId = command.RequesterId.Value,
             Content = sysMsg.Content,
             CreatedAt = sysMsg.CreatedAt
         };

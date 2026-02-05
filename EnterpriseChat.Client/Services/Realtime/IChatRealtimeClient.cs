@@ -31,8 +31,7 @@ public interface IChatRealtimeClient
 
     event Action<Guid, string>? GroupRenamed;
     event Action<Guid, Guid, string>? MemberAdded;
-    event Action<Guid, Guid>? MemberRemoved;
-    event Action<Guid, Guid>? MemberLeft;
+    event Action<Guid, Guid, string?>? MemberRemoved; 
     event Action<Guid>? GroupDeleted;
     event Action<Guid, Guid>? AdminPromoted;
     event Action<Guid, Guid>? AdminDemoted;

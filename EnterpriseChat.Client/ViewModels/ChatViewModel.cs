@@ -283,7 +283,6 @@ public sealed class ChatViewModel
         _realtime.GroupRenamed += OnGroupRenamed;
         _realtime.MemberAdded += OnMemberAdded;
         _realtime.MemberRemoved += OnMemberRemoved;
-        _realtime.MemberLeft += OnMemberRemoved; // نفس handler
         _realtime.GroupDeleted += OnGroupDeleted;
         _realtime.AdminPromoted += OnMemberRoleChanged;
         _realtime.AdminDemoted += OnMemberRoleChanged;
@@ -314,7 +313,6 @@ public sealed class ChatViewModel
         _realtime.GroupRenamed -= OnGroupRenamed;
         _realtime.MemberAdded -= OnMemberAdded;
         _realtime.MemberRemoved -= OnMemberRemoved;
-        _realtime.MemberLeft -= OnMemberRemoved;
         _realtime.GroupDeleted -= OnGroupDeleted;
         _realtime.AdminPromoted -= OnMemberRoleChanged;
         _realtime.AdminDemoted -= OnMemberRoleChanged;
@@ -338,55 +336,26 @@ public sealed class ChatViewModel
         await RefreshRoomStateAsync(roomId);
     }
 
-  
 
-    private async void OnMemberRemoved(Guid roomId, Guid userId)
+
+    private async void OnMemberRemoved(Guid roomId, Guid userId, string? removerName)
     {
         if (_currentRoomId != roomId) return;
-
-        // لو الشخص اللي اتشال هو أنا -> خلي IsRemoved = true
         if (userId == CurrentUserId)
         {
             IsRemoved = true;
             NotifyChanged();
             return;
         }
-
-        // حدّث قائمة الأعضاء من API (أضمن من remove local)
         await RefreshGroupMembersAsync();
         RebuildPresenceFromRealtime();
-
-        // system message (اسم الشخص لو مش معروف خليها generic)
-        var name = FindMember(userId)?.DisplayName ?? "A member";
-        Messages.Add(new MessageModel
-        {
-            Id = Guid.NewGuid(),
-            RoomId = roomId,
-            SenderId = Guid.Empty,
-            Content = $"{name} left the group",
-            CreatedAt = DateTime.UtcNow,
-            Status = MessageStatus.Sent
-        });
-
-        NotifyChanged();
+        var message = removerName != null
+            ? $"{removerName} removed a member"
+            : "A member was removed";
+        _toasts.Info("Member removed", message);
     }
 
-    private void AddSystemMessage(string text)
-    {
-        if (!_currentRoomId.HasValue) return;
 
-        Messages.Add(new MessageModel
-        {
-            Id = Guid.NewGuid(),
-            RoomId = _currentRoomId.Value,
-            SenderId = Guid.Empty,
-            Content = text,
-            CreatedAt = DateTime.UtcNow,
-            Status = MessageStatus.Sent
-        });
-
-        NotifyChanged();
-    }
 
     private void OnGroupDeleted(Guid roomId)
     {
@@ -411,26 +380,10 @@ public sealed class ChatViewModel
     private async void OnMemberAdded(Guid roomId, Guid userId, string displayName)
     {
         if (_currentRoomId != roomId) return;
-
-        // 1) حدّث قائمة الأعضاء + presence
         await RefreshGroupMembersAsync();
         RebuildPresenceFromRealtime();
-
-        // 2) (اختياري) Toast
-        _toasts.Info("Member added", $"{displayName} joined the group");
-
-        // 3) (مهم لو عايز يظهر جوه الشات) أضف System Message في الرسائل محلياً
-        Messages.Add(new MessageModel
-        {
-            Id = Guid.NewGuid(),
-            RoomId = roomId,
-            SenderId = Guid.Empty, // system
-            Content = $"{displayName} joined the group",
-            CreatedAt = DateTime.UtcNow,
-            Status = MessageStatus.Sent
-        });
-
-        NotifyChanged();
+        _toasts.Info("Member added", $"{displayName} was added to the group");
+        // احذف الـ Messages.Add هنا تمامًا
     }
 
 

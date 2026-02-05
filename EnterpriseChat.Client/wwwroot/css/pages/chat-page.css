@@ -580,3 +580,89 @@ body.drawer-open {
     font-size: 11px;
     color: var(--text-secondary);
 }
+
+
+/* ===== SYSTEM MESSAGES FINAL SOLUTION ===== */
+/* ===== SYSTEM MESSAGES – WhatsApp Style ===== */
+
+.system-message-container {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 6px 0;
+}
+
+.system-message {
+    width: fit-content;
+    max-width: 90%;
+}
+
+.system-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1.3;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(226, 232, 240, 0.75);
+    border: none;
+    box-shadow: none;
+}
+
+/* icons */
+.system-icon {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+/* text */
+.system-text {
+    white-space: nowrap;
+}
+
+/* time inline */
+.system-time {
+    margin-left: 6px;
+    font-size: 10px;
+    opacity: 0.55;
+}
+
+/* ===== Types (very subtle) ===== */
+
+.system-message.create .system-content {
+    color: #93c5fd;
+}
+
+.system-message.join .system-content {
+    color: #86efac;
+}
+
+.system-message.remove .system-content {
+    color: #fde68a;
+}
+
+.system-message.leave .system-content {
+    color: #fca5a5;
+}
+
+
+/* Force centering */
+.message-list .system-message-container {
+    align-self: center !important;
+}
+.system-time {
+    display: none;
+    margin-left: 6px;
+    font-size: 10px;
+    opacity: 0.55;
+}
+
+.system-content:hover .system-time {
+    display: inline;
+}
+.system-text {
+    white-space: normal;
+}
+

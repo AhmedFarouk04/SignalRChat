@@ -45,8 +45,8 @@ public sealed class RoomsViewModel
         _rt.GroupRenamed += OnGroupRenamed; // ✅
         _rt.RoomUpserted += OnRoomUpserted;
         _rt.MemberAdded += OnMemberAddedRealtime;
-        _rt.MemberRemoved += OnMemberRemovedRealtime;
-        _rt.MessageReceived += OnMessageReceived;
+        _rt.MemberRemoved += (roomId, userId, removerName) =>
+            _toasts.Info("Member removed", "A member was removed from the group"); _rt.MessageReceived += OnMessageReceived;
         _rt.RemovedFromRoom += OnRemovedFromRoom;
         _rt.RoomUpdated += OnRoomUpdated;
 

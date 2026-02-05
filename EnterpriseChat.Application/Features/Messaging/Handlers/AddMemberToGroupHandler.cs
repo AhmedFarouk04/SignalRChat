@@ -88,19 +88,18 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
         await _broadcaster.RoomUpsertedAsync(roomDtoForNewMember, new[] { command.MemberId });
 
         // ✅ الاسم
-        var displayName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct)
-                          ?? $"User {command.MemberId.Value.ToString()[..8]}";
+        var displayName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct);
 
+
+        // realtime for new member room upsert
+        // بعد Commit الأول (add member)
         var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
 
-        // ✅ broadcast "member added" event (اختياري — عندك UI بيستفيد منه)
-        await _broadcaster.MemberAddedAsync(room.Id, command.MemberId, displayName, recipients);
+        var addedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
+        var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
 
-        // ==========================================================
-        // ✅ WhatsApp-style: System message persisted + realtime
-        // ==========================================================
-        var systemSender = new UserId(Guid.Empty);
-        var systemText = $"{displayName} joined the group";
+        var systemSender = command.RequesterId; // الأفضل
+        var systemText = $"{addedName} was added by {requesterName}";
 
         var sysMsg = new Message(room.Id, systemSender, systemText, recipients);
         await _messages.AddAsync(sysMsg, ct);
@@ -110,25 +109,26 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = Guid.Empty,
-            Content = sysMsg.Content,
+            SenderId = command.RequesterId.Value,
+            Content = systemText,
             CreatedAt = sysMsg.CreatedAt
         };
 
-        // 1) ابعت الرسالة داخل الشات
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        // 2) حدّث ترتيب الغرف + preview بدون unread
-        var preview = msgDto.Content.Length > 80 ? msgDto.Content[..80] + "…" : msgDto.Content;
+        var preview = systemText.Length > 80 ? systemText[..80] + "…" : systemText;
         await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
         {
             RoomId = msgDto.RoomId,
             MessageId = msgDto.Id,
-            SenderId = msgDto.SenderId, // Guid.Empty
+            SenderId = command.RequesterId.Value,
             Preview = preview,
             CreatedAt = msgDto.CreatedAt,
             UnreadDelta = 0
         }, recipients);
+
+        // optional event
+        await _broadcaster.MemberAddedAsync(room.Id, command.MemberId, addedName, recipients);
 
         return Unit.Value;
     }

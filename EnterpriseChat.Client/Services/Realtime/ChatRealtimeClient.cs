@@ -43,8 +43,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action<Guid, bool>? UserBlockChanged;
     public event Action<Guid, string>? GroupRenamed;
     public event Action<Guid, Guid, string>? MemberAdded;
-    public event Action<Guid, Guid>? MemberRemoved;
-    public event Action<Guid, Guid>? MemberLeft;
+    public event Action<Guid, Guid, string?>? MemberRemoved;
     public event Action<Guid>? GroupDeleted;
     public event Action<Guid, Guid>? AdminPromoted;
     public event Action<Guid, Guid>? AdminDemoted;
@@ -221,9 +220,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
      (roomId, userId, displayName) => MemberAdded?.Invoke(roomId, userId, displayName));
 
 
-        _connection.On<Guid, Guid>("MemberRemoved", (roomId, userId) => MemberRemoved?.Invoke(roomId, userId));
-        _connection.On<Guid, Guid>("MemberLeft", (roomId, userId) => MemberLeft?.Invoke(roomId, userId));
-        _connection.On<Guid>("GroupDeleted", roomId => GroupDeleted?.Invoke(roomId));
+        _connection.On<Guid, Guid, string?>("MemberRemoved",
+    (roomId, userId, removerName) => MemberRemoved?.Invoke(roomId, userId, removerName)); _connection.On<Guid>("GroupDeleted", roomId => GroupDeleted?.Invoke(roomId));
         _connection.On<Guid, Guid>("AdminPromoted", (roomId, userId) => AdminPromoted?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("AdminDemoted", (roomId, userId) => AdminDemoted?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("OwnerTransferred", (roomId, newOwnerId) => OwnerTransferred?.Invoke(roomId, newOwnerId));

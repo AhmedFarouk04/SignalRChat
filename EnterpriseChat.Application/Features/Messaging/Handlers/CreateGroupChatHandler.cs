@@ -14,25 +14,59 @@ public sealed class CreateGroupChatHandler
     private readonly IChatRoomRepository _repository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMessageBroadcaster _broadcaster;
+    private readonly IMessageRepository _messages;
+    private readonly IUserLookupService _users;
 
     public CreateGroupChatHandler(
         IChatRoomRepository repository,
         IUnitOfWork unitOfWork,
-        IMessageBroadcaster broadcaster)
+        IMessageBroadcaster broadcaster, IMessageRepository message, IUserLookupService users)
     {
         _repository = repository;
         _unitOfWork = unitOfWork;
         _broadcaster = broadcaster;
+        _messages = message;
+        _users = users;
+
     }
 
     public async Task<ChatRoom> Handle(CreateGroupChatCommand command, CancellationToken ct)
     {
-        var room = ChatRoom.CreateGroup(command.Name, command.CreatorId, command.Members);
-
+        var validMembers = command.Members.Where(m => m.Value != Guid.Empty).ToList();
+        var room = ChatRoom.CreateGroup(command.Name, command.CreatorId, validMembers);
         await _repository.AddAsync(room, ct);
+        await _unitOfWork.CommitAsync(ct);  // ✅ انقل هذا هنا أولاً!
+
+        var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+        var creatorName = await _users.GetDisplayNameAsync(command.CreatorId.Value, ct) ?? "Someone";
+
+        // ✅ استخدم command.CreatorId بدلاً من Guid.Empty
+        var sysMsg = new Message(room.Id, command.CreatorId, $"{creatorName} created the group", recipients);
+
+        await _messages.AddAsync(sysMsg, ct);
         await _unitOfWork.CommitAsync(ct);
 
-        // ✅ realtime room يظهر فورًا ويتحط فوق
+        var msgDto = new MessageDto
+        {
+            Id = sysMsg.Id.Value,
+            RoomId = room.Id.Value,
+            SenderId = command.CreatorId.Value,  // ✅ هنا أيضاً
+            Content = $"{creatorName} created the group",
+            CreatedAt = sysMsg.CreatedAt
+        };
+
+        await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
+
+        await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
+        {
+            RoomId = room.Id.Value,
+            MessageId = msgDto.Id,
+            SenderId = command.CreatorId.Value,  // ✅ وهنا أيضاً
+            Preview = "Group created",
+            CreatedAt = msgDto.CreatedAt,
+            UnreadDelta = 0
+        }, recipients);
+
         var now = DateTime.UtcNow;
 
         var dto = new RoomListItemDto
@@ -42,16 +76,14 @@ public sealed class CreateGroupChatHandler
             Type = room.Type.ToString(),
             UnreadCount = 0,
             IsMuted = false,
-            LastMessageAt = now,              // ✅ يخليه أول القائمة
+            LastMessageAt = now,
             LastMessagePreview = null,
             LastMessageId = null,
             LastMessageSenderId = null,
             LastMessageStatus = null
         };
 
-        var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
         await _broadcaster.RoomUpsertedAsync(dto, recipients);
-
 
         return room;
     }

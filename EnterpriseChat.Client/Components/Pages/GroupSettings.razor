@@ -3,6 +3,7 @@
 @using EnterpriseChat.Application.DTOs
 @using EnterpriseChat.Client.Authentication.Abstractions 
 @using EnterpriseChat.Client.Services.Http 
+@using EnterpriseChat.Client.Services.Realtime
 @using EnterpriseChat.Client.Services.Ui 
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components 
@@ -12,7 +13,7 @@
 @inject GroupsApi GroupsApi
 @inject UsersApi UsersApi
 @inject NavigationManager Nav
-
+@inject IChatRealtimeClient RealtimeClient
 <h2 style="margin:0 0 12px 0;">Group settings</h2>
 
 @if (loading)
@@ -142,7 +143,6 @@ else
 
 @code {
     [Parameter] public Guid RoomId { get; set; }
-
     private bool loading = true;
     private bool busy;
     private string? error;
@@ -150,6 +150,9 @@ else
     private string newName = "";
     private readonly List<EnterpriseChat.Client.Models.UserModel> searchResults = new();
     private CancellationTokenSource? _cts;
+    private bool _realtimeEventsRegistered;
+    private Action<Guid, Guid, string>? _memberAddedHandler;
+    private Action<Guid, Guid, string?>? _memberRemovedHandler;
     private string _search = "";
     private string search
     {
@@ -161,15 +164,28 @@ else
             _ = DebouncedSearchAsync();
         }
     }
-
     private Guid CurrentUserId { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        CurrentUserId = await CurrentUser.GetUserIdAsync() ?? Guid.Empty;
-        await LoadAsync();
-    }
+        if (firstRender)
+        {
+            CurrentUserId = await CurrentUser.GetUserIdAsync() ?? Guid.Empty;
+            await RealtimeClient.ConnectAsync();
 
+            _memberAddedHandler = OnMemberAddedRealtime;
+            _memberRemovedHandler = OnMemberRemovedRealtime;
+
+            RealtimeClient.MemberAdded += _memberAddedHandler;
+            RealtimeClient.MemberRemoved += _memberRemovedHandler;
+
+            _realtimeEventsRegistered = true;
+            await LoadAsync();
+        }
+        Console.WriteLine($"[DEBUG] RealtimeClient connected: {RealtimeClient.State.IsConnected}");
+
+    }
+   
     private async Task LoadAsync()
     {
         loading = true;
@@ -189,7 +205,6 @@ else
             StateHasChanged();
         }
     }
-
     // Toast موحد لكل operation
     private async Task ExecuteWithToast(Func<Task> action, string successMessage = "Done")
     {
@@ -220,20 +235,34 @@ else
     }
 
     private async Task RenameAsync() => await ExecuteWithToast(async () => await GroupsApi.UpdateGroupAsync(RoomId, newName.Trim()), "Group renamed");
+    
 
     private async Task AddMemberAsync(Guid userId) => await ExecuteWithToast(async () =>
-  {
-      await GroupsApi.AddMemberAsync(RoomId, userId);
+   {
+       if (group?.Members.Any(m => m.UserId == userId) == true)
+       {
+           Toasts.Info("Already member", "This user is already in the group.");
+           return;
+       }
 
-      // ✅ حمّل الجروب الأول عشان group.Members يتحدث قبل ما تصفّي
-      await LoadAsync();
+       await GroupsApi.AddMemberAsync(RoomId, userId);
 
-      searchResults.Clear();
-      _search = ""; // ✅ بدل search= عشان ما يشغل DebouncedSearchAsync
-  }, "Member added");
+       searchResults.Clear();
+       _search = "";
 
-    private async Task RemoveMemberAsync(Guid userId) => await ExecuteWithToast(async () => await GroupsApi.RemoveMemberAsync(RoomId, userId), "Member removed");
+       // ✅ تحديث فوري بـ LoadAsync
+       await LoadAsync();
 
+   }, "Member added");
+
+    private async Task RemoveMemberAsync(Guid userId) => await ExecuteWithToast(async () =>
+    {
+        await GroupsApi.RemoveMemberAsync(RoomId, userId);
+
+        // ✅ تحديث فوري بـ LoadAsync
+        await LoadAsync();
+
+    }, "Member removed");
     private async Task ToggleAdminAsync(Guid userId, bool isAdmin) => await ExecuteWithToast(async () =>
     {
         if (isAdmin) await GroupsApi.DemoteAdminAsync(RoomId, userId);
@@ -278,5 +307,59 @@ else
             Toasts.Error("Search failed", ex.Message);
         }
         StateHasChanged();
+    }
+
+    private async void OnMemberAddedRealtime(Guid roomId, Guid userId, string displayName)
+    {
+        Console.WriteLine($"[DEBUG] MemberAdded event received: room={roomId}, user={userId}, name={displayName}");
+
+        if (roomId != RoomId) return;
+
+        await InvokeAsync(async () =>
+        {
+            Console.WriteLine($"[DEBUG] Loading updated members...");
+            await LoadAsync();
+            StateHasChanged();
+            Toasts.Info("Member joined", $"{displayName} joined the group");
+        });
+    }
+    private async void OnMemberRemovedRealtime(Guid roomId, Guid userId, string? removerName)
+    {
+        if (roomId != RoomId) return;
+
+        await InvokeAsync(async () =>
+        {
+            // ✅ تحديث فوري بدون LoadAsync
+            if (group != null)
+            {
+                var memberToRemove = group.Members.FirstOrDefault(m => m.UserId == userId);
+                if (memberToRemove != null)
+                {
+                    // تحويل IReadOnlyList إلى List للتعديل
+                    var membersList = group.Members.ToList();
+                    membersList.Remove(memberToRemove);
+                    group = group with { Members = membersList };
+                }
+            }
+
+            var message = removerName != null
+                ? $"{removerName} removed a member"
+                : "A member was removed";
+            Toasts.Info("Member removed", message);
+            StateHasChanged();
+        });
+    }
+    public void Dispose()
+    {
+        if (_realtimeEventsRegistered)
+        {
+            if (_memberAddedHandler != null)
+                RealtimeClient.MemberAdded -= _memberAddedHandler;
+
+            if (_memberRemovedHandler != null)
+                RealtimeClient.MemberRemoved -= _memberRemovedHandler;
+
+            _realtimeEventsRegistered = false;
+        }
     }
 }

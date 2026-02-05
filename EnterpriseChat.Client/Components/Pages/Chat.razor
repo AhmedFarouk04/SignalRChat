@@ -54,14 +54,14 @@
             }
 
             <div class="chat-messages">
-                <MessageList Messages="@VM.Messages"
+                @* هنا كنا عايزين نضيف رسائل النظام لكنها أصلاً في VM.Messages *@
+                <MessageList Messages="@OrderedMessages"
                              CurrentUserId="@VM.CurrentUserId"
                              Room="@VM.Room"
                              GroupMembers="@(VM.GroupMembers?.Members ?? new())"
                              OnRetry="RetrySend"
                              OnReachedBottom="HandleReachedBottom"
                              AutoScroll="true" />
-
 
                 <TypingIndicator TypingUsers="@VM.TypingUsers" />
             </div>
@@ -305,7 +305,8 @@
             return changed ? _page.InvokeAsync(_page.StateHasChanged) : Task.CompletedTask;
         }
     }
-
+    private IReadOnlyList<MessageModel> OrderedMessages
+      => VM.Messages?.OrderBy(m => m.CreatedAt).ToList() ?? [];
     private Task UnblockOtherUser()
     => VM.OtherUser == null
         ? Task.CompletedTask
