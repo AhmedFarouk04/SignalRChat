@@ -12,4 +12,7 @@ public sealed class RoomUpdatedDto
     // ✅ add these
     public string? RoomName { get; set; }
     public string? RoomType { get; set; }
+
+    public bool IsReply { get; set; }
+    public Guid? ReplyToMessageId { get; set; }
 }

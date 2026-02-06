@@ -37,6 +37,11 @@ public interface IChatRealtimeClient
     event Action<Guid, Guid>? AdminDemoted;
     event Action<Guid, Guid>? OwnerTransferred;
     event Action<RoomListItemDto>? RoomUpserted;
+    // في IChatRealtimeClient.cs أضف:
+    event Action<Guid, Guid, int> MessageStatusUpdated; // messageId, userId, status
+    event Action<Guid, Guid> MessageDeliveredToAll; // messageId, senderId
+    event Action<Guid, Guid> MessageReadToAll; // messageId, senderId
+    event Action<Guid, Guid, int, bool> MessageReactionUpdated; // messageId, userId, reactionType, isNewReaction
 
     Task ConnectAsync();
     Task DisconnectAsync();

@@ -4,6 +4,8 @@ using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Features.Messaging.Queries;
 using EnterpriseChat.Application.Interfaces;
+using EnterpriseChat.Application.Services;
+using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Persistence;
 using MediatR;
@@ -293,5 +295,133 @@ public async Task<IActionResult> UploadAttachment(
         return Ok(list);
     }
 
+    [HttpGet("messages/{messageId:guid}/stats")]
+    [ProducesResponseType(typeof(MessageReceiptStatsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMessageStats(
+    Guid messageId,
+    [FromServices] IMessageReceiptRepository receiptRepo,
+    [FromServices] IUserDirectoryService userDirectory,
+    CancellationToken ct)
+    {
+        var stats = await receiptRepo.GetMessageStatsAsync(MessageId.From(messageId), ct);
 
-}
+        var dto = new MessageReceiptStatsDto
+        {
+            TotalRecipients = stats.TotalRecipients,
+            DeliveredCount = stats.DeliveredCount,
+            ReadCount = stats.ReadCount,
+            DeliveredUsers = await GetUserSummaries(stats.DeliveredUsers, userDirectory, ct),
+            ReadUsers = await GetUserSummaries(stats.ReadUsers, userDirectory, ct)
+        };
+
+        return Ok(dto);
+    }
+
+    [HttpGet("messages/{messageId:guid}/readers-details")]
+    [ProducesResponseType(typeof(List<UserDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMessageReadersDetails(
+        Guid messageId,
+        [FromServices] IMessageReceiptRepository receiptRepo,
+        [FromServices] IUserDirectoryService userDirectory,
+        CancellationToken ct)
+    {
+        var readers = await receiptRepo.GetReadersAsync(MessageId.From(messageId), ct);
+        var userDtos = await GetUserDtos(readers, userDirectory, ct);
+        return Ok(userDtos);
+    }
+
+    [HttpGet("messages/{messageId:guid}/delivered-details")]
+    [ProducesResponseType(typeof(List<UserDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMessageDeliveredDetails(
+        Guid messageId,
+        [FromServices] IMessageReceiptRepository receiptRepo,
+        [FromServices] IUserDirectoryService userDirectory,
+        CancellationToken ct)
+    {
+        var delivered = await receiptRepo.GetDeliveredUsersAsync(MessageId.From(messageId), ct);
+        var userDtos = await GetUserDtos(delivered, userDirectory, ct);
+        return Ok(userDtos);
+    }
+
+    private async Task<List<UserDto>> GetUserDtos(
+        IEnumerable<UserId> userIds,
+        IUserDirectoryService userDirectory,
+        CancellationToken ct)
+    {
+        var tasks = userIds.Select(id => userDirectory.GetUserAsync(id, ct));
+        var users = await Task.WhenAll(tasks);
+        return users.Where(u => u != null)
+                    .Select(u => new UserDto
+                    {
+                        Id = u.Id,
+                        DisplayName = u.DisplayName,
+                        Email = u.Email,
+                        IsOnline = u.IsOnline,
+                        LastSeen = u.LastSeen
+                    })
+                    .ToList();
+    }
+
+    // ... الكود الحالي ...
+
+    private async Task<List<UserSummaryDto>> GetUserSummaries(
+        IEnumerable<UserId> userIds,
+        IUserDirectoryService userDirectory,
+        CancellationToken ct)
+    {
+        var tasks = userIds.Select(id => userDirectory.GetUserAsync(id, ct));
+        var users = await Task.WhenAll(tasks);
+        return users.Where(u => u != null)
+                    .Select(u => new UserSummaryDto
+                    {
+                        Id = u.Id,
+                        DisplayName = u.DisplayName,
+                        IsOnline = u.IsOnline,
+                        LastSeen = u.LastSeen
+                    })
+                    .ToList();
+    }
+    // في ChatController.cs أضف:
+    [HttpPost("messages/{messageId:guid}/react")]
+    [ProducesResponseType(typeof(MessageReactionsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReactToMessage(
+        Guid messageId,
+        [FromBody] ReactToMessageRequest request,
+        CancellationToken ct)
+    {
+        if (messageId == Guid.Empty)
+            return BadRequest("MessageId is required.");
+
+        var dto = await _mediator.Send(
+            new ReactToMessageCommand(
+                MessageId.From(messageId),
+                GetCurrentUserId(),
+                request.ReactionType),
+            ct);
+
+        return Ok(dto);
+    }
+
+    [HttpGet("messages/{messageId:guid}/reactions")]
+    [ProducesResponseType(typeof(MessageReactionsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMessageReactions(
+     Guid messageId,
+     [FromServices] IReactionRepository reactionRepo,
+     [FromServices] IUserDirectoryService userDirectory,
+     CancellationToken ct)
+    {
+        if (messageId == Guid.Empty)
+            return BadRequest("MessageId is required.");
+
+        var reactions = await reactionRepo.GetForMessageAsync(MessageId.From(messageId), ct);
+
+        var service = new ReactionsService(reactionRepo, userDirectory);
+        var dto = await service.CreateReactionsDto(
+            MessageId.From(messageId),
+            reactions,
+            GetCurrentUserId(),
+            ct);
+
+        return Ok(dto);
+    }
+} 

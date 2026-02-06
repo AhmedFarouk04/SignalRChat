@@ -1,17 +1,18 @@
 ﻿@using EnterpriseChat.Client.Models
+@using EnterpriseChat.Domain.Enums
+@using ClientMessageStatus = EnterpriseChat.Client.Models.MessageStatus
+@inject NavigationManager Navigation
 
 @{
     var systemType = GetSystemMessageType();
     var isSystem = !string.IsNullOrEmpty(systemType);
     var systemIcon = GetSystemIcon(systemType);
-
-    // System time should always exist in DOM (so hover works even if ShowMeta=false)
     var showSystemTime = isSystem;
 }
 
 @if (isSystem)
 {
-    <div class="system-message-container">
+    <div class="system-message-container" id="@($"message-{Message.Id}")">
         <div class="system-message @systemType">
             <div class="system-content">
                 @if (!string.IsNullOrEmpty(systemIcon))
@@ -31,21 +32,107 @@
 }
 else
 {
-    <div class="msg @(IsMine ? "mine" : "theirs") @GroupPosClass @(IsNew ? "new" : "")">
+    <div class="msg @(IsMine ? "mine" : "theirs") @GroupPosClass @(IsNew ? "new" : "")" 
+         id="@($"message-{Message.Id}")"
+         @onclick="OnMessageClick">
+        
+        <!-- ✅ Reply Preview -->
+        @if (Message.ReplyInfo != null && !Message.IsDeleted)
+        {
+            <div class="reply-preview" @onclick="OnReplyPreviewClick">
+                <div class="reply-header">
+                    <span class="reply-sender">@Message.ReplyInfo.SenderName</span>
+                    @if (Message.ReplyInfo.IsDeleted)
+                    {
+                        <span class="reply-deleted">[Deleted]</span>
+                    }
+                </div>
+                <div class="reply-content">
+                    @if (Message.ReplyInfo.IsDeleted)
+                    {
+                        <em>This message was deleted</em>
+                    }
+                    else
+                    {
+                        @Message.ReplyInfo.ContentPreview
+                    }
+                </div>
+                <div class="reply-line"></div>
+            </div>
+        }
+        
         <div class="msg-body">
-            <div class="msg-text">@Message.Content</div>
+            <div class="msg-text">
+                @if (Message.IsDeleted)
+                {
+                    <em class="deleted-message">This message was deleted</em>
+                }
+                else
+                {
+                    @if (IsMine)
+                    {
+                        <MarkdownText Content="@Message.Content" />
+                    }
+                    else
+                    {
+                        <MarkdownText Content="@Message.Content" />
+                    }
+                    
+                    @if (Message.IsEdited)
+                    {
+                        <span class="edited-badge" title="Edited at @Message.UpdatedAt?.ToLocalTime()">
+                            (edited)
+                        </span>
+                    }
+                }
+            </div>
         </div>
 
-        @if (ShowMeta)
+        @if (ShowReactions && Message.Reactions?.Counts.Any() == true)
         {
-            <div class="msg-meta">
-                <span class="time">@Message.CreatedAt.ToLocalTime().ToString("h:mm tt")</span>
-                @if (IsMine)
+            <div class="message-reactions">
+                @foreach (var kv in Message.Reactions.Counts.OrderByDescending(x => x.Value))
                 {
-                    <span class="status @StatusClass" title="@TooltipText">@StatusIcon</span>
+                    <span class="reaction-item" 
+                          @onclick="() => ShowReactionDetails(kv.Key)"
+                          title="@GetReactionUsers(kv.Key)">
+                        @GetReactionEmoji(kv.Key) @kv.Value
+                    </span>
                 }
             </div>
         }
+
+        <ReactionsPanel MessageId="@Message.Id" 
+                        Reactions="@Message.Reactions"
+                        OnReaction="@OnReactionClicked" />
+
+        @if (IsMine)
+        {
+            @if (Message.Status == ClientMessageStatus.Read && Message.ReadCount > 0)
+            {
+                <span class="read-stats" title="@Message.ReadCount of @Message.TotalRecipients read">
+                    (@Message.ReadCount/@Message.TotalRecipients)
+                </span>
+            }
+            else if (Message.Status == ClientMessageStatus.Delivered && Message.DeliveredCount > 0)
+            {
+                <span class="delivered-stats" title="@Message.DeliveredCount of @Message.TotalRecipients delivered">
+                    (@Message.DeliveredCount/@Message.TotalRecipients)
+                </span>
+            }
+        }
+        
+        <!-- ✅ الحالة والتوقيت -->
+        <div class="message-meta">
+            <span class="message-time">
+                @Message.CreatedAt.ToLocalTime().ToString("HH:mm")
+            </span>
+            
+            @if (IsMine)
+            {
+                <span class="message-status @StatusClass" title="@TooltipText"></span>
+            }
+        </div>
     </div>
 }
 
@@ -58,7 +145,11 @@ else
     [Parameter] public string GroupPosition { get; set; } = "single";
     [Parameter] public bool ShowMeta { get; set; } = true;
     [Parameter] public bool IsNew { get; set; } = false;
+    [Parameter] public EventCallback<ReactionType> OnReaction { get; set; }
+    [Parameter] public EventCallback<Guid> OnReplyRequested { get; set; }
+    [Parameter] public EventCallback<Guid> OnScrollToMessage { get; set; }
 
+    private bool ShowReactions => true;
     private bool IsMine => Message.SenderId == CurrentUserId;
 
     private string GroupPosClass => GroupPosition switch
@@ -69,33 +160,23 @@ else
         _ => "g-single"
     };
 
-    private string StatusIcon => Message.Status switch
-    {
-        MessageStatus.Pending => "…",
-        MessageStatus.Sent => "✓",
-        MessageStatus.Delivered => "✓✓",
-        MessageStatus.Read => "✓✓ 👁",
-        MessageStatus.Failed => "!",
-        _ => ""
-    };
-
     private string StatusClass => Message.Status switch
     {
-        MessageStatus.Pending => "pending",
-        MessageStatus.Sent => "sent",
-        MessageStatus.Delivered => "delivered",
-        MessageStatus.Read => "read",
-        MessageStatus.Failed => "failed",
+        ClientMessageStatus.Pending => "pending",
+        ClientMessageStatus.Sent => "sent",
+        ClientMessageStatus.Delivered => "delivered",
+        ClientMessageStatus.Read => "read",
+        ClientMessageStatus.Failed => "failed",
         _ => ""
     };
 
     private string TooltipText => Message.Status switch
     {
-        MessageStatus.Pending => "Sending…",
-        MessageStatus.Sent => "Sent",
-        MessageStatus.Delivered => "Delivered",
-        MessageStatus.Read => "Read",
-        MessageStatus.Failed => "Failed",
+        ClientMessageStatus.Pending => "Sending…",
+        ClientMessageStatus.Sent => "Sent",
+        ClientMessageStatus.Delivered => "Delivered",
+        ClientMessageStatus.Read => "Read",
+        ClientMessageStatus.Failed => "Failed",
         _ => ""
     };
 
@@ -136,4 +217,57 @@ else
             .Replace("was added by", "added by")
             .Replace("was removed by", "removed by");
     }
+
+    private string GetReactionEmoji(ReactionType type) => type switch
+    {
+        ReactionType.Like => "👍",
+        ReactionType.Love => "❤️",
+        ReactionType.Laugh => "😂",
+        ReactionType.Wow => "😮",
+        ReactionType.Sad => "😢",
+        ReactionType.Angry => "😠",
+        ReactionType.ThumbsUp => "👍",
+        ReactionType.ThumbsDown => "👎",
+        ReactionType.Fire => "🔥",
+        ReactionType.Party => "🎉",
+        ReactionType.Clap => "👏",
+        ReactionType.Pray => "🙏",
+        _ => "❓"
+    };
+
+    private string GetReactionUsers(ReactionType type)
+    {
+        if (Message.Reactions?.UsersByType.TryGetValue(type, out var users) == true)
+        {
+            var userNames = users.Select(u => u.DisplayName).Take(3);
+            return $"{string.Join(", ", userNames)}" +
+                   (users.Count > 3 ? $" and {users.Count - 3} more" : "");
+        }
+        return "";
+    }
+
+    private void ShowReactionDetails(ReactionType type)
+    {
+        Console.WriteLine($"Showing details for reaction: {type}");
+    }
+
+    private async Task OnReactionClicked(ReactionType type)
+    {
+        await OnReaction.InvokeAsync(type);
+    }
+    private async Task OnMessageClick()
+    {
+        // عند الضغط على الرسالة، اعرض خيارات الرد
+        await OnReplyRequested.InvokeAsync(Message.Id);
+    }
+
+    private async Task OnReplyPreviewClick()
+    {
+        if (Message.ReplyInfo != null && !Message.ReplyInfo.IsDeleted)
+        {
+            // انتقل إلى الرسالة الأصلية
+            await OnScrollToMessage.InvokeAsync(Message.ReplyInfo.MessageId);
+        }
+    }
+   
 }

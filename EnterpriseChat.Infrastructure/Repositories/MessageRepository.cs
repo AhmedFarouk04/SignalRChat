@@ -276,8 +276,17 @@ WHERE r.rn = 1
         return dict;
     }
 
-    // ✅ DTO للـ raw sql
-   
+    // في MessageRepository.cs
+    public async Task<IReadOnlyList<UserId>> GetRoomMemberIdsAsync(
+        RoomId roomId,
+        CancellationToken ct = default)
+    {
+        return await _context.ChatRooms
+            .Where(r => r.Id == roomId)
+            .SelectMany(r => r.Members)
+            .Select(m => m.UserId)
+            .ToListAsync(ct);
+    }
 
 
 

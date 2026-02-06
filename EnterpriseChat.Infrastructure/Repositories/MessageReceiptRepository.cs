@@ -1,9 +1,10 @@
-﻿using EnterpriseChat.Domain.Entities;
+﻿using EnterpriseChat.Domain.Common;
+using EnterpriseChat.Domain.Entities;
+using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using EnterpriseChat.Domain.Enums;
 
 namespace EnterpriseChat.Infrastructure.Repositories;
 
@@ -46,5 +47,60 @@ public sealed class MessageReceiptRepository
                 .SetProperty(r => r.UpdatedAt, DateTime.UtcNow),
             ct);
     }
+
+    public async Task<IReadOnlyList<MessageReceipt>> GetReceiptsForMessageAsync(
+      MessageId messageId,
+      CancellationToken ct = default)
+    {
+        return await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId)
+            .ToListAsync(ct);
+    }
+
+    public async Task<MessageReceiptStats> GetMessageStatsAsync(
+        MessageId messageId,
+        CancellationToken ct = default)
+    {
+        var receipts = await GetReceiptsForMessageAsync(messageId, ct);
+
+        var deliveredUsers = receipts
+            .Where(r => r.Status >= MessageStatus.Delivered)
+            .Select(r => r.UserId)
+            .ToList();
+
+        var readUsers = receipts
+            .Where(r => r.Status >= MessageStatus.Read)
+            .Select(r => r.UserId)
+            .ToList();
+
+        return new MessageReceiptStats(
+            totalRecipients: receipts.Count,
+            deliveredCount: deliveredUsers.Count,
+            readCount: readUsers.Count,
+            deliveredUsers: deliveredUsers,
+            readUsers: readUsers
+        );
+    }
+
+    public async Task<IReadOnlyList<UserId>> GetReadersAsync(
+        MessageId messageId,
+        CancellationToken ct = default)
+    {
+        return await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Read)
+            .Select(r => r.UserId)
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<UserId>> GetDeliveredUsersAsync(
+        MessageId messageId,
+        CancellationToken ct = default)
+    {
+        return await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Delivered)
+            .Select(r => r.UserId)
+            .ToListAsync(ct);
+    }
+
 
 }

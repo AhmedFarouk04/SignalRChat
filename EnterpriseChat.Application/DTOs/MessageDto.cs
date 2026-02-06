@@ -1,15 +1,29 @@
-﻿using EnterpriseChat.Domain.Enums;
+﻿// EnterpriseChat.Application/DTOs/MessageDto.cs
+using EnterpriseChat.Domain.Enums;
 
 namespace EnterpriseChat.Application.DTOs;
 
-public sealed class MessageDto
+public class MessageDto
 {
-    public Guid Id { get; init; }
-    public Guid RoomId { get; init; }
-    public Guid SenderId { get; init; }
-    public string Content { get; init; } = string.Empty;
-    public MessageStatus Status { get; init; }
-    public DateTime CreatedAt { get; init; }
+    public Guid Id { get; set; }
+    public Guid RoomId { get; set; }
+    public Guid SenderId { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public MessageStatus Status { get; set; }
+    public MessageReactionsDto? Reactions { get; set; }
 
-    public List<MessageReceiptDto> Receipts { get; set; } // userId + status + timestamp
+    // ✅ أضف هذه الخصائص للـ Delivery Tracking:
+    public int ReadCount { get; set; }
+    public int DeliveredCount { get; set; }
+    public int TotalRecipients { get; set; }
+
+    // ✅ أضف خصائص الردود:
+    public ReplyInfoDto? ReplyInfo { get; set; }
+    public Guid? ReplyToMessageId { get; set; }
+
+    // ✅ أضف خصائص Edit/Delete:
+    public bool IsEdited { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }

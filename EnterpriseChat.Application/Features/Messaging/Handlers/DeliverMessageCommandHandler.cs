@@ -13,19 +13,23 @@ public sealed class DeliverMessageCommandHandler
     private readonly IMessageRepository _messageRepo;
     private readonly IRoomAuthorizationService _auth;
     private readonly IUnitOfWork _uow;
-    private readonly IMessageBroadcaster? _broadcaster;
+    private readonly IMessageBroadcaster _broadcaster;
+    private readonly IChatRoomRepository _roomRepo;
+
     public DeliverMessageCommandHandler(
         IMessageReceiptRepository receiptRepo,
         IMessageRepository messageRepo,
         IRoomAuthorizationService auth,
         IUnitOfWork uow,
-        IMessageBroadcaster? broadcaster)
+        IMessageBroadcaster broadcaster,
+        IChatRoomRepository roomRepo)
     {
         _receiptRepo = receiptRepo;
         _messageRepo = messageRepo;
         _auth = auth;
         _uow = uow;
         _broadcaster = broadcaster;
+        _roomRepo = roomRepo;
     }
 
     public async Task<Unit> Handle(DeliverMessageCommand command, CancellationToken ct)
@@ -40,14 +44,29 @@ public sealed class DeliverMessageCommandHandler
 
         await _uow.CommitAsync(ct);
 
-        // ✅ جديد: ابعت Delivered للـ SENDER (مش الrecipient)
-        if (_broadcaster is not null)
+        // ✅ جديد: احصل على أعضاء الغرفة
+        var room = await _roomRepo.GetByIdAsync(info.Value.RoomId, ct);
+        if (room is not null)
         {
-            await _broadcaster.MessageDeliveredAsync(command.MessageId, info.Value.SenderId); // SenderId من info
+            var roomMembers = room.GetMemberIds();
+
+            // أرسل للمرسل (للتوافق مع الكود الحالي)
+            await _broadcaster.MessageDeliveredAsync(command.MessageId, info.Value.SenderId);
+
+            // أرسل لكل الأعضاء (النظام الجديد)
+            await _broadcaster.MessageDeliveredToAllAsync(
+                command.MessageId,
+                info.Value.SenderId,
+                roomMembers);
+
+            // أرسل تحديث الحالة للمستلم
+            await _broadcaster.MessageStatusUpdatedAsync(
+                command.MessageId,
+                command.UserId,
+                MessageStatus.Delivered,
+                roomMembers);
         }
 
         return Unit.Value;
     }
-
-
 }

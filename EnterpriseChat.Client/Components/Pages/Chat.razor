@@ -2,6 +2,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using EnterpriseChat.Client.ViewModels
 @using EnterpriseChat.Client.Models
+@using EnterpriseChat.Domain.Enums
 @using Microsoft.JSInterop
 @inject ChatViewModel VM
 @inject NavigationManager Nav
@@ -10,7 +11,6 @@
 @inject RoomsViewModel RoomsVM
 
 <div class="chat-page">
-
     <TopBar Room="@VM.Room"
             MembersCount="@(VM.GroupMembers?.Members.Count ?? 0)"
             OnlineCount="@VM.OnlineUsers.Count"
@@ -21,7 +21,6 @@
             OnBlock="BlockOtherUser"
             OnUnblock="UnblockOtherUser"
             OnMembers="OpenMembers" />
-
 
     @if (VM.UiError != null)
     {
@@ -38,11 +37,9 @@
             <button class="mini-btn" @onclick="@(() => Nav.NavigateTo("/rooms"))">Back to rooms</button>
         </div>
     }
-
     else
     {
         <div class="chat-body">
-
             @if (VM.Room.Type == "Group")
             {
                 <PresenceBar OnlineUsers="@VM.OnlineUsers" />
@@ -53,16 +50,23 @@
                 <div class="connection-banner">Reconnecting…</div>
             }
 
-            <div class="chat-messages">
-                @* هنا كنا عايزين نضيف رسائل النظام لكنها أصلاً في VM.Messages *@
-                <MessageList Messages="@OrderedMessages"
-                             CurrentUserId="@VM.CurrentUserId"
-                             Room="@VM.Room"
-                             GroupMembers="@(VM.GroupMembers?.Members ?? new())"
-                             OnRetry="RetrySend"
-                             OnReachedBottom="HandleReachedBottom"
-                             AutoScroll="true" />
+            <div class="chat-messages" id="chat-messages">
+                @foreach (var msg in OrderedMessages)
+                {
+                    <MessageBubble Message="msg"
+                                   CurrentUserId="@VM.CurrentUserId"
+                                   Room="@VM.Room"
+                                   GroupMembers="@(VM.GroupMembers?.Members ?? new())"
+                                   GroupPosition="single"
+                                   ShowMeta="true"
+                                   IsNew="false"
+                                   OnRetry="RetrySend"
+                                   OnReaction="OnReaction"
+                                   OnReplyRequested="HandleReplyRequest"
+                                   OnScrollToMessage="ScrollToMessage" />
+                }
 
+                <div id="messages-end"></div>
                 <TypingIndicator TypingUsers="@VM.TypingUsers" />
             </div>
 
@@ -81,17 +85,14 @@
             @if (_attachmentsOpen)
             {
                 <div class="drawer-backdrop" @onclick="CloseAttachments"></div>
-
                 <aside class="drawer" role="dialog" aria-modal="true" aria-label="Attachments drawer" tabindex="0">
                     <div class="drawer-header">
                         <div>
                             <div class="drawer-name">Attachments</div>
                             <div class="drawer-sub">Room files</div>
                         </div>
-
                         <button class="icon-btn" title="Close" @onclick="CloseAttachments" autofocus>✕</button>
                     </div>
-
                     <div class="drawer-list">
                         <ChatAttachments RoomId="RoomId" />
                     </div>
@@ -109,8 +110,8 @@
                 }
                 else
                 {
-                    <ChatInput OnSend="Send"
-                               OnUserTyping="NotifyTyping" />
+                    <ChatInput OnSend="HandleSendMessage"
+                               OnUserTyping="@(() => NotifyTyping())" />
                 }
             </div>
 
@@ -144,9 +145,17 @@
 
     private IJSObjectReference? _chatModule;
 
+    // ✅ ReplyContext
+    private ReplyContext? _replyContext;
+
     protected override async Task OnInitializedAsync()
     {
         VM.Changed += OnVmChanged;
+
+        // ✅ اشترك في الأحداث - استخدام الـ events بشكل صحيح
+        VM.MessageReplyReceived += HandleMessageReply;
+        VM.ReplyContextChanged += HandleReplyContextChanged;
+
         await VM.InitializeAsync(RoomId);
 
         if (VM.Room == null && VM.UiError == null)
@@ -163,7 +172,7 @@
                 "import", "./js/chatPage.js");
 
             await _chatModule.InvokeVoidAsync("registerEscape", _objRef);
-            await JS.InvokeVoidAsync("scrollToBottom", "chat-messages");
+            await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
             _escapeRegistered = true;
         }
     }
@@ -171,6 +180,10 @@
     public void Dispose()
     {
         VM.Changed -= OnVmChanged;
+
+        // ✅ ألغ الاشتراك في الأحداث
+        VM.MessageReplyReceived -= HandleMessageReply;
+        VM.ReplyContextChanged -= HandleReplyContextChanged;
 
         _readCts?.Cancel();
         _readCts?.Dispose();
@@ -185,10 +198,10 @@
             try
             {
                 if (_chatModule != null)
+                {
                     await _chatModule.InvokeVoidAsync("unregisterEscape");
-
-                if (_chatModule != null)
                     await _chatModule.DisposeAsync();
+                }
             }
             catch { }
         });
@@ -196,13 +209,100 @@
         _objRef?.Dispose();
     }
 
-    private Task Send(string text)
+    // ✅ دالة الإرسال الجديدة
+    private async Task HandleSendMessage(string text)
     {
-        Console.WriteLine($"[Chat.razor] Send fired: '{text}'");
-        return VM.SendAsync(RoomId, text);
+        Console.WriteLine($"[Chat.razor] Send with reply: '{text}'");
+
+        Guid? replyTo = null;
+        if (_replyContext != null && _replyContext.MessageId != Guid.Empty)
+        {
+            replyTo = _replyContext.MessageId;
+        }
+
+        await VM.SendMessageWithReplyAsync(RoomId, text, replyTo);
+        await ScrollToBottom();
+
+        // ✅ مسح context الرد بعد الإرسال
+        ClearReplyContext();
     }
-    private Task RetrySend(MessageModel msg) => VM.SendAsync(RoomId, msg.Content);
+
+    private async Task RetrySend(MessageModel msg)
+        => await VM.SendAsync(RoomId, msg.Content);
+
     private Task NotifyTyping() => VM.NotifyTypingAsync(RoomId);
+
+    private Task OnReaction(ReactionType reaction)
+    {
+        // Handle reactions
+        return Task.CompletedTask;
+    }
+
+    // ✅ معالجة طلب الرد
+    private async Task HandleReplyRequest(Guid messageId)
+    {
+        var message = VM.Messages.FirstOrDefault(m => m.Id == messageId);
+        if (message != null)
+        {
+            _replyContext ??= new ReplyContext();
+
+            _replyContext.MessageId = message.Id;
+            _replyContext.SenderName = VM.GetSenderName(message.SenderId);
+            _replyContext.ContentPreview = message.Content.Length > 60
+                ? message.Content[..60] + "…"
+                : message.Content;
+            _replyContext.CreatedAt = message.CreatedAt;
+
+            // ✅ تحديث VM
+            VM.NotifyReplyContextChanged(_replyContext);
+
+            StateHasChanged();
+        }
+    }
+
+    // ✅ مسح context الرد
+    private void ClearReplyContext()
+    {
+        if (_replyContext != null)
+        {
+            _replyContext.MessageId = Guid.Empty;
+            _replyContext.SenderName = "";
+            _replyContext.ContentPreview = "";
+            _replyContext.CreatedAt = DateTime.MinValue;
+        }
+
+        VM.NotifyReplyContextChanged(null);
+    }
+
+    // ✅ الانتقال إلى رسالة
+    private async Task ScrollToMessage(Guid messageId)
+    {
+        var elementId = $"message-{messageId}";
+        await JS.InvokeVoidAsync("scrollToMessage", elementId);
+        await JS.InvokeVoidAsync("highlightMessage", elementId);
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
+    }
+
+    // ✅ معالجة استقبال رد - تغيير التوقيع
+    private async Task HandleMessageReply(MessageModel message)
+    {
+        await InvokeAsync(() =>
+        {
+            // يمكنك إضافة أي UI feedback هنا
+            StateHasChanged();
+        });
+    }
+
+    // ✅ معالجة تغيير context الرد
+    private void HandleReplyContextChanged(ReplyContext? context)
+    {
+        _replyContext = context;
+        StateHasChanged();
+    }
 
     private Task HandleReachedBottom(Guid lastMessageId)
     {
@@ -223,10 +323,7 @@
 
                 _lastSentReadId = lastMessageId;
 
-                // ✅ نبلغ السيرفر
                 await VM.MarkRoomReadAsync(RoomId, lastMessageId);
-
-                // ✅ نصفر badge فورًا بدون refresh
                 await InvokeAsync(() => RoomsVM.MarkRoomAsReadLocal(RoomId, lastMessageId));
             }
             catch { }
@@ -234,7 +331,6 @@
 
         return Task.CompletedTask;
     }
-
 
     private Task RemoveMember(Guid userId) => VM.RemoveMemberAsync(RoomId, userId);
 
@@ -252,7 +348,6 @@
 
     private void CloseMembers() => _membersOpen = false;
 
-
     private async void OnVmChanged()
     {
         if (_renderQueued) return;
@@ -262,12 +357,9 @@
         {
             try
             {
-                await Task.Delay(50); // throttling قديم – خليه
-
+                await Task.Delay(50);
                 StateHasChanged();
-
-                // ✅ scroll to bottom كل update (load أو new message)
-                await JS.InvokeVoidAsync("scrollToBottom", "chat-messages");
+                await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
             }
             catch (Exception ex)
             {
@@ -279,6 +371,11 @@
             }
         });
     }
+
+    private Task UnblockOtherUser()
+        => VM.OtherUser == null
+            ? Task.CompletedTask
+            : VM.UnblockUserAsync(VM.OtherUser.Id);
 
     private sealed class ChatPageInterop
     {
@@ -305,11 +402,7 @@
             return changed ? _page.InvokeAsync(_page.StateHasChanged) : Task.CompletedTask;
         }
     }
+
     private IReadOnlyList<MessageModel> OrderedMessages
       => VM.Messages?.OrderBy(m => m.CreatedAt).ToList() ?? [];
-    private Task UnblockOtherUser()
-    => VM.OtherUser == null
-        ? Task.CompletedTask
-        : VM.UnblockUserAsync(VM.OtherUser.Id);
-
 }

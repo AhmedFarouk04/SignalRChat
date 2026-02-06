@@ -1,10 +1,9 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Http;
+using EnterpriseChat.Domain.Enums;
 using System.Text;
 using System.Text.Json;
-using ServerStatus = EnterpriseChat.Domain.Enums.MessageStatus;
-using ClientStatus = EnterpriseChat.Client.Models.MessageStatus;
 
 namespace EnterpriseChat.Client.Services.Chat;
 
@@ -22,7 +21,6 @@ public sealed class ChatService : IChatService
         var dtos = await _api.GetAsync<IReadOnlyList<MessageReadDto>>(ApiEndpoints.RoomMessages(roomId, skip, take))
                    ?? [];
 
-        // السيرفر بيرجع newest-first (desc)، والـ UI غالبًا محتاج ascending
         var ordered = dtos.OrderBy(m => m.CreatedAt);
 
         return ordered.Select(m => new MessageModel
@@ -32,17 +30,14 @@ public sealed class ChatService : IChatService
             SenderId = m.SenderId,
             Content = m.Content,
             CreatedAt = m.CreatedAt,
-
-            Status = (MessageStatus)(int)m.Status, // ✅ cast آمن لو الأرقام مطابقة
-
+            Status = (Models.MessageStatus)(int)m.Status,
             Receipts = (m.Receipts ?? new()).Select(r => new MessageReceiptModel
             {
                 UserId = r.UserId,
-                Status = (ClientStatus)(int)r.Status
+                Status = (Models.MessageStatus)(int)m.Status,
             }).ToList()
         }).ToList();
     }
-
 
     public Task<MessageDto?> SendMessageAsync(Guid roomId, string content)
         => _api.PostAsync<object, MessageDto>(ApiEndpoints.SendMessage, new
@@ -83,4 +78,62 @@ public sealed class ChatService : IChatService
         await _api.SendAsync(HttpMethod.Post, ApiEndpoints.MarkRoomRead(roomId), content);
     }
 
+    public async Task<MessageReceiptStatsDto?> GetMessageStatsAsync(Guid messageId, CancellationToken ct = default)
+    {
+        return await _api.GetAsync<MessageReceiptStatsDto>($"/api/chat/messages/{messageId}/stats", ct);
+    }
+
+    public async Task<List<UserDto>> GetMessageReadersAsync(Guid messageId, CancellationToken ct = default)
+    {
+        var readers = await _api.GetAsync<List<UserDto>>($"/api/chat/messages/{messageId}/readers-details", ct);
+        return readers ?? new List<UserDto>();
+    }
+
+    public async Task<List<UserDto>> GetMessageDeliveredUsersAsync(Guid messageId, CancellationToken ct = default)
+    {
+        var delivered = await _api.GetAsync<List<UserDto>>($"/api/chat/messages/{messageId}/delivered-details", ct);
+        return delivered ?? new List<UserDto>();
+    }
+
+    public async Task StartTypingAsync(Guid roomId, int ttlSeconds = 5, CancellationToken ct = default)
+    {
+        var request = new StartTypingRequest { TtlSeconds = ttlSeconds };
+        await _api.PostAsync<StartTypingRequest, object>(
+            ApiEndpoints.StartTyping(roomId),
+            request,
+            ct);
+    }
+
+    public async Task StopTypingAsync(Guid roomId, CancellationToken ct = default)
+    {
+        await _api.PostAsync(ApiEndpoints.StopTyping(roomId), ct: ct);
+    }
+    public async Task<MessageReactionsModel?> ReactToMessageAsync(Guid messageId, ReactionType reactionType, CancellationToken ct = default)
+    {
+        var request = new { ReactionType = reactionType };
+        return await _api.PostAsync<object, MessageReactionsModel>(
+            $"/api/chat/messages/{messageId}/react",
+            request,
+            ct);
+    }
+
+    public async Task<MessageReactionsModel?> GetMessageReactionsAsync(Guid messageId, CancellationToken ct = default)
+    {
+        return await _api.GetAsync<MessageReactionsModel>($"/api/chat/messages/{messageId}/reactions", ct);
+    }
+    // EnterpriseChat.Client/Services/ChatService.cs
+    // EnterpriseChat.Client/Services/ChatService.cs
+    public async Task<MessageDto?> SendMessageWithReplyAsync(Guid roomId, string content, Guid? replyToMessageId)
+    {
+        var request = new
+        {
+            RoomId = roomId,
+            Content = content,
+            ReplyToMessageId = replyToMessageId
+        };
+
+        return await _api.PostAsync<object, MessageDto>(
+            ApiEndpoints.SendMessage,
+            request);
+    }
 }

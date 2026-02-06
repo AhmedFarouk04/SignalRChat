@@ -4,6 +4,7 @@ using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
+using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Handlers;
@@ -16,7 +17,8 @@ public sealed class SendMessageCommandHandler
     private readonly IUserBlockRepository _blockRepository;
     private readonly IRoomAuthorizationService _authorization;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IMessageBroadcaster? _broadcaster; // optional
+    private readonly IMessageBroadcaster? _broadcaster;
+    private readonly IUserDirectoryService _userDirectory;
 
     public SendMessageCommandHandler(
         IChatRoomRepository roomRepository,
@@ -24,6 +26,7 @@ public sealed class SendMessageCommandHandler
         IUserBlockRepository blockRepository,
         IRoomAuthorizationService authorization,
         IUnitOfWork unitOfWork,
+        IUserDirectoryService userDirectory,
         IMessageBroadcaster? broadcaster = null)
     {
         _roomRepository = roomRepository;
@@ -31,6 +34,7 @@ public sealed class SendMessageCommandHandler
         _blockRepository = blockRepository;
         _authorization = authorization;
         _unitOfWork = unitOfWork;
+        _userDirectory = userDirectory;
         _broadcaster = broadcaster;
     }
 
@@ -53,7 +57,43 @@ public sealed class SendMessageCommandHandler
                 throw new InvalidOperationException("User is blocked.");
         }
 
-        var message = new Message(command.RoomId, command.SenderId, command.Content, recipients);
+        // ✅ الحل النهائي: تحقق من وجود رد باستخدام طريقة آمنة
+        bool hasReply = command.ReplyToMessageId != null &&
+                       command.ReplyToMessageId.Value != Guid.Empty;
+
+        ReplyInfoDto? replyInfo = null;
+        if (hasReply && command.ReplyToMessageId != null)
+        {
+            // ✅ استخدم Value مباشرة
+            var repliedMessage = await _messageRepository.GetByIdAsync(command.ReplyToMessageId, ct);
+
+            if (repliedMessage is null || repliedMessage.RoomId != command.RoomId)
+                throw new InvalidOperationException("Cannot reply to a message in a different room or non-existent message.");
+
+            // إنشاء ReplyInfo
+            var sender = await _userDirectory.GetUserAsync(repliedMessage.SenderId, ct);
+
+            // ✅ استخدم Value مباشرة
+            replyInfo = new ReplyInfoDto
+            {
+                MessageId = repliedMessage.Id.Value,
+                SenderId = repliedMessage.SenderId.Value,
+                SenderName = sender?.DisplayName ?? "User",
+                ContentPreview = repliedMessage.Content.Length > 60
+                    ? repliedMessage.Content[..60] + "…"
+                    : repliedMessage.Content,
+                CreatedAt = repliedMessage.CreatedAt,
+                IsDeleted = false
+            };
+        }
+
+        // إنشاء الرسالة
+        var message = new Message(
+            command.RoomId,
+            command.SenderId,
+            command.Content,
+            recipients,
+            command.ReplyToMessageId);
 
         await _messageRepository.AddAsync(message, ct);
         await _unitOfWork.CommitAsync(ct);
@@ -64,7 +104,15 @@ public sealed class SendMessageCommandHandler
             RoomId = command.RoomId.Value,
             SenderId = command.SenderId.Value,
             Content = message.Content,
-            CreatedAt = message.CreatedAt
+            CreatedAt = message.CreatedAt,
+            ReplyInfo = replyInfo,
+            ReplyToMessageId = command.ReplyToMessageId?.Value,
+            Status = MessageStatus.Sent,
+            ReadCount = 0,
+            DeliveredCount = 0,
+            TotalRecipients = recipients.Count,
+            IsEdited = false,
+            IsDeleted = false
         };
 
         if (_broadcaster is not null)
@@ -74,6 +122,7 @@ public sealed class SendMessageCommandHandler
 
             // 2) ابعت RoomUpdated للـ recipients (+1 unread)
             var preview = dto.Content.Length > 80 ? dto.Content[..80] + "…" : dto.Content;
+
             var updateForRecipients = new RoomUpdatedDto
             {
                 RoomId = dto.RoomId,
@@ -81,11 +130,13 @@ public sealed class SendMessageCommandHandler
                 SenderId = dto.SenderId,
                 Preview = preview,
                 CreatedAt = dto.CreatedAt,
-                UnreadDelta = 1
+                UnreadDelta = 1,
+                IsReply = hasReply,
+                ReplyToMessageId = hasReply ? command.ReplyToMessageId?.Value : null
             };
             await _broadcaster.RoomUpdatedAsync(updateForRecipients, recipients);
 
-            // 3) ابعت RoomUpdated للـ sender (+0 unread) عشان preview وترتيب القائمة يتحدث
+            // 3) ابعت RoomUpdated للـ sender (+0 unread)
             var updateForSender = new RoomUpdatedDto
             {
                 RoomId = dto.RoomId,
@@ -93,12 +144,13 @@ public sealed class SendMessageCommandHandler
                 SenderId = dto.SenderId,
                 Preview = preview,
                 CreatedAt = dto.CreatedAt,
-                UnreadDelta = 0
+                UnreadDelta = 0,
+                IsReply = hasReply,
+                ReplyToMessageId = hasReply ? command.ReplyToMessageId?.Value : null
             };
             await _broadcaster.RoomUpdatedAsync(updateForSender, new[] { command.SenderId });
         }
 
         return dto;
     }
-
 }

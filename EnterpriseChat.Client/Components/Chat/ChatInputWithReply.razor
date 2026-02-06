@@ -1,0 +1,125 @@
+﻿@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<div class="composer">
+    <!-- ✅ Reply Preview -->
+    @if (ReplyContext.Current != null && ReplyContext.Current.MessageId != Guid.Empty)
+    {
+        <div class="reply-context">
+            <div class="reply-header">
+                <span>Replying to @ReplyContext.Current.SenderName</span>
+                <button class="cancel-reply" @onclick="CancelReply" type="button">✕</button>
+            </div>
+            <div class="reply-preview-text">@ReplyContext.Current.ContentPreview</div>
+        </div>
+    }
+
+    <div class="composer-box">
+        <textarea class="composer-input"
+                  @ref="inputRef"
+                  placeholder="@(ReplyContext.Current?.MessageId != Guid.Empty ? "Type your reply…" : "Message…")"
+                  @bind-value="text"
+                  @bind-value:event="oninput"
+                  @onkeydown="OnKeyDown"></textarea>
+
+        <button class="composer-send"
+                type="button"
+                disabled="@IsSendDisabled"
+                @onclick="Send">
+            Send
+        </button>
+    </div>
+</div>
+
+@code {
+    private string text = string.Empty;
+    private ElementReference inputRef;
+
+    [Parameter] public EventCallback<string> OnSend { get; set; }
+    [Parameter] public EventCallback OnUserTyping { get; set; }
+
+    private bool IsSendDisabled => string.IsNullOrWhiteSpace(text);
+
+    private CancellationTokenSource? _typingCts;
+    private DateTime _lastTypingSent = DateTime.MinValue;
+
+    private static readonly HashSet<string> IgnoreKeys = new()
+    {
+        "Shift","Control","Alt","Meta",
+        "ArrowUp","ArrowDown","ArrowLeft","ArrowRight",
+        "Escape","Tab","CapsLock"
+    };
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await Send();
+            return;
+        }
+
+        if (IgnoreKeys.Contains(e.Key))
+            return;
+
+        await OnUserTyping.InvokeAsync();
+    }
+
+    private async Task OnInput(ChangeEventArgs _)
+    {
+        await DebouncedTypingAsync();
+    }
+
+    private async Task DebouncedTypingAsync()
+    {
+        var now = DateTime.UtcNow;
+        if ((now - _lastTypingSent).TotalMilliseconds < 700) return;
+
+        _typingCts?.Cancel();
+        _typingCts?.Dispose();
+        _typingCts = new CancellationTokenSource();
+        var ct = _typingCts.Token;
+
+        try
+        {
+            await Task.Delay(120, ct);
+            if (ct.IsCancellationRequested) return;
+
+            _lastTypingSent = DateTime.UtcNow;
+            await OnUserTyping.InvokeAsync();
+        }
+        catch { }
+    }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        var toSend = text.TrimEnd();
+        text = string.Empty;
+
+        await OnSend.InvokeAsync(toSend);
+
+        // ✅ إلغاء الرد بعد الإرسال
+        CancelReply();
+
+        await JS.InvokeVoidAsync("chatFocus", inputRef);
+    }
+
+    private void CancelReply()
+    {
+        if (ReplyContext.Current != null)
+        {
+            ReplyContext.Current.MessageId = Guid.Empty;
+            ReplyContext.Current.SenderName = "";
+            ReplyContext.Current.ContentPreview = "";
+            ReplyContext.Current.CreatedAt = DateTime.MinValue;
+        }
+    }
+
+    public void Dispose()
+    {
+        _typingCts?.Cancel();
+        _typingCts?.Dispose();
+    }
+}

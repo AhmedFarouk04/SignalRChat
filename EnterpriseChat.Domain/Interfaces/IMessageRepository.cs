@@ -36,4 +36,8 @@ public interface IMessageRepository
 
     Task<IReadOnlyList<MessageReadInfo>> GetMessageIdsAndSendersUpToAsync(RoomId roomId, DateTime maxCreatedAt, CancellationToken ct = default);
 
+    Task<IReadOnlyList<UserId>> GetRoomMemberIdsAsync(
+    RoomId roomId,
+    CancellationToken ct = default);
+
 }

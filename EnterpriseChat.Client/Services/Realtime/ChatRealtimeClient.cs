@@ -49,6 +49,11 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action<Guid, Guid>? AdminDemoted;
     public event Action<Guid, Guid>? OwnerTransferred;
     public event Action<RoomListItemDto>? RoomUpserted;
+    public event Action<Guid, Guid, int>? MessageStatusUpdated;
+    public event Action<Guid, Guid>? MessageDeliveredToAll;
+    public event Action<Guid, Guid>? MessageReadToAll;
+    public event Action<Guid, Guid, int, bool>? MessageReactionUpdated;
+
 
     public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http, RoomFlagsStore flags)
     {
@@ -213,17 +218,33 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
         _connection.On<Guid>("RemovedFromRoom",
             roomId => RemovedFromRoom?.Invoke(roomId));
-      
+        _connection.On<Guid, Guid, int>("MessageStatusUpdated",
+    (messageId, userId, status) =>
+        MessageStatusUpdated?.Invoke(messageId, userId, status));
+
+        _connection.On<Guid, Guid>("MessageDeliveredToAll",
+            (messageId, senderId) =>
+                MessageDeliveredToAll?.Invoke(messageId, senderId));
+
+        _connection.On<Guid, Guid>("MessageReadToAll",
+            (messageId, senderId) =>
+                MessageReadToAll?.Invoke(messageId, senderId));
+
 
         _connection.On<Guid, string>("GroupRenamed", (roomId, newName) => GroupRenamed?.Invoke(roomId, newName));
         _connection.On<Guid, Guid, string>("MemberAdded",
      (roomId, userId, displayName) => MemberAdded?.Invoke(roomId, userId, displayName));
 
-
+        _connection.On<Guid, Guid, int, bool>("MessageReactionUpdated",
+    (messageId, userId, reactionType, isNewReaction) =>
+        MessageReactionUpdated?.Invoke(messageId, userId, reactionType, isNewReaction));
         _connection.On<Guid, Guid, string?>("MemberRemoved",
     (roomId, userId, removerName) => MemberRemoved?.Invoke(roomId, userId, removerName)); _connection.On<Guid>("GroupDeleted", roomId => GroupDeleted?.Invoke(roomId));
         _connection.On<Guid, Guid>("AdminPromoted", (roomId, userId) => AdminPromoted?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("AdminDemoted", (roomId, userId) => AdminDemoted?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("OwnerTransferred", (roomId, newOwnerId) => OwnerTransferred?.Invoke(roomId, newOwnerId));
     }
+
+
+
 }

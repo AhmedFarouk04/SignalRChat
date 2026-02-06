@@ -1,4 +1,5 @@
 ﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.ValueObjects;
 
 namespace EnterpriseChat.Application.Interfaces;
@@ -33,4 +34,29 @@ public interface IMessageBroadcaster
     Task AdminPromotedAsync(RoomId roomId, UserId userId, IEnumerable<UserId> users);
     Task AdminDemotedAsync(RoomId roomId, UserId userId, IEnumerable<UserId> users);
     Task OwnerTransferredAsync(RoomId roomId, UserId newOwnerId, IEnumerable<UserId> users);
+
+    // في IMessageBroadcaster.cs
+    Task MessageStatusUpdatedAsync(
+        MessageId messageId,
+        UserId userId,
+        MessageStatus newStatus,
+        IEnumerable<UserId> roomMembers);
+
+    Task MessageDeliveredToAllAsync(
+        MessageId messageId,
+        UserId senderId,
+        IEnumerable<UserId> roomMembers);
+
+    Task MessageReadToAllAsync(
+        MessageId messageId,
+        UserId senderId,
+        IEnumerable<UserId> roomMembers);
+
+    // في IMessageBroadcaster.cs أضف:
+    Task MessageReactionUpdatedAsync(
+        MessageId messageId,
+        UserId userId,
+        ReactionType reactionType,
+        bool isNewReaction,
+        IEnumerable<UserId> roomMembers);
 }

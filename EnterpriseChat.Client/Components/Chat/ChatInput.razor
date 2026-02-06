@@ -1,17 +1,28 @@
-﻿@using Microsoft.AspNetCore.Components.Web
+﻿@using EnterpriseChat.Client.Models
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
 
 <div class="composer">
+    <!-- ✅ Reply Preview -->
+    @if (ReplyContext.Current != null && ReplyContext.Current.MessageId != Guid.Empty)
+    {
+        <div class="reply-context">
+            <div class="reply-header">
+                <span>Replying to @ReplyContext.Current.SenderName</span>
+                <button class="cancel-reply" @onclick="CancelReply" type="button">✕</button>
+            </div>
+            <div class="reply-preview-text">@ReplyContext.Current.ContentPreview</div>
+        </div>
+    }
+
     <div class="composer-box">
         <textarea class="composer-input"
                   @ref="inputRef"
-                  placeholder="Message…"
+                  placeholder="@(ReplyContext.Current != null ? "Type your reply…" : "Message…")"
                   @bind-value="text"
                   @bind-value:event="oninput"
                   @onkeydown="OnKeyDown"></textarea>
-
-
 
         <button class="composer-send"
                 type="button"
@@ -29,17 +40,20 @@
     [Parameter] public EventCallback<string> OnSend { get; set; }
     [Parameter] public EventCallback OnUserTyping { get; set; }
 
+    // ✅ Parameter جديد للرد
+    [Parameter] public EventCallback<Guid?> OnReply { get; set; }
+
     private bool IsSendDisabled => string.IsNullOrWhiteSpace(text);
 
     private CancellationTokenSource? _typingCts;
     private DateTime _lastTypingSent = DateTime.MinValue;
 
     private static readonly HashSet<string> IgnoreKeys = new()
-{
-    "Shift","Control","Alt","Meta",
-    "ArrowUp","ArrowDown","ArrowLeft","ArrowRight",
-    "Escape","Tab","CapsLock"
-};
+    {
+        "Shift","Control","Alt","Meta",
+        "ArrowUp","ArrowDown","ArrowLeft","ArrowRight",
+        "Escape","Tab","CapsLock"
+    };
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
@@ -55,21 +69,13 @@
         await OnUserTyping.InvokeAsync();
     }
 
-
     private async Task OnInput(ChangeEventArgs _)
     {
-        // input بيغطي paste + mobile keyboards
         await DebouncedTypingAsync();
     }
 
-    private static bool IsNonTypingKey(string key)
-        => key is "Shift" or "Control" or "Alt" or "Meta"
-            or "ArrowUp" or "ArrowDown" or "ArrowLeft" or "ArrowRight"
-            or "CapsLock" or "Tab" or "Escape";
-
     private async Task DebouncedTypingAsync()
     {
-        // throttle: ابعت بحد أقصى مرة كل 700ms
         var now = DateTime.UtcNow;
         if ((now - _lastTypingSent).TotalMilliseconds < 700) return;
 
@@ -80,7 +86,7 @@
 
         try
         {
-            await Task.Delay(120, ct); // debounce صغير
+            await Task.Delay(120, ct);
             if (ct.IsCancellationRequested) return;
 
             _lastTypingSent = DateTime.UtcNow;
@@ -96,8 +102,31 @@
         var toSend = text.TrimEnd();
         text = string.Empty;
 
+        // ✅ أرسل مع معرف الرد
+        Guid? replyToId = null;
+        if (ReplyContext.Current != null && ReplyContext.Current.MessageId != Guid.Empty)
+        {
+            replyToId = ReplyContext.Current.MessageId;
+        }
+
+        // استدعاء دالة جديدة تدعم الرد
         await OnSend.InvokeAsync(toSend);
+
+        // ✅ إلغاء الرد بعد الإرسال
+        CancelReply();
+
         await JS.InvokeVoidAsync("chatFocus", inputRef);
+    }
+
+    private void CancelReply()
+    {
+        if (ReplyContext.Current != null)
+        {
+            ReplyContext.Current.MessageId = Guid.Empty;
+            ReplyContext.Current.SenderName = "";
+            ReplyContext.Current.ContentPreview = "";
+            ReplyContext.Current.CreatedAt = DateTime.MinValue;
+        }
     }
 
     public void Dispose()

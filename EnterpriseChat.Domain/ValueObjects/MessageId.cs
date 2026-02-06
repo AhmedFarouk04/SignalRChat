@@ -8,7 +8,18 @@ public sealed class MessageId
     {
         Value = value;
     }
+    public static MessageId Empty { get; } = new(Guid.Empty);
 
+    // ✅ أضف دالة ToGuid
+    public Guid ToGuid() => Value;
+
+    // ✅ دالة للتحقق من فارغ
+    public bool IsEmpty => Value == Guid.Empty;
+
+    // ✅ يمكنك أيضاً إضافة implicit conversion
+    public static implicit operator Guid(MessageId id) => id.Value;
+
+    public static implicit operator MessageId(Guid id) => new(id);
     public static MessageId New() => new(Guid.NewGuid());
 
     public static MessageId From(Guid value) => new(value);

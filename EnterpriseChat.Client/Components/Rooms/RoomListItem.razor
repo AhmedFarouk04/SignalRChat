@@ -21,7 +21,6 @@
                     <span class="online-dot" title="Online" aria-label="Online"></span>
                 }
             </div>
-
         }
 
         <div class="room-main">
@@ -51,33 +50,54 @@
                 </div>
             </div>
 
-            @* ✅ ما نعرضش أي preview لو فاضي (نلغي Tap to open chat) *@
             @if (!string.IsNullOrWhiteSpace(Room.LastMessagePreview))
             {
                 <div class="room-preview" title="@Room.LastMessagePreview">
                     @if (IsMyLastMessage && Room.LastMessageStatus.HasValue)
                     {
-                        <span class="room-last-status" title="@StatusTooltip(Room.LastMessageStatus.Value)">
+                        <span class="room-last-status @GetStatusClass(Room.LastMessageStatus.Value)"
+                              title="@StatusTooltip(Room.LastMessageStatus.Value)">
                             @StatusIcon(Room.LastMessageStatus.Value)
                         </span>
                         <span>&nbsp;</span>
                     }
-                    @Truncate(Room.LastMessagePreview, 60)
+
+                    @if (IsTyping)
+                    {
+                        <span class="typing-indicator-room">
+                            <span class="typing-dots">
+                                <span></span><span></span><span></span>
+                            </span>
+                            typing...
+                        </span>
+                    }
+                    else
+                    {
+                        @Truncate(Room.LastMessagePreview, 60)
+                    }
                 </div>
             }
-
         </div>
-
     </NavLink>
 </li>
 
 @code {
     [Parameter, EditorRequired] public RoomListItemModel Room { get; set; } = default!;
-    [Parameter] public bool? IsOnline { get; set; } // null = unknown/loading
+    [Parameter] public bool? IsOnline { get; set; }
     [Parameter] public string? LastSeenText { get; set; }
     [Parameter] public bool IsTyping { get; set; }
-    // ✅ we can't know current user id هنا، فنعتمد على إن السيرفر بيبعت status فقط لو last msg is mine
+
     private bool IsMyLastMessage => Room.LastMessageStatus.HasValue;
+
+    private static string GetStatusClass(MessageStatus status) => status switch
+    {
+        MessageStatus.Pending => "pending",
+        MessageStatus.Sent => "sent",
+        MessageStatus.Delivered => "delivered",
+        MessageStatus.Read => "read",
+        MessageStatus.Failed => "failed",
+        _ => ""
+    };
 
     private static string StatusIcon(MessageStatus st) => st switch
     {
@@ -110,11 +130,9 @@
 
     private string GetAvatarText()
     {
-        // Private → أول حرف من اسم الشخص
         if (Room.Type == "Private" && !string.IsNullOrWhiteSpace(Room.OtherDisplayName))
             return Room.OtherDisplayName.Substring(0, 1).ToUpper();
 
-        // Group/Other fallback
         return Room.Name.Substring(0, 1).ToUpper();
     }
 

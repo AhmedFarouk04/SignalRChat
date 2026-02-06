@@ -1,0 +1,29 @@
+﻿@using EnterpriseChat.Client.Models
+
+@if (ReplyInfo != null)
+{
+    <div class="reply-preview" @onclick="NavigateToReply">
+        <div class="reply-line"></div>
+        <div class="reply-content">
+            <div class="reply-sender">@ReplyInfo.SenderName</div>
+            <div class="reply-text">@ReplyInfo.ContentPreview</div>
+            @if (ReplyInfo.IsDeleted)
+            {
+                <div class="reply-deleted">This message was deleted</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public ReplyInfoModel? ReplyInfo { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private async Task NavigateToReply()
+    {
+        if (ReplyInfo != null)
+        {
+            await OnClick.InvokeAsync();
+        }
+    }
+}

@@ -8,6 +8,7 @@ using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.API.Hubs;
 using Microsoft.AspNetCore.SignalR;
+using EnterpriseChat.Domain.Enums;
 
 namespace EnterpriseChat.API.Messaging;
 
@@ -33,21 +34,19 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await Task.WhenAll(tasks);
     }
 
+  
+
+    // عدل الطرق الحالية لترسل لكل الأعضاء
     public async Task MessageDeliveredAsync(
         MessageId messageId,
         UserId userId)
     {
+        // احصل على أعضاء الغرفة أولاً (سنضيف هذا المنطق في الـ Handler)
+        // حالياً نرسل للمرسل فقط (للتوافق مع الكود الحالي)
         await _hub.Clients.User(userId.Value.ToString())
             .SendAsync("MessageDelivered", messageId.Value);
     }
 
-    public async Task MessageReadAsync(
-        MessageId messageId,
-        UserId userId)
-    {
-        await _hub.Clients.User(userId.Value.ToString())
-            .SendAsync("MessageRead", messageId.Value);
-    }
 
     public async Task MemberLeftAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
     {
@@ -196,5 +195,77 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
     public async Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
     {
         await MemberRemovedAsync(roomId, memberId, null, null, users);
+    }
+
+   
+
+
+    public async Task MessageReadAsync(
+    MessageId messageId,
+    UserId userId)
+    {
+        await _hub.Clients.User(userId.Value.ToString())
+            .SendAsync("MessageRead", messageId.Value);
+    }
+
+    public async Task MessageReadToAllAsync(
+    MessageId messageId,
+    UserId senderId,
+    IEnumerable<UserId> roomMembers)
+    {
+        var tasks = roomMembers.Select(memberId =>
+            _hub.Clients.User(memberId.Value.ToString())
+                .SendAsync("MessageReadToAll",
+                    messageId.Value,
+                    senderId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+    public async Task MessageDeliveredToAllAsync(
+    MessageId messageId,
+    UserId senderId,
+    IEnumerable<UserId> roomMembers)
+    {
+        var tasks = roomMembers.Select(memberId =>
+            _hub.Clients.User(memberId.Value.ToString())
+                .SendAsync("MessageDeliveredToAll",
+                    messageId.Value,
+                    senderId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task MessageStatusUpdatedAsync(
+    MessageId messageId,
+    UserId userId,
+    MessageStatus newStatus,
+    IEnumerable<UserId> roomMembers)
+    {
+        var tasks = roomMembers.Select(memberId =>
+            _hub.Clients.User(memberId.Value.ToString())
+                .SendAsync("MessageStatusUpdated",
+                    messageId.Value,
+                    userId.Value,
+                    (int)newStatus));
+
+        await Task.WhenAll(tasks);
+    }
+    // في SignalRMessageBroadcaster.cs أضف:
+    public async Task MessageReactionUpdatedAsync(
+        MessageId messageId,
+        UserId userId,
+        ReactionType reactionType,
+        bool isNewReaction,
+        IEnumerable<UserId> roomMembers)
+    {
+        var tasks = roomMembers.Select(memberId =>
+            _hub.Clients.User(memberId.Value.ToString())
+                .SendAsync("MessageReactionUpdated",
+                    messageId.Value,
+                    userId.Value,
+                    (int)reactionType,
+                    isNewReaction));
+
+        await Task.WhenAll(tasks);
     }
 }

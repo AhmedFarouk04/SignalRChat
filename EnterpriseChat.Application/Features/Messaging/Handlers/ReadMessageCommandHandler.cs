@@ -13,20 +13,23 @@ public sealed class ReadMessageCommandHandler
     private readonly IUnitOfWork _uow;
     private readonly IMessageRepository _messages;
     private readonly IRoomAuthorizationService _auth;
-    private readonly IMessageBroadcaster? _broadcaster; // ✅ جديد
+    private readonly IMessageBroadcaster _broadcaster;
+    private readonly IChatRoomRepository _roomRepo;
 
     public ReadMessageCommandHandler(
         IMessageReceiptRepository receiptRepo,
         IMessageRepository messages,
         IRoomAuthorizationService auth,
         IUnitOfWork uow,
-        IMessageBroadcaster? broadcaster = null) // ✅ جديد
+        IMessageBroadcaster broadcaster,
+        IChatRoomRepository roomRepo)
     {
         _receiptRepo = receiptRepo;
         _messages = messages;
         _auth = auth;
         _uow = uow;
-        _broadcaster = broadcaster; // ✅ جديد
+        _broadcaster = broadcaster;
+        _roomRepo = roomRepo;
     }
 
     public async Task<Unit> Handle(ReadMessageCommand command, CancellationToken ct)
@@ -42,10 +45,27 @@ public sealed class ReadMessageCommandHandler
         receipt.MarkRead();
         await _uow.CommitAsync(ct);
 
-        // ✅ جديد: ابعت "MessageRead" للـ SENDER (مش اللي قرا)
-        if (_broadcaster is not null)
+        // ✅ جديد: احصل على أعضاء الغرفة
+        var room = await _roomRepo.GetByIdAsync(msg.RoomId, ct);
+        if (room is not null)
         {
+            var roomMembers = room.GetMemberIds();
+
+            // أرسل للمرسل (للتوافق مع الكود الحالي)
             await _broadcaster.MessageReadAsync(command.MessageId, msg.SenderId);
+
+            // أرسل لكل الأعضاء (النظام الجديد)
+            await _broadcaster.MessageReadToAllAsync(
+                command.MessageId,
+                msg.SenderId,
+                roomMembers);
+
+            // أرسل تحديث الحالة للقارئ
+            await _broadcaster.MessageStatusUpdatedAsync(
+                command.MessageId,
+                command.UserId,
+                MessageStatus.Read,
+                roomMembers);
         }
 
         return Unit.Value;

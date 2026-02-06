@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,9 +8,7 @@
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="EnterpriseChat.Client.styles.css" rel="stylesheet" />
-
 </head>
-
 <body>
     <div id="app">
         <div class="loading-screen">
@@ -23,33 +20,29 @@
         </div>
     </div>
 
-
     <div id="blazor-error-ui">
         An unhandled error has occurred.
         <a href="" class="reload">Reload</a>
         <a class="dismiss">🗙</a>
     </div>
+
     <script src="_framework/blazor.webassembly.js"></script>
 
     <script type="module">
         import { scrollToBottom, scrollToBottomSmooth, isAtBottom, registerRoomsSearchShortcuts } from './js/scroll.js';
         import { registerEscape, unregisterEscape } from './js/keyboard.js';
         import { downloadFileFromStream } from './js/download.js';
-
-        // ✅ بدل import المحدد
         import * as chatInput from './js/chatInput.js';
-
         import { initNotifySound, playNotify, unlockNotify } from './js/notify.js';
 
-        window.chatInsertNewline = chatInput.insertNewline;
+        // ✅ استيراد دوال الردود الجديدة
+        import './js/chat-utils.js';
 
-        // ✅ حاول يلاقي أي اسم موجود فعلاً
-        window.chatFocus =
-            chatInput.focusEl ??
-            chatInput.focus ??
-            chatInput.focusElement ??
-            chatInput.focusInput ??
-            chatInput.focusChatInput;
+        // تعيين الدوال على window
+        window.chatInsertNewline = chatInput.chatInsertNewline || chatInsertNewline;
+
+        // ✅ استخدام الدالة الجديدة
+        window.chatFocus = window.focusElement || chatInput.focusEl || chatInput.focus;
 
         window.scrollToBottom = scrollToBottom;
         window.scrollToBottomSmooth = scrollToBottomSmooth;
@@ -64,9 +57,20 @@
         initNotifySound('/sounds/notify.mp3');
         window.notifyUnlock = unlockNotify;
         window.notifyPlay = playNotify;
+
+        // ✅ تعيين دوال إضافية
+        window.scrollToMessage = window.scrollToMessage || ((id) => {
+            const el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+
+        window.highlightMessage = window.highlightMessage || ((id) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('highlighted');
+                setTimeout(() => el.classList.remove('highlighted'), 2000);
+            }
+        });
     </script>
-
-
-
 </body>
 </html>

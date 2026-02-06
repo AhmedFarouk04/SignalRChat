@@ -16,21 +16,27 @@ public class Message
     public RoomId RoomId { get; private set; }
     public UserId SenderId { get; private set; }
     public string Content { get; private set; }
+    public MessageId? ReplyToMessageId { get; private set; }
+    public Message? ReplyToMessage { get; private set; }
     public DateTime CreatedAt { get; private set; }
-
+    private readonly List<Reaction> _reactions = new();
+    public IReadOnlyCollection<Reaction> Reactions => _reactions.AsReadOnly();
     private Message() { }
 
     public Message(
         RoomId roomId,
         UserId senderId,
         string content,
-        IEnumerable<UserId> recipients)
+        IEnumerable<UserId> recipients,
+         MessageId? replyToMessageId = null)
     {
         Id = MessageId.New();
         RoomId = roomId;
         SenderId = senderId;
         Content = content;
         CreatedAt = DateTime.UtcNow;
+        ReplyToMessageId = replyToMessageId;
+
 
         foreach (var userId in recipients)
         {
@@ -42,7 +48,8 @@ public class Message
             RoomId,
             SenderId,
             Content,
-            CreatedAt
+            CreatedAt,
+            replyToMessageId
         ));
     }
 
@@ -86,5 +93,29 @@ public class Message
     public void ClearDomainEvents()
     {
         _domainEvents.Clear();
+    }
+
+    public void AddOrUpdateReaction(UserId userId, ReactionType reactionType)
+    {
+        var existing = _reactions.FirstOrDefault(r => r.UserId == userId);
+
+        if (existing != null)
+        {
+            if (existing.Type == reactionType)
+            {
+                // نفس الـ reaction → احذفه (toggle)
+                _reactions.Remove(existing);
+            }
+            else
+            {
+                // reaction مختلف → عدله
+                existing.UpdateType(reactionType);
+            }
+        }
+        else
+        {
+            // reaction جديد
+            _reactions.Add(new Reaction(Id, userId, reactionType));
+        }
     }
 }

@@ -13,6 +13,7 @@ public sealed class ChatDbContext : DbContext
 
     public DbSet<ChatUser> Users => Set<ChatUser>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<Reaction> Reactions => Set<Reaction>();
 
     public ChatDbContext(DbContextOptions<ChatDbContext> options)
         : base(options)

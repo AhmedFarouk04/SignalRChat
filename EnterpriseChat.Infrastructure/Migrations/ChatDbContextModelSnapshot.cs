@@ -262,6 +262,35 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.ToTable("MutedRooms", (string)null);
                 });
 
+            modelBuilder.Entity("EnterpriseChat.Domain.Entities.Reaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("MessageId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("Reactions", (string)null);
+                });
+
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.ChatRoomMember", b =>
                 {
                     b.HasOne("EnterpriseChat.Domain.Entities.ChatRoom", null)
@@ -289,6 +318,15 @@ namespace EnterpriseChat.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EnterpriseChat.Domain.Entities.Reaction", b =>
+                {
+                    b.HasOne("EnterpriseChat.Domain.Entities.Message", null)
+                        .WithMany("Reactions")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.ChatRoom", b =>
                 {
                     b.Navigation("Members");
@@ -296,6 +334,8 @@ namespace EnterpriseChat.Infrastructure.Migrations
 
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.Message", b =>
                 {
+                    b.Navigation("Reactions");
+
                     b.Navigation("Receipts");
                 });
 #pragma warning restore 612, 618

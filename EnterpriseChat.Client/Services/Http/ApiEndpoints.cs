@@ -72,4 +72,6 @@ public static class ApiEndpoints
     // Typing
     public static string TypingStart(Guid roomId) => $"api/rooms/{roomId}/typing/start";
     public static string TypingStop(Guid roomId) => $"api/rooms/{roomId}/typing/stop";
+    public static string StartTyping(Guid roomId) => $"/api/rooms/{roomId}/typing/start";
+    public static string StopTyping(Guid roomId) => $"/api/rooms/{roomId}/typing/stop";
 }
