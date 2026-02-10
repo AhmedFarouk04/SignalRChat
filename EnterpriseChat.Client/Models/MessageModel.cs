@@ -27,9 +27,7 @@ public class MessageModel
     public Guid? ReplyToMessageId { get; set; }
     public ReplyInfoModel? ReplyInfo { get; set; }
 
-
-
-
-    
+    public string Type { get; set; } = "User"; // "User" أو "System"
+    public bool IsSystem { get; set; } // اجعلها property عادية لسهولة التحكم
 
 }

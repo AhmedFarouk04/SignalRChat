@@ -57,5 +57,41 @@ public sealed class MessageReadRepository : IMessageReadRepository
 
         return messages;
     }
+    // EnterpriseChat.Infrastructure/Repositories/MessageReadRepository.cs
+    // EnterpriseChat.Infrastructure/Repositories/MessageReadRepository.cs
+
+    // EnterpriseChat.Infrastructure/Repositories/MessageReadRepository.cs
+
+    public async Task<IReadOnlyList<MessageReadDto>> SearchMessagesAsync(
+        RoomId roomId,
+        string searchTerm,
+        int take,
+        CancellationToken ct)
+    {
+        var term = searchTerm.Trim().ToLower();
+
+        // ملاحظة: شيلنا m.IsSystem واستبدلناها بمنطق يتناسب مع الـ Entity بتاعتك
+        return await _context.Messages
+            .AsNoTracking()
+            .Where(m => m.RoomId == roomId &&
+                        !m.IsDeleted &&
+                        // إذا كنت لا تريد البحث في الرسائل الفارغة أو النظامية (حسب الحاجة)
+                        !string.IsNullOrEmpty(m.Content) &&
+                        m.Content.ToLower().Contains(term))
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(take)
+            .Select(m => new MessageReadDto
+            {
+                Id = m.Id.Value,
+                RoomId = m.RoomId.Value,
+                SenderId = m.SenderId.Value,
+                Content = m.Content,
+                CreatedAt = m.CreatedAt,
+                Status = m.Receipts.Any(r => r.Status == MessageStatus.Read) ? MessageStatus.Read :
+                         m.Receipts.Any(r => r.Status == MessageStatus.Delivered) ? MessageStatus.Delivered :
+                         MessageStatus.Sent
+            })
+            .ToListAsync(ct);
+    }
 
 }

@@ -1,0 +1,23 @@
+﻿@using Markdig
+@using Microsoft.AspNetCore.Components.Web
+
+@if (!string.IsNullOrWhiteSpace(Content))
+{
+    <div class="markdown-content">
+        @(new MarkupString(Markdown.ToHtml(Content, pipeline)))
+    </div>
+}
+else
+{
+    <div> </div> <!-- placeholder فارغ عشان ما يطلعش error -->
+}
+
+@code {
+    [Parameter] public string? Content { get; set; }
+
+    private static readonly MarkdownPipeline pipeline = 
+        new MarkdownPipelineBuilder()
+            .UseAdvancedExtensions()
+            .UseEmojiAndSmiley()
+            .Build();
+}

@@ -1,27 +1,29 @@
-﻿@using Microsoft.AspNetCore.Components.Web
+﻿@using EnterpriseChat.Client.Models
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
+@inject EnterpriseChat.Client.Models.ReplyContext ReplyCtx
 
 <div class="composer">
-    <!-- ✅ Reply Preview -->
-    @if (ReplyContext.Current != null && ReplyContext.Current.MessageId != Guid.Empty)
+    @if (ReplyCtx.MessageId != Guid.Empty)
     {
         <div class="reply-context">
             <div class="reply-header">
-                <span>Replying to @ReplyContext.Current.SenderName</span>
+                <span>Replying to @ReplyCtx.SenderName</span>
                 <button class="cancel-reply" @onclick="CancelReply" type="button">✕</button>
             </div>
-            <div class="reply-preview-text">@ReplyContext.Current.ContentPreview</div>
+            <div class="reply-preview-text">@ReplyCtx.ContentPreview</div>
         </div>
     }
 
     <div class="composer-box">
         <textarea class="composer-input"
                   @ref="inputRef"
-                  placeholder="@(ReplyContext.Current?.MessageId != Guid.Empty ? "Type your reply…" : "Message…")"
+                  placeholder="@(ReplyCtx.MessageId != Guid.Empty ? "Type your reply…" : "Message…")"
                   @bind-value="text"
                   @bind-value:event="oninput"
-                  @onkeydown="OnKeyDown"></textarea>
+                  @onkeydown="OnKeyDown">
+        </textarea>
 
         <button class="composer-send"
                 type="button"
@@ -40,9 +42,6 @@
     [Parameter] public EventCallback OnUserTyping { get; set; }
 
     private bool IsSendDisabled => string.IsNullOrWhiteSpace(text);
-
-    private CancellationTokenSource? _typingCts;
-    private DateTime _lastTypingSent = DateTime.MinValue;
 
     private static readonly HashSet<string> IgnoreKeys = new()
     {
@@ -65,32 +64,6 @@
         await OnUserTyping.InvokeAsync();
     }
 
-    private async Task OnInput(ChangeEventArgs _)
-    {
-        await DebouncedTypingAsync();
-    }
-
-    private async Task DebouncedTypingAsync()
-    {
-        var now = DateTime.UtcNow;
-        if ((now - _lastTypingSent).TotalMilliseconds < 700) return;
-
-        _typingCts?.Cancel();
-        _typingCts?.Dispose();
-        _typingCts = new CancellationTokenSource();
-        var ct = _typingCts.Token;
-
-        try
-        {
-            await Task.Delay(120, ct);
-            if (ct.IsCancellationRequested) return;
-
-            _lastTypingSent = DateTime.UtcNow;
-            await OnUserTyping.InvokeAsync();
-        }
-        catch { }
-    }
-
     private async Task Send()
     {
         if (string.IsNullOrWhiteSpace(text)) return;
@@ -100,26 +73,12 @@
 
         await OnSend.InvokeAsync(toSend);
 
-        // ✅ إلغاء الرد بعد الإرسال
-        CancelReply();
-
+        ReplyCtx.Clear();
         await JS.InvokeVoidAsync("chatFocus", inputRef);
     }
 
     private void CancelReply()
     {
-        if (ReplyContext.Current != null)
-        {
-            ReplyContext.Current.MessageId = Guid.Empty;
-            ReplyContext.Current.SenderName = "";
-            ReplyContext.Current.ContentPreview = "";
-            ReplyContext.Current.CreatedAt = DateTime.MinValue;
-        }
-    }
-
-    public void Dispose()
-    {
-        _typingCts?.Cancel();
-        _typingCts?.Dispose();
+        ReplyCtx.Clear();
     }
 }

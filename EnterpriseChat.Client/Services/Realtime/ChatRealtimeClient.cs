@@ -36,7 +36,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action<Guid, Guid>? TypingStopped;
 
     public event Action<Guid>? RemovedFromRoom;
-
+    public event Action<Guid, Guid?>? MessagePinned;
     public event Action? Disconnected;
     public event Action? Reconnected;
     public event Action<RoomUpdatedModel>? RoomUpdated;
@@ -53,7 +53,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action<Guid, Guid>? MessageDeliveredToAll;
     public event Action<Guid, Guid>? MessageReadToAll;
     public event Action<Guid, Guid, int, bool>? MessageReactionUpdated;
-
+    public event Action<Guid, string>? MessageUpdated;
+    public event Action<Guid>? MessageDeleted;
 
     public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http, RoomFlagsStore flags)
     {
@@ -243,8 +244,37 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
         _connection.On<Guid, Guid>("AdminPromoted", (roomId, userId) => AdminPromoted?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("AdminDemoted", (roomId, userId) => AdminDemoted?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("OwnerTransferred", (roomId, newOwnerId) => OwnerTransferred?.Invoke(roomId, newOwnerId));
+
+        _connection.On<Guid, string>("MessageUpdated", (messageId, newContent) =>
+    MessageUpdated?.Invoke(messageId, newContent));
+
+        _connection.On<Guid>("MessageDeleted", messageId =>
+            MessageDeleted?.Invoke(messageId));
+        _connection.On<Guid, Guid?>("MessagePinned", (rid, mid) => MessagePinned?.Invoke(rid, mid));
     }
+    public async Task SendMessageWithReplyAsync(Guid roomId, MessageModel message)
+    {
+        try
+        {
+            if (_connection == null) return;
 
+            // إنشاء الـ request object
+            var request = new
+            {
+                RoomId = roomId,
+                Content = message.Content,
+                ReplyToMessageId = message.ReplyToMessageId,
+                ReplyInfo = message.ReplyInfo
+            };
 
+            await _connection.InvokeAsync("SendMessageWithReply", request);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SendMessageWithReply error: {ex.Message}");
+        }
+    }
+    public Task PinMessageAsync(Guid roomId, Guid? messageId)
+    => _connection!.InvokeAsync("PinMessage", roomId, messageId);
 
 }

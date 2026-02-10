@@ -95,12 +95,16 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, EnterpriseChat.API.Auth.SubUserIdProvider>();
 
 // SignalR
-builder.Services.AddSignalR()
-    .AddStackExchangeRedis(redisConnectionString, options =>
-    {
-        options.Configuration.ChannelPrefix = "EnterpriseChat";
-        options.Configuration.AbortOnConnectFail = false;
-    });
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true; // مكانها الصحيح هنا في الـ Hub options
+})
+.AddStackExchangeRedis(redisConnectionString, options =>
+{
+    options.Configuration.ChannelPrefix = "EnterpriseChat";
+    options.Configuration.AbortOnConnectFail = false;
+    // تم حذف السطر المسبب للخطأ من هنا
+});
 
 builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
 
@@ -154,9 +158,9 @@ if (app.Environment.IsDevelopment())
     var db = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
     await db.Database.MigrateAsync();
 
-    var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
-    var seeder = new DatabaseSeeder(db, hasher);
-    await seeder.SeedAsync();
+    //var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+    //var seeder = new DatabaseSeeder(db, hasher);
+    //await seeder.SeedAsync();
 }
 
 // ✅ مهم جدًا

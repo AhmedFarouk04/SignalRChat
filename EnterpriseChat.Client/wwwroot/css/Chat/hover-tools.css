@@ -1,0 +1,208 @@
+﻿
+/* hover area (bigger hitbox) */
+.msg-hover-area {
+    position: absolute;
+    top: -12px;
+    bottom: -12px;
+    left: -48px;
+    right: -48px;
+    z-index: 90;
+    background: transparent;
+}
+
+}
+
+/* 🙂 trigger */
+.msg-react-trigger {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, 0.95);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease;
+}
+
+.msg.mine .msg-react-trigger {
+    left: -44px;
+}
+
+.msg.theirs .msg-react-trigger {
+    right: -44px;
+}
+
+/* ˅ chevron */
+.msg-chevron {
+    position: absolute;
+    top: -10px;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, 0.88);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 500;
+    transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease;
+}
+
+.msg.mine .msg-chevron {
+    right: 8px;
+}
+
+.msg.theirs .msg-chevron {
+    left: 8px;
+}
+
+/* show on hover */
+.msg:hover .msg-react-trigger,
+.msg:hover .msg-chevron {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+    .msg:hover .msg-react-trigger:hover {
+        transform: translateY(-50%) scale(1.06);
+        background: rgba(0, 0, 0, 0.4);
+    }
+
+    .msg:hover .msg-chevron:hover {
+        background: rgba(0, 0, 0, 0.28);
+        transform: translateY(-1px);
+    }
+.msg-tool-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(15, 23, 42, 0.8);
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    margin: 0 2px;
+    transition: all 0.2s;
+}
+
+    .msg-tool-btn:hover {
+        background: #3b82f6;
+        transform: scale(1.1);
+    }
+
+    .msg-tool-btn.delete:hover {
+        background: #ef4444;
+    }
+
+/* تموضع الأدوات */
+.msg.mine .msg-hover-tools {
+    right: 100%;
+    left: auto;
+    padding-right: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.msg.theirs .msg-hover-tools {
+    left: 100%;
+    right: auto;
+    padding-left: 10px;
+    display: flex;
+    align-items: center;
+}
+/* أدوات الرسالة */
+.msg-hover-tools {
+    position: absolute;
+    top: 2px;
+    z-index: 1000;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.msg:hover .msg-hover-tools, .msg.menu-active .msg-hover-tools {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.msg.mine .msg-hover-tools {
+    right: 100%;
+    padding-right: 8px;
+}
+
+.msg.theirs .msg-hover-tools {
+    left: 100%;
+    padding-left: 8px;
+}
+
+.tool-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(30, 41, 59, 0.9);
+    color: white;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+}
+
+/* الـ Context Menu (شكل الواتساب) */
+.msg-context-menu {
+    position: absolute;
+    top: 32px;
+    width: 160px;
+    background: #1e293b;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    padding: 6px;
+    z-index: 2000;
+}
+
+.msg.mine .msg-context-menu {
+    right: 0;
+}
+
+.msg.theirs .msg-context-menu {
+    left: 0;
+}
+
+.menu-item {
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    color: #e5e7eb;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+    .menu-item:hover {
+        background: rgba(255,255,255,0.05);
+    }
+
+    .menu-item.delete-item {
+        color: #ef4444;
+    }

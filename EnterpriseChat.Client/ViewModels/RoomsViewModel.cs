@@ -49,6 +49,10 @@ public sealed class RoomsViewModel
             _toasts.Info("Member removed", "A member was removed from the group"); _rt.MessageReceived += OnMessageReceived;
         _rt.RemovedFromRoom += OnRemovedFromRoom;
         _rt.RoomUpdated += OnRoomUpdated;
+        _rt.MessageDelivered += OnMessageDelivered;
+        _rt.MessageRead += OnMessageRead;
+        _rt.MessageDeliveredToAll += OnMessageDeliveredToAll;
+        _rt.MessageReadToAll += OnMessageReadToAll;
 
     }
     private void OnRemovedFromRoom(Guid roomId)
@@ -69,7 +73,133 @@ public sealed class RoomsViewModel
     {
         _toasts.Info("Member removed", "A member was removed from the group");
     }
+    private void OnMessageDelivered(Guid messageId)
+    {
+        Console.WriteLine($"[RoomsVM] Delivered event for message: {messageId}");
+        UpdateLastMessageStatusIfNeeded(messageId, MessageStatus.Delivered);
+    }
+    public async Task RefreshLastMessageStatusesAsync()
+    {
+        Console.WriteLine("[RoomsVM] Refreshing last message statuses after initial join");
 
+        var freshRooms = await _roomService.GetRoomsAsync(); // استعلام واحد فقط
+
+        var currentList = Rooms.ToList();
+
+        for (int i = 0; i < currentList.Count; i++)
+        {
+            var current = currentList[i];
+            var fresh = freshRooms.FirstOrDefault(r => r.Id == current.Id);
+            if (fresh != null)
+            {
+                currentList[i] = new RoomListItemModel
+                {
+                    Id = current.Id,
+                    Name = current.Name,
+                    Type = current.Type,
+                    OtherUserId = current.OtherUserId,
+                    OtherDisplayName = current.OtherDisplayName,
+                    IsMuted = current.IsMuted,
+                    UnreadCount = fresh.UnreadCount,
+                    LastMessageAt = fresh.LastMessageAt,
+                    LastMessagePreview = fresh.LastMessagePreview,
+                    LastMessageId = fresh.LastMessageId,
+                    LastMessageSenderId = fresh.LastMessageSenderId,
+                    LastMessageStatus = fresh.LastMessageStatus  // ← التحديث المهم
+                };
+            }
+        }
+
+        Rooms = currentList;
+        ApplyFilter();
+        NotifyChanged();
+    }
+    public async Task RefreshRoomStatusesAsync()
+    {
+        // reload الـ rooms بس عشان نجيب latest LastMessageStatus + UnreadCount
+        var freshRooms = await _roomService.GetRoomsAsync();
+
+        var list = Rooms.ToList();
+        foreach (var fresh in freshRooms)
+        {
+            var idx = list.FindIndex(r => r.Id == fresh.Id);
+            if (idx >= 0)
+            {
+                var room = list[idx];
+                list[idx] = new RoomListItemModel
+                {
+                    Id = room.Id,
+                    Name = room.Name,
+                    Type = room.Type,
+                    OtherUserId = room.OtherUserId,
+                    OtherDisplayName = room.OtherDisplayName,
+                    IsMuted = room.IsMuted,
+                    UnreadCount = fresh.UnreadCount,  // تحديث unread
+                    LastMessageAt = fresh.LastMessageAt,
+                    LastMessagePreview = fresh.LastMessagePreview,
+                    LastMessageId = fresh.LastMessageId,
+                    LastMessageSenderId = fresh.LastMessageSenderId,
+                    LastMessageStatus = fresh.LastMessageStatus  // ← المهم: تحديث الـ status
+                };
+            }
+        }
+        Rooms = list;
+        ApplyFilter();
+        NotifyChanged();
+    }
+    private void OnMessageDeliveredToAll(Guid messageId, Guid senderId)
+    {
+        Console.WriteLine($"[RoomsVM] DeliveredToAll: {messageId} from sender {senderId}");
+        if (senderId == _cachedUserId)
+            UpdateLastMessageStatusIfNeeded(messageId, MessageStatus.Delivered);
+    }
+    // نفس الحاجة لـ Read
+    private void OnMessageRead(Guid messageId)
+    {
+        UpdateLastMessageStatusIfNeeded(messageId, MessageStatus.Read);
+    }
+
+  
+
+    private void OnMessageReadToAll(Guid messageId, Guid senderId)
+    {
+        if (senderId == _cachedUserId)
+            UpdateLastMessageStatusIfNeeded(messageId, MessageStatus.Read);
+    }
+
+    private void UpdateLastMessageStatusIfNeeded(Guid messageId, MessageStatus newStatus)
+    {
+        var list = Rooms.ToList();
+        var idx = list.FindIndex(r => r.LastMessageId == messageId);
+        if (idx < 0) return;
+
+        var room = list[idx];
+
+        // الـ status meaningful بس لو آخر رسالة مني أنا
+        if (room.LastMessageSenderId != _cachedUserId) return;
+
+        list[idx] = new RoomListItemModel
+        {
+            Id = room.Id,
+            Name = room.Name,
+            Type = room.Type,
+            OtherUserId = room.OtherUserId,
+            OtherDisplayName = room.OtherDisplayName,
+            IsMuted = room.IsMuted,
+            UnreadCount = room.UnreadCount,
+            LastMessageAt = room.LastMessageAt,
+            LastMessagePreview = room.LastMessagePreview,
+            LastMessageId = room.LastMessageId,
+            LastMessageSenderId = room.LastMessageSenderId,
+            LastMessageStatus = newStatus  // ✅ التحديث الوحيد
+        };
+
+        Rooms = list;
+        ApplyFilter();
+
+        NotifyChanged();
+
+    }
     public IReadOnlyList<RoomListItemModel> Rooms { get; private set; } = Array.Empty<RoomListItemModel>();
     public IReadOnlyList<RoomListItemModel> VisibleRooms { get; private set; } = Array.Empty<RoomListItemModel>();
 
@@ -86,15 +216,13 @@ public sealed class RoomsViewModel
     {
         IsLoading = true;
         NotifyChanged();
-
         try
         {
             Rooms = await _roomService.GetRoomsAsync();
-
             foreach (var r in Rooms)
                 _flags.SetUnread(r.Id, r.UnreadCount);
 
-            try { await _rt.ConnectAsync(); } catch { }
+            // احذف الـ try { await _rt.ConnectAsync(); } catch { }
 
             var userId = await _currentUser.GetUserIdAsync();
             if (userId.HasValue)
@@ -102,7 +230,6 @@ public sealed class RoomsViewModel
                 _cachedUserId = userId.Value;
                 _userIdCached = true;
             }
-
             ApplyFilter();
         }
         catch

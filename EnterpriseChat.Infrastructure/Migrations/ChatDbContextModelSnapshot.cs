@@ -100,6 +100,12 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.Property<Guid?>("OwnerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("PinnedMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PinnedUntilUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
@@ -204,15 +210,32 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsEdited")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("ReplyToMessageId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("SenderId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("ReplyToMessageId");
 
                     b.HasIndex("RoomId");
 
@@ -302,11 +325,17 @@ namespace EnterpriseChat.Infrastructure.Migrations
 
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.Message", b =>
                 {
+                    b.HasOne("EnterpriseChat.Domain.Entities.Message", "ReplyToMessage")
+                        .WithMany()
+                        .HasForeignKey("ReplyToMessageId");
+
                     b.HasOne("EnterpriseChat.Domain.Entities.ChatRoom", null)
                         .WithMany()
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ReplyToMessage");
                 });
 
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.MessageReceipt", b =>

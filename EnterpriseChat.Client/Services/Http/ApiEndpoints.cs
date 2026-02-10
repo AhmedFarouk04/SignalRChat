@@ -74,4 +74,13 @@ public static class ApiEndpoints
     public static string TypingStop(Guid roomId) => $"api/rooms/{roomId}/typing/stop";
     public static string StartTyping(Guid roomId) => $"/api/rooms/{roomId}/typing/start";
     public static string StopTyping(Guid roomId) => $"/api/rooms/{roomId}/typing/stop";
+
+
+    public static string EditMessage(Guid messageId) => $"api/chat/messages/{messageId}";
+    public static string DeleteMessage(Guid messageId, bool forEveryone) =>
+        $"api/chat/messages/{messageId}?deleteForEveryone={forEveryone}";
+
+    // EnterpriseChat.Client/Services/Http/ApiEndpoints.cs
+    public static string SearchMessages(Guid roomId, string query, int take)
+        => $"api/chat/rooms/{roomId}/messages/search?query={Uri.EscapeDataString(query)}&take={take}";
 }

@@ -55,4 +55,49 @@ public sealed class ReactionsService
 
         return dto;
     }
+    public async Task<MessageReactionsDetailsDto> CreateReactionsDetailsDto(
+    MessageId messageId,
+    IReadOnlyList<Reaction> reactions,
+    UserId currentUserId,
+    CancellationToken ct)
+    {
+        var dto = new MessageReactionsDetailsDto
+        {
+            MessageId = messageId.Value,
+            CurrentUserId = currentUserId.Value
+        };
+
+        // Tabs
+        dto.Tabs.Add(new ReactionTabDto
+        {
+            Type = null,
+            Count = reactions.Count
+        });
+
+        foreach (var g in reactions.GroupBy(r => r.Type))
+        {
+            dto.Tabs.Add(new ReactionTabDto
+            {
+                Type = g.Key,
+                Count = g.Count()
+            });
+        }
+
+        // Entries
+        foreach (var reaction in reactions)
+        {
+            var user = await _userDirectory.GetUserSummaryAsync(reaction.UserId, ct);
+
+            dto.Entries.Add(new ReactionEntryDto
+            {
+                UserId = reaction.UserId.Value,
+                DisplayName = user?.DisplayName ?? "Unknown",
+                Type = reaction.Type,
+                IsMe = reaction.UserId == currentUserId
+            });
+        }
+
+        return dto;
+    }
+
 }

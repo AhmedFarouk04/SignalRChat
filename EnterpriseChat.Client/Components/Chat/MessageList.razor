@@ -1,4 +1,5 @@
 ﻿@using EnterpriseChat.Client.Models
+@using EnterpriseChat.Domain.Enums
 @using EnterpriseChat.Client.Services.JsInterop
 @inject IScrollService Scroll
 
@@ -10,45 +11,89 @@
             <div class="unread-divider">New messages</div>
         }
 
-        @for (int i = 0; i < Messages.Count; i++)
+        @{
+            // ✅ تصفية الرسائل: الأصلية فقط لترتيب العرض
+            var originalMessages = Messages
+            .Where(m => !m.ReplyToMessageId.HasValue)
+            .ToList();
+        }
+
+        @for (int i = 0; i < originalMessages.Count; i++)
         {
-            var msg = Messages[i];
-            var prev = i > 0 ? Messages[i - 1] : null;
-            var next = i < Messages.Count - 1 ? Messages[i + 1] : null;
+            var msg = originalMessages[i];
+            var prev = i > 0 ? originalMessages[i - 1] : null;
+            var next = i < originalMessages.Count - 1 ? originalMessages[i + 1] : null;
 
             var currDate = msg.CreatedAt.ToLocalTime().Date;
             var prevDate = prev?.CreatedAt.ToLocalTime().Date;
+
             if (prev is null || prevDate != currDate)
             {
                 <div class="date-sep">@FormatDateLabel(currDate)</div>
             }
 
-            var samePrev = IsSameGroup(prev, msg);
-            var sameNext = IsSameGroup(msg, next);
+            @if (IsSystemMessage(msg))
+            {
+                <div class="system-message-container">
+                    <div class="system-content">
+                        @* النص فقط في المنتصف بدون وقت *@
+                        <span class="system-text">@FormatSystemMessage(msg.Content)</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                var samePrev = IsSameGroup(prev, msg);
+                var sameNext = IsSameGroup(msg, next);
 
-            var pos =
-            (!samePrev && !sameNext) ? "single" :
-            (!samePrev && sameNext) ? "start" :
-            (samePrev && sameNext) ? "mid" :
-            "end";
+                var pos = (!samePrev && !sameNext) ? "single" :
+                (!samePrev && sameNext) ? "start" :
+                (samePrev && sameNext) ? "mid" : "end";
 
-            var showMeta = !sameNext;
+                <MessageBubble Message="@msg"
+                               CurrentUserId="@CurrentUserId"
+                               GroupMembers="@GroupMembers"
+                               GroupPosition="@pos"
+                               IsNew="@newIds.Contains(msg.Id)"
+                               ShowMeta="true"
+                               OnRetry="@OnRetry"
+                               OnReaction="@OnReaction"
+                               OnReplyRequested="@OnReplyRequested"
+                               OnScrollToMessage="@OnScrollToMessage"
+                               OnOpenReactionDetails="@OnOpenReactionDetails"
+                               OpenReactionMessageId="@OpenReactionMessageId"
+                               OnEditRequested="OnEditRequested"
+                               OnDeleteRequested="OnDeleteRequested"
+                               OnToggleReaction="@OnToggleReaction" />
 
-            <MessageBubble Message="msg"
-                           CurrentUserId="CurrentUserId"
-                           GroupMembers="GroupMembers"
-                           OnRetry="OnRetry"
-                           GroupPosition="@pos"
-                           ShowMeta="@showMeta"
-                           IsNew="@newIds.Contains(msg.Id)" />
+                @* عرض الردود المتداخلة لهذه الرسالة *@
+                @foreach (var reply in GetRepliesForMessage(msg.Id))
+                {
+                    <div class="reply-container" data-parent="@msg.Id">
+                        <MessageBubble Message="@reply"
+                                       CurrentUserId="@CurrentUserId"
+                                       GroupMembers="@GroupMembers"
+                                       GroupPosition="single"
+                                       IsNew="@newIds.Contains(reply.Id)"
+                                       ShowMeta="true"
+                                       OnRetry="@OnRetry"
+                                       OnReaction="@OnReaction"
+                                       OnReplyRequested="@OnReplyRequested"
+                                       OnScrollToMessage="@OnScrollToMessage"
+                                       OnOpenReactionDetails="@OnOpenReactionDetails"
+                                       OpenReactionMessageId="@OpenReactionMessageId"
+                                       OnToggleReaction="@OnToggleReaction"
+                                       OnEditRequested="OnEditRequested"
+                                       OnDeleteRequested="OnDeleteRequested" />
+                    </div>
+                }
+            }
         }
     </div>
 
     @if (!isAtBottom)
     {
-        <button class="scroll-bottom" @onclick="ScrollDown">
-            ↓ New
-        </button>
+        <button class="scroll-bottom" @onclick="ScrollDown">↓ New</button>
     }
 </div>
 
@@ -60,21 +105,65 @@
     [Parameter] public EventCallback<MessageModel> OnRetry { get; set; }
     [Parameter] public EventCallback<Guid> OnReachedBottom { get; set; }
     [Parameter] public bool AutoScroll { get; set; } = true;
+    [Parameter] public EventCallback<Guid> OnOpenReactionDetails { get; set; }
+    [Parameter] public EventCallback<MessageModel> OnEditRequested { get; set; }
+    [Parameter] public EventCallback<MessageModel> OnDeleteRequested { get; set; }
+    [Parameter] public Guid? OpenReactionMessageId { get; set; }
+    [Parameter] public EventCallback<Guid> OnToggleReaction { get; set; }
+    [Parameter] public EventCallback<ReactionPayload> OnReaction { get; set; }
+    [Parameter] public EventCallback<Guid> OnReplyRequested { get; set; }
+    [Parameter] public EventCallback<Guid> OnScrollToMessage { get; set; }
 
     private ElementReference listRef;
-
     private int lastMessageCount;
     private bool isAtBottom = true;
-    private bool _wasAtBottom = true;
     private bool showNewDivider;
-
     private readonly HashSet<Guid> newIds = new();
+
+    // ✅ ميثود موحدة لفحص رسائل النظام
+    private bool IsSystemMessage(MessageModel msg)
+    {
+        if (msg == null) return false;
+
+        // 1. الاعتماد على النوع الصريح
+        if (msg.IsSystem || msg.Type == "System") return true;
+
+        // 2. التحقق من المحتوى (للتوافق)
+        if (string.IsNullOrEmpty(msg.Content)) return false;
+        var lower = msg.Content.ToLower();
+        return lower.Contains("created the group") ||
+               lower.Contains("was added by") ||
+               lower.Contains("was removed by") ||
+               lower.Contains("left") ||
+               lower.Contains("pinned a message");
+    }
+
+    private List<MessageModel> GetRepliesForMessage(Guid messageId)
+    {
+        return Messages.Where(m => m.ReplyToMessageId == messageId)
+                       .OrderBy(m => m.CreatedAt).ToList();
+    }
+
+    private string FormatSystemMessage(string content)
+        => content.Replace("created the group", "created group")
+                  .Replace("was added by", "added by")
+                  .Replace("was removed by", "removed by");
+
+    private string GetSystemIcon(string content)
+    {
+        var lower = content.ToLower();
+        if (lower.Contains("pinned")) return "📌";
+        if (lower.Contains("created")) return "🏗️";
+        if (lower.Contains("added") || lower.Contains("joined")) return "➕";
+        if (lower.Contains("removed")) return "➖";
+        if (lower.Contains("left")) return "👋";
+        return "";
+    }
 
     private static bool IsSameGroup(MessageModel? a, MessageModel? b)
     {
         if (a is null || b is null) return false;
         if (a.SenderId != b.SenderId) return false;
-
         var dt = (b.CreatedAt - a.CreatedAt).Duration();
         return dt <= TimeSpan.FromMinutes(2);
     }
@@ -84,69 +173,41 @@
         var today = DateTime.Now.Date;
         if (date == today) return "TODAY";
         if (date == today.AddDays(-1)) return "YESTERDAY";
-
-        // إذا كانت في نفس الأسبوع
-        if (date > today.AddDays(-7))
-            return date.ToString("dddd").ToUpper(); // "MONDAY", "TUESDAY", etc.
-
-        // إذا كانت في نفس السنة
-        if (date.Year == today.Year)
-            return date.ToString("MMM dd").ToUpper(); // "MAR 15"
-
-        return date.ToString("MMM dd, yyyy").ToUpper(); // "MAR 15, 2024"
+        if (date > today.AddDays(-7)) return date.ToString("dddd").ToUpper();
+        return date.ToString("MMM dd, yyyy").ToUpper();
     }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // لو مفيش رسائل مفيش حاجة
-        if (Messages.Count == 0)
-        {
-            lastMessageCount = 0;
-            return;
-        }
+        if (Messages.Count == 0) { lastMessageCount = 0; return; }
 
-        // لو زاد عدد الرسائل
         if (Messages.Count > lastMessageCount)
         {
-            // لو كنت تحت، انزل تحت تلقائي
             if (AutoScroll && isAtBottom)
             {
                 try { await Scroll.ScrollToBottomAsync(listRef); } catch { }
                 showNewDivider = false;
                 newIds.Clear();
-
                 await OnReachedBottom.InvokeAsync(Messages[^1].Id);
             }
             else
             {
                 for (int i = lastMessageCount; i < Messages.Count; i++)
                     newIds.Add(Messages[i].Id);
-
                 showNewDivider = true;
             }
-
             lastMessageCount = Messages.Count;
         }
     }
-
 
     private CancellationTokenSource? _scrollCts;
     private Guid _lastBottomReportedMessageId = Guid.Empty;
 
     private async Task OnScroll()
     {
-
         _scrollCts?.Cancel();
         _scrollCts = new CancellationTokenSource();
-        var token = _scrollCts.Token;
-
-        try
-        {
-            await Task.Delay(80, token);
-        }
-        catch (TaskCanceledException)
-        {
-            return;
-        }
+        try { await Task.Delay(80, _scrollCts.Token); } catch { return; }
 
         var atBottom = await Scroll.IsAtBottomAsync(listRef);
         var wasBottom = isAtBottom;
@@ -156,7 +217,6 @@
 
         showNewDivider = false;
         newIds.Clear();
-
         if (Messages.Count == 0) return;
 
         var lastId = Messages[^1].Id;
@@ -168,15 +228,10 @@
 
     private async Task ScrollDown()
     {
-
         await Scroll.ScrollToBottomSmoothAsync(listRef);
         isAtBottom = true;
-        _wasAtBottom = true;
-
         showNewDivider = false;
         newIds.Clear();
-
-        if (Messages.Count > 0)
-            await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+        if (Messages.Count > 0) await OnReachedBottom.InvokeAsync(Messages[^1].Id);
     }
 }

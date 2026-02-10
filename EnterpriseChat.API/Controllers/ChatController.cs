@@ -1,4 +1,5 @@
 ﻿using EnterpriseChat.API.Contracts.Messaging;
+using EnterpriseChat.API.Extensions;
 using EnterpriseChat.API.Hubs;
 using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
@@ -424,4 +425,101 @@ public async Task<IActionResult> UploadAttachment(
 
         return Ok(dto);
     }
-} 
+
+    [HttpGet("messages/{messageId:guid}/reactions/details")]
+    [ProducesResponseType(typeof(MessageReactionsDetailsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetReactionDetails(
+    Guid messageId,
+    [FromServices] IReactionRepository reactionRepo,
+    [FromServices] IUserDirectoryService users,
+    CancellationToken ct)
+    {
+        var reactions = await reactionRepo.GetForMessageAsync(MessageId.From(messageId), ct);
+
+        var dto = new MessageReactionsDetailsDto
+        {
+            MessageId = messageId,
+            Entries = new List<ReactionEntryDto>()
+        };
+
+        foreach (var r in reactions)
+        {
+            var user = await users.GetUserSummaryAsync(r.UserId, ct);
+
+            dto.Entries.Add(new ReactionEntryDto
+            {
+                UserId = r.UserId.Value,
+                DisplayName = user?.DisplayName ?? "User",
+                Type = r.Type,
+                IsMe = false // يتظبط في service لو حابب
+            });
+        }
+
+        return Ok(dto);
+    }
+
+    [HttpDelete("messages/{messageId:guid}/reactions/me")]
+    public async Task<IActionResult> RemoveMyReaction(
+     Guid messageId,
+     [FromServices] IReactionRepository reactionRepo,
+     [FromServices] IUnitOfWork uow,
+     CancellationToken ct)
+    {
+        var reaction = await reactionRepo.GetAsync(
+            MessageId.From(messageId),
+            GetCurrentUserId(),
+            ct);
+
+        if (reaction is null)
+            return NoContent();
+
+        await reactionRepo.RemoveAsync(reaction, ct);
+        await uow.CommitAsync(ct);
+
+        return NoContent();
+    }
+
+    [HttpPatch("messages/{messageId:guid}")]
+    public async Task<IActionResult> EditMessage(Guid messageId, [FromBody] string newContent, CancellationToken ct)
+    {
+        // شيل الـ .Value من GetCurrentUserId()
+        await _mediator.Send(new EditMessageCommand(messageId, GetCurrentUserId(), newContent), ct);
+        return NoContent();
+    }
+    [HttpDelete("messages/{messageId:guid}")]
+    public async Task<IActionResult> DeleteMessage(Guid messageId, [FromQuery] bool deleteForEveryone, CancellationToken ct)
+    {
+        // شيل الـ .Value من GetCurrentUserId()
+        await _mediator.Send(new DeleteMessageCommand(messageId, GetCurrentUserId(), deleteForEveryone), ct);
+        return NoContent();
+    }
+    // EnterpriseChat.API/Controllers/ChatController.cs
+    // EnterpriseChat.API/Controllers/ChatController.cs
+
+    [HttpGet("rooms/{roomId}/messages/search")]
+    public async Task<ActionResult<IReadOnlyList<MessageReadDto>>> Search(
+        [FromRoute] Guid roomId,
+        [FromQuery] string query,
+        [FromQuery] int take = 50)
+    {
+        var userId = User.GetUserId(); // تأكد أنها ترجع Guid
+        if (userId == null) return Unauthorized();
+
+        return Ok(await _mediator.Send(new SearchMessagesQuery(roomId, userId.Value, query, take)));
+    }
+    [HttpPost("messages/forward")]
+    public async Task<ActionResult> Forward([FromBody] ForwardMessagesRequest request)
+    {
+        var userId = User.GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var result = await _mediator.Send(new ForwardMessagesCommand(
+            userId.Value,
+            request.MessageIds,
+            request.TargetRoomIds));
+
+        return result ? Ok() : BadRequest("Forward failed");
+    }
+
+
+}

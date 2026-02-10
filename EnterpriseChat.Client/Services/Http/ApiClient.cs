@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using static EnterpriseChat.Client.Services.Http.IApiClient;
 
@@ -171,5 +172,17 @@ public sealed class ApiClient : IApiClient
         return new ApiFile(bytes, fileName, ctHeader);
     }
 
+    public async Task<TResponse?> PatchAsync<TRequest, TResponse>(string url, TRequest body, CancellationToken ct = default)
+    {
+        // فك التشفير باستخدام JsonSerializer الافتراضي لو _options مش متاحة
+        var json = System.Text.Json.JsonSerializer.Serialize(body);
 
+        // التصحيح: ترتيب الباراميترز (Content, Encoding, MediaType)
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+        // استخدام SendAsync الموجودة عندك
+        await SendAsync(HttpMethod.Patch, url, content, ct);
+
+        return default;
+    }
 }

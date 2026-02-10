@@ -3,6 +3,7 @@ using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Chat;
 using EnterpriseChat.Client.Services.Http;
+using EnterpriseChat.Client.Services.Reaction;
 using EnterpriseChat.Client.Services.Realtime;
 using EnterpriseChat.Client.Services.Rooms;
 using EnterpriseChat.Client.Services.Ui;
@@ -36,6 +37,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly TimeSpan _notifyMinInterval = TimeSpan.FromMilliseconds(80);
     private DateTime _lastTypingSent = DateTime.MinValue;
     private readonly TimeSpan _typingThrottle = TimeSpan.FromMilliseconds(800);
+    private readonly ReactionsApi _reactionsApi;
 
     // ✅ الأحداث - تعريف واحد فقط لكل حدث
     public event Action? Changed;
@@ -45,9 +47,163 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public event Action<ReplyContext?>? ReplyContextChanged;
 
     public event PropertyChangedEventHandler? PropertyChanged;
-    private void NotifyPropertyChanged([CallerMemberName] string propertyName = "")
+    private bool _isPinModalOpen;
+    public bool IsPinModalOpen { get => _isPinModalOpen; set { _isPinModalOpen = value; NotifyChanged(); } }
+    private Guid? _messageIdToPin;
+    public bool IsMessagePinned(Guid messageId) => PinnedMessages.Any(m => m.Id == messageId);
+    public ObservableCollection<MessageModel> PinnedMessages { get; } = new();
+
+    private bool _isSelectionMode;
+    public bool IsSelectionMode { get => _isSelectionMode; set { _isSelectionMode = value; if (!value) SelectedMessageIds.Clear(); NotifyChanged(); } }
+
+    public ObservableCollection<Guid> SelectedMessageIds { get; } = new();
+
+    public Guid? PinnedMessageId => PinnedMessages.LastOrDefault()?.Id;
+    public MessageModel? PinnedMessage => PinnedMessages.LastOrDefault();
+    public void OpenPinModal(Guid messageId)
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        if (IsMessagePinned(messageId))
+        {
+            // إذا كانت مثبتة، نفذ ميثود الـ Unpin اللي هنعدلها تحت
+            _ = UnpinMessageAsync(messageId);
+            return;
+        }
+        _messageIdToPin = messageId;
+        IsPinModalOpen = true;
+        NotifyChanged(); // تأكد إن الميثود دي بتنادي StateHasChanged في الـ UI
+    }
+    // أضف هذه الخصائص في ChatViewModel
+    public void ToggleMessageSelection(Guid messageId)
+    {
+        if (SelectedMessageIds.Contains(messageId))
+            SelectedMessageIds.Remove(messageId);
+        else
+            SelectedMessageIds.Add(messageId);
+        NotifyChanged();
+    }
+
+    // ميثود لفتح الـ Forward Modal (هنحتاجها لاحقاً)
+    public bool IsForwardModalOpen { get; set; }
+    public void OpenForwardModal() => IsForwardModalOpen = true;
+    public async Task ConfirmPinAsync(string duration)
+    {
+        if (!_messageIdToPin.HasValue) return;
+        var msgId = _messageIdToPin.Value;
+        IsPinModalOpen = false;
+
+        try
+        {
+            await _chatService.PinMessageAsync(Room!.Id, msgId, duration);
+
+            // إضافة رسالة نظام
+            Messages.Add(new MessageModel
+            {
+                Id = Guid.NewGuid(),
+                Content = "You pinned a message",
+                Type = "System",
+                IsSystem = true,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            var msg = Messages.FirstOrDefault(m => m.Id == msgId);
+            if (msg != null)
+            {
+                // التحقق إذا كانت الرسالة موجودة أصلاً (عشان التكرار)
+                if (!PinnedMessages.Any(x => x.Id == msgId))
+                {
+                    // إذا وصلنا لـ 3 رسائل، نشيل أقدم واحدة (أول واحدة في القائمة)
+                    if (PinnedMessages.Count >= 3)
+                    {
+                        PinnedMessages.RemoveAt(0);
+                    }
+                    PinnedMessages.Add(msg);
+                }
+            }
+
+            NotifyChanged();
+        }
+        catch (Exception ex)
+        {
+            _toasts.Error("Pin failed", ex.Message);
+        }
+    }
+    public async Task UnpinMessageAsync(Guid messageId)
+    {
+        // 1. التحديث المحلي (السر كله هنا)
+        var msg = PinnedMessages.FirstOrDefault(m => m.Id == messageId);
+        if (msg != null)
+        {
+            PinnedMessages.Remove(msg);
+            NotifyChanged(); // الـ Topbar هيحس فوراً إن الـ Count نقص أو القائمة فضيت
+        }
+
+        try
+        {
+            // 2. هنا حط الكود بتاعك اللي بيكلم السيرفر 
+            // مثلاً: await _hubConnection.InvokeAsync("UnpinMessage", messageId);
+            // أو: await YourActualServiceName.UnpinAsync(messageId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error unpinning: {ex.Message}");
+        }
+    }
+    // EnterpriseChat.Client/ViewModels/ChatViewModel.cs
+
+    public async Task<bool> ExecuteForwardAsync(List<Guid> targetRoomIds)
+    {
+        if (!SelectedMessageIds.Any() || !targetRoomIds.Any()) return false;
+
+        try
+        {
+            // 1. تجهيز الطلب
+            var request = new ForwardMessagesRequest
+            {
+                MessageIds = SelectedMessageIds.ToList(),
+                TargetRoomIds = targetRoomIds
+            };
+
+            // 2. نداء الـ API (تأكد إنك ضفت EndPoint في الـ ChatService)
+            await _chatService.ForwardMessagesAsync(request);
+
+            // 3. إنهاء وضع الاختيار وتقديم تغذية راجعة
+            IsSelectionMode = false;
+            _toasts.Success("Success", "Messages forwarded successfully!");
+
+            NotifyChanged();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _toasts.Error("Forward failed", ex.Message);
+            return false;
+        }
+    }
+    public async Task PinMessageAsync(Guid? messageId, string? duration = null)
+    {
+        try
+        {
+            await _chatService.PinMessageAsync(Room!.Id, messageId, duration);
+
+            // تحديث القائمة محلياً Real-time
+            if (messageId == null)
+            {
+                PinnedMessages.Clear(); // إلغاء الكل مؤقتاً لتبسيط المنطق
+            }
+            else
+            {
+                var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+                if (msg != null && !PinnedMessages.Any(m => m.Id == msg.Id))
+                {
+                    PinnedMessages.Add(msg);
+                }
+            }
+            NotifyChanged();
+        }
+        catch (Exception ex)
+        {
+            _toasts.Error("Operation failed", ex.Message);
+        }
     }
 
     private void NotifyChanged([CallerMemberName] string from = "?")
@@ -64,7 +220,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         ICurrentUser currentUser,
         ToastService toasts,
         RoomFlagsStore flags,
-        ModerationApi mod)
+        ModerationApi mod, ReactionsApi reactionsApi
+        )
     {
         _chatService = chatService;
         _roomService = roomService;
@@ -73,6 +230,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _toasts = toasts;
         _flags = flags;
         _mod = mod;
+        _reactionsApi = reactionsApi;
+
     }
 
     // ✅ الخصائص العامة
@@ -89,10 +248,17 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public bool IsDisconnected { get; private set; }
     public bool IsOtherDeleted { get; private set; }
     public bool IsRemoved { get; private set; }
+    private string _searchQuery = string.Empty;
+    public string SearchQuery { get => _searchQuery; set { _searchQuery = value; NotifyChanged(); _ = PerformSearchAsync(); } }
 
+    private bool _isSearching;
+    public bool IsSearching { get => _isSearching; set { _isSearching = value; if (!value) SearchResults.Clear(); NotifyChanged(); } }
+
+    public ObservableCollection<MessageModel> SearchResults { get; } = new();
+
+    private CancellationTokenSource? _searchCts;
     private int _changedCount;
     private DateTime _lastLog = DateTime.UtcNow;
-
     private void DebugChanged(string from)
     {
         _changedCount++;
@@ -194,6 +360,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             {
                 Messages.Add(msg);
             }
+            // جوه InitializeAsync بعد تحميل الرسائل
+            var pinnedMsg = loaded.FirstOrDefault(m => m.Id == Room.PinnedMessageId);
+            if (pinnedMsg != null)
+            {
+                PinnedMessages.Add(pinnedMsg);
+            }
+            // أو لو عندك API خاص بالـ Pinned Messages ناديه هنا
 
             NotifyChanged();
 
@@ -261,6 +434,19 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
+    public async Task<MessageReactionsDetailsDto?> GetMessageReactionsDetailsAsync(Guid messageId)
+    {
+        try
+        {
+            return await _chatService.GetMessageReactionsDetailsAsync(messageId);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+
     // ✅ Register/Unregister Realtime Events
     private void RegisterRealtimeEvents(Guid roomId)
     {
@@ -293,7 +479,9 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _realtime.MessageDeliveredToAll += OnMessageDeliveredToAll;
         _realtime.MessageReadToAll += OnMessageReadToAll;
         _realtime.MessageReactionUpdated += OnMessageReactionUpdated;
-
+        _realtime.MessageUpdated += OnMessageUpdated;
+        _realtime.MessageDeleted += OnMessageDeleted;
+        _realtime.MessagePinned += OnMessagePinned;
         _eventsRegistered = true;
     }
 
@@ -333,9 +521,10 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     private void OnRealtimeMessageReceived(MessageModel message)
     {
         var existing = Messages.FirstOrDefault(m =>
-            m.Status == ClientMessageStatus.Pending &&
-            m.Content == message.Content &&
-            m.SenderId == message.SenderId);
+             (m.Status == ClientMessageStatus.Pending || m.Status == ClientMessageStatus.Sent) &&
+             m.Content == message.Content &&
+             m.SenderId == message.SenderId &&
+             Math.Abs((m.CreatedAt - message.CreatedAt).TotalSeconds) < 5);
 
         if (existing != null)
         {
@@ -421,17 +610,25 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void OnTypingStarted(Guid rid, Guid uid)
     {
-        if (_eventsRoomId != rid || uid == CurrentUserId)
-            return;
+        if (_eventsRoomId != rid || uid == CurrentUserId) return;
 
-        if (TypingUsers.Any(u => u.Id == uid))
-            return;
+        var existing = TypingUsers.FirstOrDefault(u => u.Id == uid);
+        if (existing != null) return;
 
-        var user = OnlineUsers.FirstOrDefault(u => u.Id == uid) ?? FindMember(uid);
+        // ابحث عن الـ user (من members أو online أو other)
+        var user = FindMember(uid)
+                   ?? OnlineUsers.FirstOrDefault(u => u.Id == uid)
+                   ?? (OtherUser?.Id == uid ? OtherUser : null);
+
         if (user != null)
         {
-            user.IsOnline = true;
-            TypingUsers.Add(user);
+            var typingUser = new UserModel
+            {
+                Id = uid,
+                DisplayName = GetSenderName(uid), // استخدم الـ method اللي عندك
+                IsOnline = true
+            };
+            TypingUsers.Add(typingUser);
             NotifyChanged();
         }
     }
@@ -687,37 +884,32 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
+
+    private void OnMessagePinned(Guid rid, Guid? mid)
+    {
+        if (_currentRoomId != rid || Room == null) return;
+
+        // تحديث يدوي لأن RoomModel كلاس مش Record
+        Room.PinnedMessageId = mid;
+
+        NotifyChanged("OnMessagePinned");
+    }
+    public async Task PinMessageAsync(Guid? messageId)
+    {
+        try
+        {
+            await _chatService.PinMessageAsync(_currentRoomId!.Value, messageId);
+            await _realtime.PinMessageAsync(_currentRoomId!.Value, messageId);
+        }
+        catch (Exception ex)
+        {
+            _toasts.Error("Pin failed", ex.Message);
+        }
+    }
     // ✅ Public Methods
     public async Task SendAsync(Guid roomId, string text)
     {
-        Console.WriteLine($"[VM] SendAsync fired room={roomId} text='{text}'");
-
-        if (IsMuted)
-        {
-            _toasts.Warning("Muted", "This chat is muted. Unmute to send messages.");
-            return;
-        }
-
-        if (IsBlocked)
-        {
-            _toasts.Warning("Blocked", "You can't send messages to this user.");
-            return;
-        }
-
-        if (IsOtherDeleted)
-        {
-            _toasts.Warning("Unavailable", "This user is no longer available.");
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(text))
-            return;
-
-        if (text.Length > 2000)
-        {
-            _toasts.Warning("Too long", "Message is too long.");
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(text)) return;
 
         var tempId = Guid.NewGuid();
         var pending = new MessageModel
@@ -752,9 +944,12 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             NotifyChanged();
         }
     }
-
     // ✅ SendMessageWithReplyAsync - واحدة فقط بدون تكرار
-    public async Task SendMessageWithReplyAsync(Guid roomId, string text, Guid? replyToMessageId)
+    public async Task SendMessageWithReplyAsync(
+    Guid roomId,
+    string text,
+    Guid? replyToMessageId,
+    ReplyInfoModel? replySnapshot)
     {
         Console.WriteLine($"[VM] SendMessageWithReplyAsync room={roomId} text='{text}' replyTo={replyToMessageId}");
 
@@ -794,7 +989,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             Content = text,
             CreatedAt = DateTime.UtcNow,
             Status = ClientMessageStatus.Pending,
-            ReplyToMessageId = replyToMessageId
+            ReplyToMessageId = replyToMessageId,
+            ReplyInfo = replySnapshot   // ✅ ده اللي هيخلي الشكل يظهر فورًا
         };
 
         Messages.Add(pending);
@@ -802,7 +998,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         try
         {
-            var dto = await _chatService.SendMessageWithReplyAsync(roomId, text, replyToMessageId);
+            var dto = await _chatService.SendMessageWithReplyAsync(roomId, text, replySnapshot);
             if (dto != null)
             {
                 pending.Id = dto.Id;
@@ -821,6 +1017,14 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                         CreatedAt = dto.ReplyInfo.CreatedAt,
                         IsDeleted = dto.ReplyInfo.IsDeleted
                     };
+                }
+
+                if (replyToMessageId.HasValue) // فقط لو في reply حقيقي
+                {
+                    if (_realtime is ChatRealtimeClient realtimeClient)
+                    {
+                        await realtimeClient.SendMessageWithReplyAsync(roomId, pending);
+                    }
                 }
 
                 // Trigger حدث الرد
@@ -842,21 +1046,11 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     public async Task NotifyTypingAsync(Guid roomId)
     {
-        if ((DateTime.UtcNow - _lastTyping).TotalMilliseconds < 800)
-            return;
-
-        _lastTyping = DateTime.UtcNow;
-
-        try
+        if (_realtime is ChatRealtimeClient realtimeClient)
         {
-            await _chatService.StartTypingAsync(roomId);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Typing] Error: {ex.Message}");
+            await realtimeClient.NotifyTypingAsync(roomId);
         }
     }
-
     public async Task NotifyTypingStoppedAsync(Guid roomId)
     {
         try
@@ -1004,21 +1198,22 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     public string GetSenderName(Guid userId)
     {
-        // البحث في GroupMembers
-        if (GroupMembers?.Members != null)
-        {
-            var member = GroupMembers.Members.FirstOrDefault(m => m.Id == userId);
-            if (member != null && !string.IsNullOrEmpty(member.DisplayName))
-                return member.DisplayName;
-        }
+        // ✅ لو الرسالة بتاعتك
+        if (userId == CurrentUserId)
+            return "You";
 
-        // البحث في OnlineUsers
-        var onlineUser = OnlineUsers.FirstOrDefault(u => u.Id == userId);
-        if (onlineUser != null && !string.IsNullOrEmpty(onlineUser.DisplayName))
-            return onlineUser.DisplayName;
+        // Group members
+        var member = GroupMembers?.Members?.FirstOrDefault(m => m.Id == userId);
+        if (member != null && !string.IsNullOrWhiteSpace(member.DisplayName))
+            return member.DisplayName;
 
-        // البحث في OtherUser
-        if (OtherUser?.Id == userId && !string.IsNullOrEmpty(OtherUser.DisplayName))
+        // Online users
+        var online = OnlineUsers.FirstOrDefault(u => u.Id == userId);
+        if (online != null && !string.IsNullOrWhiteSpace(online.DisplayName))
+            return online.DisplayName;
+
+        // Private other user
+        if (OtherUser?.Id == userId && !string.IsNullOrWhiteSpace(OtherUser.DisplayName))
             return OtherUser.DisplayName;
 
         return "User";
@@ -1085,5 +1280,122 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _flags.RoomMuteChanged -= OnRoomMuteChanged;
         _flags.UserBlockChanged -= OnUserBlockChanged;
         UnregisterRealtimeEvents();
+    }
+    public void DebugMessages()
+    {
+        Console.WriteLine($"=== DEBUG MESSAGES ===");
+        Console.WriteLine($"Total messages: {Messages.Count}");
+
+        var original = Messages.Where(m => !m.ReplyToMessageId.HasValue).ToList();
+        var replies = Messages.Where(m => m.ReplyToMessageId.HasValue).ToList();
+
+        Console.WriteLine($"Original: {original.Count}, Replies: {replies.Count}");
+
+        // تحقق من التكرار
+        var duplicateGroups = Messages
+            .GroupBy(m => m.Id)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        if (duplicateGroups.Any())
+        {
+            Console.WriteLine("⚠️ DUPLICATE MESSAGES FOUND!");
+            foreach (var group in duplicateGroups)
+            {
+                Console.WriteLine($"  Message {group.Key} appears {group.Count()} times");
+            }
+        }
+
+        // تحقق من التكرار بالمحتوى
+        var contentDuplicates = Messages
+            .GroupBy(m => new { m.Content, m.SenderId, m.CreatedAt })
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        if (contentDuplicates.Any())
+        {
+            Console.WriteLine("⚠️ CONTENT DUPLICATES FOUND!");
+            foreach (var group in contentDuplicates)
+            {
+                Console.WriteLine($"  '{group.Key.Content}' appears {group.Count()} times");
+            }
+        }
+    }
+    private async Task PerformSearchAsync()
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var ct = _searchCts.Token;
+
+        // تغيير الشرط ليسمح بحرف واحد (بشرط ميكونش مسافة فاضية)
+        if (string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            SearchResults.Clear();
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(300, ct);
+            var results = await _chatService.SearchMessagesAsync(Room!.Id, SearchQuery);
+
+            SearchResults.Clear();
+            foreach (var res in results) SearchResults.Add(res);
+            NotifyChanged();
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void OnMessageUpdated(Guid messageId, string newContent)
+    {
+        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg != null)
+        {
+            msg.Content = newContent;
+            msg.IsEdited = true;
+            NotifyChanged();
+        }
+    }
+
+    private void OnMessageDeleted(Guid messageId)
+    {
+        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg != null)
+        {
+            msg.IsDeleted = true;
+            msg.Content = "This message was deleted";
+            NotifyChanged();
+        }
+    }
+
+    public async Task EditMessageAsync(Guid messageId, string newContent)
+    {
+        try
+        {
+            await _chatService.EditMessageAsync(messageId, newContent);
+        }
+        catch (Exception ex)
+        {
+            _toasts.Error("Edit failed", ex.Message);
+        }
+    }
+
+    public async Task DeleteMessageAsync(Guid messageId, bool forEveryone)
+    {
+        try
+        {
+            await _chatService.DeleteMessageAsync(messageId, forEveryone);
+        }
+        catch (Exception ex)
+        {
+            _toasts.Error("Delete failed", ex.Message);
+        }
+    }
+
+    public async Task PinMessageWithDurationAsync(Guid messageId, string duration)
+    {
+        await _chatService.PinMessageAsync(Room.Id, messageId, duration);
+        // السيرفر هيبعت SignalR يضيف رسالة نظام تلقائياً في الشات
+        // والـ TopBar هيحدث نفسه فوراً
     }
 }

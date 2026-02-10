@@ -197,8 +197,20 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await MemberRemovedAsync(roomId, memberId, null, null, users);
     }
 
-   
 
+    public async Task MessageUpdatedAsync(MessageId messageId, string newContent, IEnumerable<UserId> recipients)
+    {
+        var tasks = recipients.Select(r =>
+            _hub.Clients.User(r.Value.ToString()).SendAsync("MessageUpdated", messageId.Value, newContent));
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task MessageDeletedAsync(MessageId messageId, IEnumerable<UserId> recipients)
+    {
+        var tasks = recipients.Select(r =>
+            _hub.Clients.User(r.Value.ToString()).SendAsync("MessageDeleted", messageId.Value));
+        await Task.WhenAll(tasks);
+    }
 
     public async Task MessageReadAsync(
     MessageId messageId,
@@ -268,4 +280,11 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
         await Task.WhenAll(tasks);
     }
+    public async Task NotifyMessagePinned(Guid roomId, Guid? messageId)
+    {
+        // إرسال الإشارة لكل المشتركين في الغرفة عبر SignalR
+        await _hub.Clients.Group(roomId.ToString())
+            .SendAsync("MessagePinned", roomId, messageId);
+    }
+
 }

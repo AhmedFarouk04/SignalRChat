@@ -2,8 +2,10 @@
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Http;
 using EnterpriseChat.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 using System.Text.Json;
+using static System.Net.WebRequestMethods;
 
 namespace EnterpriseChat.Client.Services.Chat;
 
@@ -82,6 +84,16 @@ public sealed class ChatService : IChatService
     {
         return await _api.GetAsync<MessageReceiptStatsDto>($"/api/chat/messages/{messageId}/stats", ct);
     }
+    public async Task<MessageReactionsDetailsDto?> GetMessageReactionsDetailsAsync(Guid messageId)
+    {
+        return await _api.GetAsync<MessageReactionsDetailsDto>(
+            $"/api/chat/messages/{messageId}/reactions/details");
+    }
+    public Task EditMessageAsync(Guid messageId, string newContent)
+    => _api.PatchAsync<string, object>(ApiEndpoints.EditMessage(messageId), newContent);
+
+    public Task DeleteMessageAsync(Guid messageId, bool deleteForEveryone)
+        => _api.DeleteAsync(ApiEndpoints.DeleteMessage(messageId, deleteForEveryone));
 
     public async Task<List<UserDto>> GetMessageReadersAsync(Guid messageId, CancellationToken ct = default)
     {
@@ -116,24 +128,77 @@ public sealed class ChatService : IChatService
             request,
             ct);
     }
+    // داخل ميثود PinMessageAsync في ChatService.cs
+    public async Task PinMessageAsync(Guid roomId, Guid? messageId)
+    {
+        // حل مشكلة الـ PostAsync باستخدام ميثود مخصصة أو الـ SendAsync العام
+        var json = System.Text.Json.JsonSerializer.Serialize(new { MessageId = messageId });
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
+        await _api.SendAsync(HttpMethod.Post, $"api/rooms/{roomId}/pin", content);
+    }
     public async Task<MessageReactionsModel?> GetMessageReactionsAsync(Guid messageId, CancellationToken ct = default)
     {
         return await _api.GetAsync<MessageReactionsModel>($"/api/chat/messages/{messageId}/reactions", ct);
     }
     // EnterpriseChat.Client/Services/ChatService.cs
     // EnterpriseChat.Client/Services/ChatService.cs
-    public async Task<MessageDto?> SendMessageWithReplyAsync(Guid roomId, string content, Guid? replyToMessageId)
+    public async Task<MessageDto?> SendMessageWithReplyAsync(
+         Guid roomId,
+         string content,
+         ReplyInfoModel? replyInfo)
     {
         var request = new
         {
             RoomId = roomId,
             Content = content,
-            ReplyToMessageId = replyToMessageId
+            ReplyToMessageId = replyInfo?.MessageId,
+            ReplyInfo = replyInfo // ✅ هتبعت الـ snapshot مع الطلب
         };
 
         return await _api.PostAsync<object, MessageDto>(
             ApiEndpoints.SendMessage,
             request);
+    }
+
+    public async Task PinMessageAsync(Guid roomId, Guid? messageId, string? duration = null)
+    {
+        var payload = new { MessageId = messageId, Duration = duration };
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+        await _api.SendAsync(HttpMethod.Post, $"api/rooms/{roomId}/pin", content);
+    }
+    // EnterpriseChat.Client/Services/Chat/ChatService.cs
+
+    // EnterpriseChat.Client/Services/Chat/ChatService.cs
+    public async Task<IReadOnlyList<MessageModel>> SearchMessagesAsync(Guid roomId, string term, int take = 50)
+    {
+        if (string.IsNullOrWhiteSpace(term)) return [];
+
+        var dtos = await _api.GetAsync<IReadOnlyList<MessageReadDto>>(
+            ApiEndpoints.SearchMessages(roomId, term, take)) ?? [];
+
+        return dtos.Select(m => new MessageModel
+        {
+            Id = m.Id,
+            RoomId = m.RoomId,
+            SenderId = m.SenderId,
+            Content = m.Content,
+            CreatedAt = m.CreatedAt,
+            Status = (Models.MessageStatus)(int)m.Status
+            // يمكنك إضافة باقي الحقول حسب الحاجة
+        }).ToList();
+    }
+
+    // EnterpriseChat.Client/Services/Chat/ChatService.cs
+
+    // EnterpriseChat.Client/Services/Chat/ChatService.cs
+
+    public async Task ForwardMessagesAsync(ForwardMessagesRequest request)
+    {
+        // ✅ التعديل هنا: حدد الـ Types عشان الـ Compiler ميتلخبطش
+        // <RequestType, ResponseType>
+        await _api.PostAsync<ForwardMessagesRequest, object>("api/chat/messages/forward", request);
     }
 }

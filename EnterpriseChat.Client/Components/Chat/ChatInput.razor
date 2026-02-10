@@ -2,27 +2,29 @@
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
+@inject ReplyContext ReplyContext
 
 <div class="composer">
     <!-- ✅ Reply Preview -->
-    @if (ReplyContext.Current != null && ReplyContext.Current.MessageId != Guid.Empty)
+    @if (ReplyContext.MessageId != Guid.Empty)
     {
         <div class="reply-context">
             <div class="reply-header">
-                <span>Replying to @ReplyContext.Current.SenderName</span>
+                <span>Replying to @ReplyContext.SenderName</span>
                 <button class="cancel-reply" @onclick="CancelReply" type="button">✕</button>
             </div>
-            <div class="reply-preview-text">@ReplyContext.Current.ContentPreview</div>
+            <div class="reply-preview-text">@ReplyContext.ContentPreview</div>
         </div>
     }
 
     <div class="composer-box">
         <textarea class="composer-input"
                   @ref="inputRef"
-                  placeholder="@(ReplyContext.Current != null ? "Type your reply…" : "Message…")"
+                  placeholder="@(ReplyContext.MessageId != Guid.Empty ? "Type your reply…" : "Message…")"
                   @bind-value="text"
                   @bind-value:event="oninput"
                   @onkeydown="OnKeyDown"></textarea>
+
 
         <button class="composer-send"
                 type="button"
@@ -39,9 +41,6 @@
 
     [Parameter] public EventCallback<string> OnSend { get; set; }
     [Parameter] public EventCallback OnUserTyping { get; set; }
-
-    // ✅ Parameter جديد للرد
-    [Parameter] public EventCallback<Guid?> OnReply { get; set; }
 
     private bool IsSendDisabled => string.IsNullOrWhiteSpace(text);
 
@@ -69,10 +68,12 @@
         await OnUserTyping.InvokeAsync();
     }
 
-    private async Task OnInput(ChangeEventArgs _)
+    private async Task OnInput(ChangeEventArgs e)
     {
+        text = e.Value?.ToString() ?? "";
         await DebouncedTypingAsync();
     }
+
 
     private async Task DebouncedTypingAsync()
     {
@@ -102,14 +103,7 @@
         var toSend = text.TrimEnd();
         text = string.Empty;
 
-        // ✅ أرسل مع معرف الرد
-        Guid? replyToId = null;
-        if (ReplyContext.Current != null && ReplyContext.Current.MessageId != Guid.Empty)
-        {
-            replyToId = ReplyContext.Current.MessageId;
-        }
-
-        // استدعاء دالة جديدة تدعم الرد
+        // ✅ الإرسال نفسه بيتم من Chat.razor/VM مع ReplyContext.MessageId
         await OnSend.InvokeAsync(toSend);
 
         // ✅ إلغاء الرد بعد الإرسال
@@ -120,13 +114,10 @@
 
     private void CancelReply()
     {
-        if (ReplyContext.Current != null)
-        {
-            ReplyContext.Current.MessageId = Guid.Empty;
-            ReplyContext.Current.SenderName = "";
-            ReplyContext.Current.ContentPreview = "";
-            ReplyContext.Current.CreatedAt = DateTime.MinValue;
-        }
+        ReplyContext.MessageId = Guid.Empty;
+        ReplyContext.SenderName = "";
+        ReplyContext.ContentPreview = "";
+        ReplyContext.CreatedAt = DateTime.MinValue;
     }
 
     public void Dispose()

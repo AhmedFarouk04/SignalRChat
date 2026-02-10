@@ -40,3 +40,144 @@
         padding: 12px;
     }
 }
+/* تأثير الزجاج الاحترافي للرسالة المثبتة */
+.pinned-banner {
+    position: sticky; /* يفضل استخدام sticky لضمان بقائها تحت الـ TopBar */
+    top: 0;
+    z-index: 80; /* أقل من الـ Popups وأعلى من الرسائل */
+    background: rgba(15, 23, 42, 0.75); /* لون داكن شفاف */
+    backdrop-filter: blur(12px); /* جوهر تأثير الزجاج - التغبيش */
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08); /* خط سفلي خفيف جداً */
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    animation: slideDown 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+    .pinned-banner:hover {
+        background: rgba(30, 41, 59, 0.85); /* تفتيح بسيط عند الوقوف بالماوس */
+    }
+
+/* أيقونة الدبوس */
+.pin-icon {
+    font-size: 16px;
+    filter: drop-shadow(0 0 5px var(--accent-main)); /* توهج خفيف حول الدبوس */
+}
+
+.pin-content {
+    flex: 1;
+    min-width: 0; /* ضروري لعمل الـ ellipsis */
+}
+
+.pin-label {
+    color: var(--text-accent);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+}
+
+.pin-text {
+    color: var(--text-primary);
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.9;
+}
+
+/* زر إغلاق الـ Pin */
+.close-pin {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+    .close-pin:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ef4444;
+    }
+
+/* أنيميشن الظهور السلس */
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+.pin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: grid;
+    place-items: center;
+    z-index: 5000;
+    backdrop-filter: blur(4px);
+}
+
+.pin-modal {
+    background: #202c33;
+    color: #e9edef;
+    padding: 24px;
+    border-radius: 12px;
+    width: 320px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+
+.pin-modal-header {
+    font-size: 16px;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+.pin-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.pin-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+}
+
+.btn-pin {
+    color: #00a884;
+    background: none;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-cancel {
+    color: #8696a0;
+    background: none;
+    border: none;
+    cursor: pointer;
+}

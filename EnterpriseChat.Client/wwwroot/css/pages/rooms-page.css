@@ -16,42 +16,48 @@
     margin: 0;
 }
 
-/* Search + Tabs */
+/* Search + Tabs - الحل هنا */
 .rooms-toolbar {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px; /* قللنا من 10px */
     margin-bottom: 12px;
 }
 
 .rooms-search {
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 10px; /* ⬅️ قللنا padding */
     border-radius: 999px;
     border: 1px solid var(--border-subtle);
     background: rgba(255,255,255,.02);
     color: var(--text-primary);
     outline: none;
+    font-size: 14px;
 }
 
     .rooms-search:focus {
         border-color: rgba(56,189,248,0.65);
+        box-shadow: 0 0 0 2px rgba(56,189,248,0.1);
     }
 
 .rooms-tabs {
     display: flex;
-    gap: 8px;
+    gap: 6px; /* قللنا من 8px */
     flex-wrap: wrap;
 }
 
 .tab {
-    padding: 8px 12px;
+    padding: 6px 10px; /* ⬅️ قللنا من 8px 12px */
     border-radius: 999px;
     border: 1px solid var(--border-subtle);
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    transition: background var(--transition-fast), color var(--transition-fast), border var(--transition-fast);
+    font-size: 13px; /* ⬅️ حجم أصغر */
+    transition: background var(--transition-fast), 
+                color var(--transition-fast), 
+                border var(--transition-fast);
+    white-space: nowrap;
 }
 
     .tab:hover {
@@ -63,6 +69,7 @@
         background: rgba(56,189,248,0.14);
         border-color: rgba(56,189,248,0.28);
         color: var(--text-primary);
+        font-weight: 600;
     }
 
 /* List */
@@ -132,64 +139,6 @@
     font-size: 13px;
 }
 
-.room-main {
-    flex: 1;
-    min-width: 0;
-}
-
-.room-meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.room-time {
-    font-size: 11px;
-    color: var(--text-secondary);
-    opacity: .9;
-}
-
-.room-preview {
-    margin-top: 2px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-
-.user-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px;
-    border-radius: 14px;
-    border: 1px solid rgba(148,163,184,0.12);
-    background: rgba(2,6,23,0.35);
-}
-
-.user-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-}
-
-.mini-btn {
-    border: 1px solid rgba(56,189,248,0.35);
-    background: rgba(56,189,248,0.12);
-    padding: 10px 14px;
-    border-radius: 12px;
-    color: #e2e8f0;
-    cursor: pointer;
-}
-
-    .mini-btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
 .room-item {
     margin-bottom: 10px;
 }
@@ -219,30 +168,39 @@
     align-items: center;
     justify-content: center;
     font-size: 18px;
-    background: rgba(255,255,255,.06);
+    background: linear-gradient(135deg, #6a5cff, #4f8cff);
+    color: #fff;
     position: relative;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
-    .room-avatar.private .avatar-text {
-        font-weight: 700;
-        opacity: .9;
+    .room-avatar .avatar-text {
+        font-weight: 800;
+        opacity: .95;
+        line-height: 1;
     }
 
     .room-avatar.group {
-        font-size: 18px;
+        background: linear-gradient(135deg, #ff7a18, #ffb347);
     }
 
-.online-dot {
-    position: absolute;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    right: 3px;
-    bottom: 3px;
-    background: #22c55e;
-    border: 2px solid #0b1220;
-}
+    .room-avatar.private {
+        background: linear-gradient(135deg, #4f8cff, #7b61ff);
+        position: relative;
+    }
+
+    .room-avatar.private .online-dot {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        right: 2px;
+        bottom: 2px;
+        background: #22c55e;
+        box-shadow: 0 0 6px rgba(34, 197, 94, 0.8);
+        border: 2px solid #0f172a;
+    }
 
 .room-main {
     flex: 1;
@@ -261,6 +219,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 15px;
 }
 
 .room-meta {
@@ -270,7 +229,20 @@
     flex-shrink: 0;
 }
 
+.room-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: .9;
+}
 
+.room-preview {
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 .typing {
     color: #60a5fa;
@@ -289,24 +261,26 @@
     padding: 0 7px;
     background: rgba(96,165,250,.2);
 }
+
+/* Layout improvements */
 .rooms-page {
     display: flex;
     flex-direction: column;
-    height: 100%; /* ✅ ياخد full height من .content */
+    height: 100%;
     padding: 14px;
 }
 
 .rooms-toolbar {
-    flex-shrink: 0; /* ✅ الsearch + tabs متقلش */
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 12px;
 }
 
 .rooms-list {
-    flex: 1; /* ✅ ياخد الباقي كله */
-    overflow-y: auto; /* ✅ scroll لو الrooms كتير */
+    flex: 1;
+    overflow-y: auto;
     list-style: none;
     padding: 0;
     margin: 0;
@@ -315,20 +289,6 @@
     gap: 8px;
 }
 
-/* لو في empty أو skeleton */
-.rooms-empty,
-.loading-screen { /* لو موجود */
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-}
-
-.room-last-status {
-    opacity: .7;
-    font-size: .95em;
-}
 /* Typing indicators in rooms list */
 .typing-indicator-room {
     color: #60a5fa;
@@ -374,28 +334,56 @@
 }
 
 /* Message status in rooms list */
+/* Message status in rooms list - تحسين التمييز */
 .room-last-status {
-    font-size: 12px;
-    opacity: 0.8;
-    display: inline-block;
+    font-size: 13px; /* كبرناه شوية عشان العين تبقى أوضح */
+    opacity: 0.9;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px; /* مسافة صغيرة بين الـ checks والعين */
+    font-weight: 600;
+    transition: color 0.2s ease;
 }
 
-    .room-last-status.read {
-        color: #4CAF50;
-    }
-
-    .room-last-status.delivered {
-        color: #2196F3;
-    }
-
-    .room-last-status.sent {
-        color: #9E9E9E;
-    }
-
+    /* Pending: برتقالي/أصفر (جاري الإرسال) */
     .room-last-status.pending {
-        color: #FF9800;
+        color: #f59e0b !important;
     }
 
-    .room-last-status.failed {
-        color: #f44336;
+    /* Sent: رمادي فاتح (أرسلت بس ما وصلتش) */
+    .room-last-status.sent {
+        color: #94a3b8 !important;
     }
+
+    /* Delivered: رمادي متوسط (وصلت بس ما اتقرأتش) */
+    .room-last-status.delivered {
+        color: #64748b !important; /* غامق شوية عن Sent عشان تمييز */
+    }
+
+    /* Read: أزرق قوي ومميز (اتقرأت) */
+    .room-last-status.read {
+        color: #0d94ea !important; /* أزرق WhatsApp الكلاسيكي القوي */
+        font-weight: 700;
+    }
+
+        /* العين في Read - نخليها أوضح */
+        .room-last-status.read::after {
+            font-size: 11px;
+            opacity: 0.9;
+        }
+
+    /* Failed: أحمر قوي */
+    .room-last-status.failed {
+        color: #ef4444 !important;
+        animation: pulse 1.5s infinite;
+    }
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.8;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}

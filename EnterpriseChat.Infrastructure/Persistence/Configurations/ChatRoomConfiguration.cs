@@ -13,29 +13,23 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Id)
-            .HasConversion(id => id.Value, value => new RoomId(value))
-            .IsRequired();
+        // ✅ حذف الـ HasConversion من هنا
+        builder.Property(x => x.Id).IsRequired();
 
         builder.Property(x => x.Name)
             .HasMaxLength(200);
 
         builder.Property(x => x.Type).IsRequired();
         builder.Property(x => x.CreatedAt).IsRequired();
+        builder.Property(x => x.OwnerId).IsRequired(false);
 
-        builder.Property(x => x.OwnerId)
-            .HasConversion(
-                id => id!.Value,
-                value => new UserId(value))
-            .IsRequired(false);
-
-        // ✅ اربط الـ navigation بالـ backing field
+        // ✅ Members navigation
         builder.Metadata.FindNavigation(nameof(ChatRoom.Members))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
-        builder.HasMany(x => x.Members)          // ✅ مهم: HasMany(x => x.Members)
+        builder.HasMany(x => x.Members)
             .WithOne()
-            .HasForeignKey(m => m.RoomId)        // ✅ FK الحقيقي
+            .HasForeignKey(m => m.RoomId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasMany<Message>()

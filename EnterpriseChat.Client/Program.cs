@@ -5,10 +5,12 @@ using EnterpriseChat.Client.Services.Attachments;
 using EnterpriseChat.Client.Services.Chat;
 using EnterpriseChat.Client.Services.Http;
 using EnterpriseChat.Client.Services.JsInterop;
+using EnterpriseChat.Client.Services.Reaction;
 using EnterpriseChat.Client.Services.Realtime;
 using EnterpriseChat.Client.Services.Rooms;
 using EnterpriseChat.Client.Services.Ui;
 using EnterpriseChat.Client.ViewModels;
+using EnterpriseChat.Domain.Interfaces;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -35,7 +37,6 @@ builder.Services.AddScoped<IApiClient, ApiClient>();
 
 builder.Services.AddScoped<IChatRealtimeClient, ChatRealtimeClient>();
 builder.Services.AddScoped<IScrollService, ScrollService>();
-
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IRoomService, RoomService>();
 builder.Services.AddScoped<ChatViewModel>();
@@ -52,4 +53,11 @@ builder.Services.AddScoped<AttachmentsApi>();
 builder.Services.AddScoped<PresenceApi>();
 builder.Services.AddSingleton<RoomFlagsStore>();
 builder.Services.AddScoped<NotificationSoundService>();
+builder.Services.AddScoped<EnterpriseChat.Client.Models.ReplyContext>();
+builder.Services.AddScoped<ReactionsApi>();
+
+builder.Logging.SetMinimumLevel(LogLevel.Debug);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Components.WebAssembly.Rendering", LogLevel.Debug);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Components", LogLevel.Debug);
+
 await builder.Build().RunAsync();

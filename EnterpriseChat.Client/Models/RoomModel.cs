@@ -10,7 +10,7 @@ public sealed class RoomModel
     public string? OtherDisplayName { get; init; }
 
     public int UnreadCount { get; init; }
-
+    public Guid? PinnedMessageId { get; set; } // تم تغييرها من init لـ set    public string? PinnedMessagePreview { get; init; } // اختياري لعرض نص الرسالة فوق
     // ✅ جديد
     public bool IsMuted { get; init; }
 }

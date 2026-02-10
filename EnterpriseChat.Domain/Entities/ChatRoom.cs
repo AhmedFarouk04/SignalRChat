@@ -13,8 +13,8 @@ public sealed class ChatRoom
 
     // Group owner (for Group rooms only)
     public UserId? OwnerId { get; private set; }
-
-
+    public Guid? PinnedMessageId { get; private set; }
+    public DateTime? PinnedUntilUtc { get; private set; }
 
     private readonly List<ChatRoomMember> _members = new();
     public IReadOnlyCollection<ChatRoomMember> Members => _members.AsReadOnly();
@@ -163,7 +163,29 @@ public sealed class ChatRoom
         Name = name.Trim();
     }
 
+    public void PinMessage(Guid? messageId, TimeSpan? duration)
+    {
+        if (messageId == null)
+        {
+            // حالة إلغاء التثبيت (Unpin)
+            PinnedMessageId = null;
+            PinnedUntilUtc = null;
+            return;
+        }
 
+        PinnedMessageId = messageId;
+
+        // إذا تم تحديد مدة، نحسب وقت الانتهاء
+        if (duration.HasValue)
+        {
+            PinnedUntilUtc = DateTime.UtcNow.Add(duration.Value);
+        }
+        else
+        {
+            PinnedUntilUtc = null; // تثبيت دائم
+        }
+    }
+    public void UnpinMessage() => PinnedMessageId = null;
 
 
 }

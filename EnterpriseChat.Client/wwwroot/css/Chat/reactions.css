@@ -1,0 +1,137 @@
+﻿
+/* Reactions popup container (ONE canonical version) */
+.reactions-hover-wrap {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    z-index: 3000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+/* show when open */
+.msg.reactions-open .reactions-hover-wrap {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* panel */
+.reaction-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+    max-width: min(520px, calc(100vw - 80px));
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+    .reaction-actions::-webkit-scrollbar {
+        display: none;
+    }
+
+/* buttons */
+.reaction-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    display: grid;
+    place-items: center;
+    transition: transform 0.12s ease, background 0.12s ease;
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+}
+
+    .reaction-btn:hover {
+        transform: translateY(-1px) scale(1.06);
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .reaction-btn.selected {
+        background: rgba(56, 189, 248, 0.25);
+        outline: 2px solid rgba(56, 189, 248, 0.4);
+    }
+
+/* ✅ Reaction summary chip under bubble (pill style)
+   - Supports: one emoji or multiple emojis + total count */
+.msg-reaction-chip {
+    position: absolute;
+    bottom: -14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    z-index: 600;
+}
+
+.msg.mine .msg-reaction-chip {
+    right: 12px;
+}
+
+.msg.theirs .msg-reaction-chip {
+    left: 12px;
+}
+
+.reaction-chip-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.reaction-emoji {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.reaction-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e5e7eb;
+    margin-left: 4px;
+}
+/* في reactions.css أو message-bubble.css */
+.reactions-hover-wrap, .msg-context-menu {
+    z-index: 9999 !important; /* قيمة عالية جداً */
+}
+/* reactions.css */
+.reactions-hover-wrap {
+    z-index: 9999 !important; /* قيمة خيالية عشان تظهر فوق الكل */
+    pointer-events: auto; /* التأكد إنها بتستجيب */
+}
+
+/* لو محتاج "تغش" وتعمل شفافية تقفل لما تضغط عليها */
+.msg.reactions-open::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 2999; /* تحت البانل مباشرة */
+    background: transparent;
+}
+.reaction-actions {
+    pointer-events: auto !important;
+}
+
+.reaction-btn {
+    pointer-events: auto !important;
+    user-select: none; /* عشان ما يحصلش تحديد نص بالغلط */
+}

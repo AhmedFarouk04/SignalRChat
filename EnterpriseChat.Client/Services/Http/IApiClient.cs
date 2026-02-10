@@ -24,6 +24,6 @@ public interface IApiClient
 
     public sealed record ApiFile(byte[] Bytes, string FileName, string ContentType);
     Task<byte[]> GetBytesAsync(string url, CancellationToken ct = default);
-
+    Task<TResponse?> PatchAsync<TRequest, TResponse>(string url, TRequest body, CancellationToken ct = default);
     Task<HttpStatusCode> SendAsync(HttpMethod method, string url, HttpContent? content = null, CancellationToken ct = default);
 }

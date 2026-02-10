@@ -1,0 +1,20 @@
+﻿
+@media (max-width: 768px) {
+    .msg-hover-area {
+        left: -40px;
+        right: -40px;
+    }
+
+    .msg.mine .msg-react-trigger {
+        left: -40px;
+    }
+
+    .msg.theirs .msg-react-trigger {
+        right: -40px;
+    }
+
+    /* reactions panel width protection */
+    .reaction-actions {
+        max-width: min(420px, calc(100vw - 110px));
+    }
+}

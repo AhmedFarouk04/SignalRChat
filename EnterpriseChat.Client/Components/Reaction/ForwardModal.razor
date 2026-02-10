@@ -1,0 +1,96 @@
+﻿@using EnterpriseChat.Client.Models
+@using EnterpriseChat.Client.ViewModels
+@inject ChatViewModel VM
+@inject RoomsViewModel RoomsVM
+
+@if (IsOpen)
+{
+    <div class="forward-modal-overlay" @onclick="Close">
+        <div class="forward-modal" @onclick:stopPropagation="true">
+            <div class="forward-modal-header">
+                <span class="forward-modal-title">Forward to...</span>
+                <button class="forward-modal-close" @onclick="Close">✕</button>
+            </div>
+
+            <div class="modal-search">
+                <input type="text" placeholder="Search chats..."
+                       @bind="searchTerm" @bind:event="oninput" autofocus />
+            </div>
+
+            <div class="modal-body">
+                <div class="targets-list">
+                    @if (!FilteredRooms.Any())
+                    {
+                        <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                            No chats found.
+                        </div>
+                    }
+                    @foreach (var room in FilteredRooms)
+                    {
+                        <div class="target-item @(selectedRoomIds.Contains(room.Id) ? "selected" : "")"
+                             @onclick="() => ToggleTarget(room.Id)">
+                            <div class="target-avatar">@(room.Name?[0] ?? 'C')</div>
+                            <div class="target-info">
+                                <div class="target-name">@room.Name</div>
+                                <div class="target-type">@(room.Type == "Private" ? "Private Chat" : "Group")</div>
+                            </div>
+                            <div class="target-check">
+                                @if (selectedRoomIds.Contains(room.Id))
+                                {
+                                    <span class="check-mark">✓</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="forward-modal-footer">
+                <div style="color: var(--text-secondary); font-size: 13px;">
+                    @selectedRoomIds.Count Selected
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-cancel" @onclick="Close">Cancel</button>
+                    <button class="btn-send-forward @(selectedRoomIds.Any() ? "active" : "")"
+                            disabled="@(!selectedRoomIds.Any())"
+                            @onclick="HandleForward">
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string searchTerm = "";
+    private List<Guid> selectedRoomIds = new();
+
+    private IEnumerable<RoomListItemModel> FilteredRooms =>
+        RoomsVM.Rooms.Where(r => string.IsNullOrEmpty(searchTerm) ||
+                                r.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                     .Take(15); // زودنا العدد شوية
+
+    private void ToggleTarget(Guid roomId)
+    {
+        if (selectedRoomIds.Contains(roomId)) selectedRoomIds.Remove(roomId);
+        else selectedRoomIds.Add(roomId);
+    }
+
+    private void Close()
+    {
+        selectedRoomIds.Clear();
+        searchTerm = "";
+        OnClose.InvokeAsync();
+    }
+
+    private async Task HandleForward()
+    {
+        if (!selectedRoomIds.Any()) return;
+        var success = await VM.ExecuteForwardAsync(selectedRoomIds);
+        if (success) Close();
+    }
+}

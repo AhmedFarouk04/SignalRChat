@@ -1,0 +1,972 @@
+﻿/* bubble wrapper */
+.msg {
+    max-width: 75%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    margin: 2px 0;
+    position: relative;
+    z-index: 1;
+}
+
+    .msg.mine {
+        align-self: flex-end;
+        align-items: flex-end;
+    }
+
+    .msg.theirs {
+        align-self: flex-start;
+        align-items: flex-start;
+    }
+
+/* bubble core */
+.msg-body {
+    position: relative;
+    display: inline-block;
+    width: fit-content;
+    max-width: 100%;
+    min-width: 42px;
+    padding: 8px 10px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    z-index: 5;
+}
+
+/* colors */
+.msg.mine .msg-body {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+}
+
+.msg.theirs .msg-body {
+    background: rgba(55, 65, 81, 0.95);
+    color: #e5e7eb;
+    border: 1px solid rgba(75, 85, 99, 0.4);
+}
+
+/* Markdown = inline */
+.msg-text,
+.markdown-content {
+    display: inline;
+}
+
+    .markdown-content p {
+        display: inline;
+        margin: 0;
+    }
+
+    .markdown-content br {
+        display: block;
+    }
+
+/* edited/deleted */
+.edited-badge {
+    font-size: 10.5px;
+    opacity: 0.75;
+    margin-left: 6px;
+}
+
+.deleted-message {
+    color: rgba(148, 163, 184, 0.6) !important;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* META like WhatsApp */
+.message-meta {
+    float: right;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 8px;
+    margin-top: 6px;
+    font-size: 10.5px;
+    opacity: 0.8;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.msg.mine .message-time {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.msg.theirs .message-time {
+    color: rgba(203, 213, 225, 0.9);
+}
+
+/* checks */
+.message-status-icon {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+
+    .message-status-icon .st {
+        font-size: 12px;
+        line-height: 1;
+        transform: translateY(0.4px);
+    }
+
+.msg.mine .message-status-icon.sent .st {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.msg.mine .message-status-icon.delivered .st {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.msg.mine .message-status-icon.read .st {
+    color: #38bdf8;
+}
+
+.message-status-icon.failed .st {
+    color: #f87171;
+}
+
+.message-status-icon.pending {
+    opacity: 0.85;
+}
+
+/* GROUPING + TAIL */
+.msg.mine.g-start .msg-body {
+    border-bottom-right-radius: 6px;
+}
+
+.msg.mine.g-mid .msg-body {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.msg.mine.g-end .msg-body {
+    border-top-right-radius: 6px;
+}
+
+.msg.theirs.g-start .msg-body {
+    border-bottom-left-radius: 6px;
+}
+
+.msg.theirs.g-mid .msg-body {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.msg.theirs.g-end .msg-body {
+    border-top-left-radius: 6px;
+}
+
+/* WhatsApp Tail Logic - يظهر فقط في بداية المجموعة */
+.msg.mine.g-start .msg-body::after,
+.msg.mine.g-single .msg-body::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -8px;
+    width: 12px;
+    height: 12px;
+    background: linear-gradient(135deg, #2563eb 50%, transparent 50%);
+    clip-path: polygon(0 0, 0% 100%, 100% 0);
+}
+
+.msg.theirs.g-start .msg-body::after,
+.msg.theirs.g-single .msg-body::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -8px;
+    width: 12px;
+    height: 12px;
+    background: rgba(55, 65, 81, 0.95);
+    clip-path: polygon(100% 0, 100% 100%, 0 0);
+}
+
+.msg.mine.g-mid .msg-body::after,
+.msg.mine.g-start .msg-body::after,
+.msg.theirs.g-mid .msg-body::after,
+.msg.theirs.g-start .msg-body::after {
+    display: none;
+}
+
+/* z-index lift on hover */
+.msg:hover {
+    z-index: 100;
+}
+
+.msg.deleted .msg-body::after {
+    display: none;
+}
+
+/* خيارات الرسالة (السهم) - مخفي افتراضياً */
+.msg-options-btn {
+    position: absolute;
+    top: 2px;
+    right: 5px;
+    background: linear-gradient(to bottom, rgba(30,41,59,0.8), transparent);
+    border: none;
+    color: white;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.1s;
+    border-radius: 0 15px 0 15px;
+}
+
+.msg-body:hover .msg-options-btn {
+    opacity: 1;
+}
+
+/* زر الرياكشن السريع */
+.quick-react-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1000;
+    cursor: pointer;
+    pointer-events: auto !important;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255,255,255,0.1);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.msg:hover .quick-react-btn {
+    opacity: 1;
+}
+
+.msg.mine .quick-react-btn {
+    left: -40px;
+}
+
+.msg.theirs .quick-react-btn {
+    right: -40px;
+}
+
+/* كلاس التميز للرسالة المختارة */
+.highlight-flash {
+    animation: flash-pulse 2s ease-out;
+    position: relative;
+    z-index: 10;
+}
+
+@keyframes flash-pulse {
+    0% {
+        background-color: rgba(56, 189, 248, 0.6);
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+        transform: scale(1.02);
+    }
+
+    50% {
+        background-color: rgba(56, 189, 248, 0.2);
+        transform: scale(1.01);
+    }
+
+    100% {
+        background-color: transparent;
+        transform: scale(1);
+    }
+}
+
+/* ====== FIX: تصحيح مشكلة msg-selection-wrapper ====== */
+.chat-messages {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 16px;
+    gap: 4px;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+.msg-selection-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 2px 0;
+    transition: background-color 0.2s;
+}
+
+    .msg-selection-wrapper.mine-wrapper {
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+    }
+
+    .msg-selection-wrapper.theirs-wrapper {
+        flex-direction: row;
+        justify-content: flex-start;
+    }
+
+.selection-active:hover {
+    background: rgba(56, 189, 248, 0.05);
+    cursor: pointer;
+}
+
+.custom-checkbox {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--accent-main, #38bdf8);
+    border-radius: 50%;
+    margin: 0 12px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+    .custom-checkbox.selected {
+        background: var(--accent-main);
+        color: white;
+    }
+
+:not(.selection-active) .custom-checkbox {
+    display: none;
+}
+
+/* ====== تنسيق Forward Action Bar ====== */
+.forward-action-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background: rgba(15, 23, 42, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 2000;
+    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3);
+    border-top: 1px solid var(--border-subtle);
+    animation: slideUp 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.selection-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+    .close-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+.forward-submit-btn {
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    color: #000;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 25px;
+    font-weight: bold;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2);
+}
+
+    .forward-submit-btn.active {
+        opacity: 1;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(74, 222, 128, 0.3);
+    }
+
+    .forward-submit-btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.4;
+    }
+
+    .forward-submit-btn.active:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(74, 222, 128, 0.4);
+    }
+
+/* ====== تنسيق الـ Forward Modal ====== */
+.forward-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.3s ease;
+}
+
+.forward-modal {
+    background: var(--bg-panel);
+    width: 90%;
+    max-width: 450px;
+    max-height: 80vh;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-subtle);
+    animation: modalSlideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.forward-modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.forward-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.forward-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+    .forward-modal-close:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+.targets-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.target-item {
+    display: flex;
+    align-items: center;
+    padding: 14px 20px;
+    gap: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+    .target-item:last-child {
+        border-bottom: none;
+    }
+
+    .target-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .target-item.selected {
+        background: rgba(56, 189, 248, 0.15);
+        border-left: 3px solid var(--accent-main);
+    }
+
+.target-avatar {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: white;
+    font-size: 16px;
+}
+
+.target-info {
+    flex: 1;
+}
+
+.target-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.target-type {
+    font-size: 12px;
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.target-check {
+    color: var(--accent-main);
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.target-item.selected .target-check {
+    opacity: 1;
+}
+
+.forward-modal-footer {
+    padding: 20px 24px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.btn-cancel {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+    .btn-cancel:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: var(--text-secondary);
+    }
+
+.btn-send-forward {
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    color: #000;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.3s;
+    min-width: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+    .btn-send-forward.active {
+        opacity: 1;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+    }
+
+        .btn-send-forward.active:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 222, 128, 0.4);
+        }
+
+    .btn-send-forward:disabled {
+        cursor: not-allowed;
+        opacity: 0.4;
+    }
+
+/* Animations */
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ====== تعديلات Responsive ====== */
+@media (max-width: 768px) {
+    .forward-action-bar {
+        height: 60px;
+        padding: 0 16px;
+    }
+
+    .forward-submit-btn {
+        padding: 10px 20px;
+        font-size: 14px;
+    }
+
+    .forward-modal {
+        width: 95%;
+        max-height: 85vh;
+    }
+
+    .target-item {
+        padding: 12px 16px;
+    }
+
+    .target-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 15px;
+    }
+
+    .custom-checkbox {
+        width: 20px;
+        height: 20px;
+        margin: 0 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .selection-info {
+        font-size: 14px;
+    }
+
+    .custom-checkbox {
+        width: 18px;
+        height: 18px;
+        margin: 0 8px;
+    }
+}
+
+
+/* ====== 1. زرار Forward (الألوان الجديدة) ====== */
+.forward-submit-btn {
+    background: linear-gradient(135deg, #38bdf8, #2563eb); /* تدرج أزرق بدل الأخضر */
+    color: #fff;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 25px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+}
+
+    .forward-submit-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+    }
+
+/* ====== 2. إظهار الـ Select (Checkbox) ====== */
+.msg-selection-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 4px 12px; /* مساحة جانبية كافية */
+    gap: 15px;
+    transition: all 0.3s ease;
+}
+
+/* في وضع الاختيار، نضمن أن الحاوية لا تخفي العناصر الجانبية */
+.selection-active {
+    background: rgba(56, 189, 248, 0.03);
+}
+
+.custom-checkbox {
+    width: 22px;
+    height: 22px;
+    border: 2px solid #38bdf8;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-panel); /* خلفية عشان يظهر */
+}
+
+/* ====== 3. إصلاح الـ Forward Modal ====== */
+.forward-modal {
+    background: #1e293b; /* لون داكن صريح */
+    width: 95%;
+    max-width: 450px;
+    min-height: 400px; /* ضمان طول مناسب */
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-search input {
+    width: 100%;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    padding: 12px;
+    border-radius: 8px;
+    color: white;
+    margin: 15px;
+    width: calc(100% - 30px); /* موازنة المسافات */
+}
+
+.modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 10px 10px;
+}
+
+/* قائمة الناس */
+.target-item {
+    background: rgba(255,255,255,0.02);
+    margin-bottom: 8px;
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.target-name {
+    color: #f1f5f9;
+    font-weight: 500;
+}
+.chat-page {
+    position: relative; /* ده أهم سطر عشان البار السفلي يلتزم بحدود الشات */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.forward-action-bar {
+    position: absolute; /* غيرناها من fixed لـ absolute */
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 65px; /* قللنا الطول سنة عشان يبقا زي الـ composer */
+    background: var(--bg-panel, #0f172a);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 1002; /* لازم يبقا فوق الـ composer */
+    border-top: 1px solid var(--border-subtle);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.4);
+}
+.forward-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    backdrop-filter: blur(4px);
+}
+
+.forward-modal {
+    background: #1e293b; /* نفس لون مشروعك الداكن */
+    width: 90%;
+    max-width: 420px;
+    max-height: 85vh; /* بياخد أغلب طول الشاشة لو الداتا كتير */
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.targets-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+/* تأكد من أن هذه الأنماط موجودة */
+.selection-active .msg-selection-wrapper {
+    position: relative;
+    cursor: pointer;
+}
+
+.selection-active .custom-checkbox {
+    display: flex !important; /* إجبار ظهور الـ checkbox */
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* تحسين ظهور الـ checkbox */
+.custom-checkbox {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--accent-main, #38bdf8);
+    border-radius: 50%;
+    display: none; /* مخفي افتراضياً */
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+    .custom-checkbox.selected {
+        background: var(--accent-main);
+        color: white;
+    }
+
+/* عندما نكون في وضع الاختيار */
+.selection-active .msg-selection-wrapper::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(56, 189, 248, 0.05);
+    border-radius: 8px;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.selection-active .msg-selection-wrapper:hover::before {
+    opacity: 1;
+}
+
+/* تغيير كل الألوان الخضراء في الـ Forward Modal */
+.forward-submit-btn,
+.btn-send-forward {
+    background: linear-gradient(135deg, var(--accent-main, #38bdf8), #0ea5e9) !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3) !important;
+}
+
+.forward-submit-btn.active,
+.btn-send-forward.active {
+    box-shadow: 0 6px 20px rgba(56, 189, 248, 0.4) !important;
+}
+
+.forward-submit-btn.active:hover,
+.btn-send-forward.active:hover {
+    box-shadow: 0 8px 25px rgba(56, 189, 248, 0.5) !important;
+}
+
+/* تغيير ألوان الهوامش والحدود */
+.target-item.selected {
+    background: rgba(56, 189, 248, 0.1) !important;
+    border-left: 3px solid var(--accent-main) !important;
+}
+
+.target-check {
+    color: var(--accent-main) !important;
+}
+/* إعادة تصميم كاملة لـ msg-selection-wrapper */
+.msg-selection-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 2px 0;
+    gap: 10px;
+    position: relative;
+    min-height: 40px; /* ارتفاع مناسب */
+}
+
+/* جميع الـ checkboxes تكون على اليسار */
+.selection-active .msg-selection-wrapper::before {
+    content: "";
+    position: absolute;
+    left: -16px;
+    right: -16px;
+    top: 0;
+    bottom: 0;
+    background: rgba(56, 189, 248, 0.03);
+    border-radius: 8px;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.selection-active .msg-selection-wrapper:hover::before {
+    opacity: 1;
+}
+
+/* الـ checkbox نفسه - دائماً على اليسار */
+.custom-checkbox {
+    position: absolute;
+    left: 8px; /* مسافة من الحافة اليسرى */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--accent-main, #38bdf8);
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    z-index: 10;
+    background: var(--bg-panel);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+/* إظهار الـ checkbox فقط في وضع الاختيار */
+.selection-active .custom-checkbox {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.custom-checkbox.selected {
+    background: var(--accent-main);
+    border-color: var(--accent-main);
+}
+
+    .custom-checkbox.selected::after {
+        color: white;
+        font-size: 14px;
+        font-weight: bold;
+    }
+
+/* تعديل مسافة الرسائل عندما يكون هناك selection */
+.selection-active .msg {
+    margin-left: 40px !important; /* مساحة للـ checkbox على اليسار */
+    transition: margin-left 0.3s ease;
+}
+
+/* التأكد من أن الرسائل تحافظ على اتجاهها */
+.msg.mine {
+    align-self: flex-end;
+    margin-right: 0;
+}
+
+.msg.theirs {
+    align-self: flex-start;
+    margin-left: 40px; /* نفس المساحة */
+}

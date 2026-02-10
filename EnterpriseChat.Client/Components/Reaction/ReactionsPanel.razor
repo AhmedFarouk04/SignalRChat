@@ -6,54 +6,48 @@
         @foreach (var reaction in AvailableReactions)
         {
             <button class="reaction-btn @(IsSelected(reaction) ? "selected" : "")"
-                    @onclick="() => OnReactionClick(reaction)"
-                    title="@GetReactionName(reaction)">
+                    type="button"
+                    @onmousedown="() => OnReactionClick(reaction)"
+                    title="@GetReactionName(reaction)"
+                    style="font-family: 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif; font-size: 22px;">
                 @GetReactionEmoji(reaction)
             </button>
         }
     </div>
-
-    @if (Reactions?.Counts.Any() == true)
-    {
-        <div class="reaction-summary">
-            @foreach (var kv in Reactions.Counts.OrderByDescending(x => x.Value))
-            {
-                <span class="reaction-badge" @onclick="() => ShowReactionUsers(kv.Key)">
-                    @GetReactionEmoji(kv.Key) @kv.Value
-                </span>
-            }
-        </div>
-    }
 </div>
 
 @code {
     [Parameter] public Guid MessageId { get; set; }
     [Parameter] public MessageReactionsModel? Reactions { get; set; }
-    [Parameter] public EventCallback<ReactionType> OnReaction { get; set; }
 
-    private List<ReactionType> AvailableReactions => new()
-    {
-        ReactionType.Like,
-        ReactionType.Love,
-        ReactionType.Laugh,
-        ReactionType.Wow,
-        ReactionType.Sad,
-        ReactionType.Angry,
-        ReactionType.ThumbsUp,
-        ReactionType.ThumbsDown,
-        ReactionType.Fire,
-        ReactionType.Party,
-        ReactionType.Clap,
-        ReactionType.Pray
-    };
-
-    private bool IsSelected(ReactionType type)
-        => Reactions?.CurrentUserReactionType == type;
+    [Parameter] public EventCallback<ReactionPayload> OnReaction { get; set; }
 
     private async Task OnReactionClick(ReactionType type)
     {
-        await OnReaction.InvokeAsync(type);
+        await OnReaction.InvokeAsync(new ReactionPayload
+        {
+            MessageId = MessageId,
+            Type = type
+        });
     }
+
+    private List<ReactionType> AvailableReactions => new()
+{
+    ReactionType.Like,
+    ReactionType.Love,
+    ReactionType.Laugh,
+    ReactionType.Wow,
+    ReactionType.Sad,
+    ReactionType.Angry,
+    ReactionType.ThumbsDown,
+    ReactionType.Fire,
+    ReactionType.Party,
+    ReactionType.Clap,
+    ReactionType.Pray
+};
+
+
+    private bool IsSelected(ReactionType type) => Reactions?.CurrentUserReactionType == type;
 
     private string GetReactionEmoji(ReactionType type) => type switch
     {
@@ -72,26 +66,5 @@
         _ => "❓"
     };
 
-    private string GetReactionName(ReactionType type) => type switch
-    {
-        ReactionType.Like => "Like",
-        ReactionType.Love => "Love",
-        ReactionType.Laugh => "Laugh",
-        ReactionType.Wow => "Wow",
-        ReactionType.Sad => "Sad",
-        ReactionType.Angry => "Angry",
-        ReactionType.ThumbsUp => "Thumbs Up",
-        ReactionType.ThumbsDown => "Thumbs Down",
-        ReactionType.Fire => "Fire",
-        ReactionType.Party => "Party",
-        ReactionType.Clap => "Clap",
-        ReactionType.Pray => "Pray",
-        _ => "Unknown"
-    };
-
-    private void ShowReactionUsers(ReactionType type)
-    {
-        // يمكن فتح modal يظهر المستخدمين الذين تفاعلوا بهذا الـ reaction
-        Console.WriteLine($"Users who reacted with {type}: {Reactions?.Counts.GetValueOrDefault(type) ?? 0}");
-    }
+    private string GetReactionName(ReactionType type) => type.ToString();
 }

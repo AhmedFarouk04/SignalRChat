@@ -1,0 +1,36 @@
+﻿@if (IsOpen)
+{
+    <div class="pin-modal-backdrop" @onclick="OnCancel">
+        <div class="pin-modal" @onclick:stopPropagation="true">
+            <div class="pin-modal-header">Choose how long your pin lasts</div>
+            <div class="pin-modal-sub">You can unpin at any time.</div>
+
+            <div class="pin-options">
+                @foreach (var opt in _options)
+                {
+                    <label class="pin-opt @(_selected == opt.Id ? "active" : "")">
+                        <input type="radio" name="pinDur" checked="@(_selected == opt.Id)" @onchange="() => _selected = opt.Id" />
+                        <span class="radio-custom"></span>
+                        <span class="opt-label">@opt.Label</span>
+                    </label>
+                }
+            </div>
+
+            <div class="pin-modal-actions">
+                <button class="btn-text" @onclick="OnCancel">Cancel</button>
+                <button class="btn-filled" @onclick="() => OnConfirm.InvokeAsync(_selected)">Pin</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback<string> OnConfirm { get; set; }
+
+    private string _selected = "24h";
+    private List<(string Id, string Label)> _options = new() {
+        ("24h", "24 hours"), ("7d", "7 days"), ("30d", "30 days")
+    };
+}

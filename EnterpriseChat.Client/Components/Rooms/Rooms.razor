@@ -6,6 +6,8 @@
 @inject RoomsViewModel VM
 @inject IChatRealtimeClient Realtime
 @inject NavigationManager Nav
+@implements IAsyncDisposable
+
 
 @implements IDisposable
 
@@ -108,37 +110,30 @@
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            await Realtime.ConnectAsync();
-            Console.WriteLine("[RoomsPage] SignalR Connected successfully, OnlineUsers count: " + (Realtime.State.OnlineUsers?.Count ?? 0));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("[RoomsPage] SignalR Connect FAILED: " + ex.Message);
-        }
         VM.Changed += OnVmChanged;
-
-        // subscribe realtime events (مرة واحدة)
         SubscribeRealtime();
+        await Realtime.ConnectAsync();
+        Console.WriteLine("[RoomsPage] SignalR Connected - now loading rooms and joining");
 
-        // load rooms
-        await VM.LoadAsync();
+        await VM.LoadAsync(); // initial load
 
-        // connect realtime (حتى لو VM عمل connect - ConnectAsync عندك safe)
-        try
+        Console.WriteLine($"[RoomsPage] Loaded {VM.Rooms.Count()} rooms - now joining all");
+
+        foreach (var room in VM.Rooms)
         {
-            await Realtime.ConnectAsync();
-        }
-        catch
-        {
-            // ignore – الصفحة هتشتغل عادي بس بدون presence realtime
+            await Realtime.JoinRoomAsync(room.Id);
         }
 
-        // initial snapshot for online users
-        ApplyOnlineSnapshot();
+        Console.WriteLine("[RoomsPage] All rooms joined");
 
+        // انتظر وقت قصير جدًا (أقل من 500ms) عشان الـ server يخلّص الـ Deliver ويبعت events
+
+        // لو لسه مش محدث، force re-render + log
+        Console.WriteLine("[RoomsPage] Forcing UI refresh after initial deliver");
+        await VM.RefreshRoomStatusesAsync();  // ← ده هيحدث الـ status فورًا بدون delay أو events
         await InvokeAsync(StateHasChanged);
+
+        ApplyOnlineSnapshot();
     }
 
     private void SubscribeRealtime()
@@ -277,12 +272,23 @@
         Console.WriteLine($"[RoomsPage] RoomUpdated DIRECT RECEIVED: RoomId={upd.RoomId}");
         _ = InvokeAsync(StateHasChanged); // لو الـ VM مش كفاية
     }
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         VM.Changed -= OnVmChanged;
-
         UnsubscribeRealtime();
 
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+
+        // تنظيف إضافي إذا احتجت
+        _onlineMap.Clear();
+        _typingMap.Clear();
+    }
+    public void Dispose()
+    {
+        // Sync cleanup - ابقى زي ما هو أو أضف تنظيف إضافي
+        VM.Changed -= OnVmChanged;
+        UnsubscribeRealtime();
         _searchCts?.Cancel();
         _searchCts?.Dispose();
     }

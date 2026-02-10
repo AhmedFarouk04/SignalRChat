@@ -7,6 +7,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
+
 using System.Security.Claims;
 
 namespace EnterpriseChat.API.Hubs;
@@ -49,7 +50,11 @@ public sealed class ChatHub : Hub
 
         await base.OnConnectedAsync();
     }
-
+    public async Task PinMessage(Guid roomId, Guid? messageId)
+    {
+        // هنا ممكن تضيف Logic للتأكد إن اللي بيثبت هو الـ Owner
+        await Clients.Group(roomId.ToString()).SendAsync("MessagePinned", roomId, messageId);
+    }
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var userId = GetUserId();
@@ -98,8 +103,7 @@ public sealed class ChatHub : Hub
         var user = GetUserId();
         var rid = new RoomId(Guid.Parse(roomId));
 
-        var room = await _roomRepository.GetByIdAsync(rid);
-        if (room is null)
+        var room = await _roomRepository.GetByIdWithMembersAsync(rid, Context.ConnectionAborted); if (room is null)
             throw new HubException("Room not found.");
 
         // التحقق من العضوية أو الدعوة الحديثة
@@ -130,16 +134,7 @@ public sealed class ChatHub : Hub
         await Clients.Caller.SendAsync("RoomPresenceUpdated", rid.Value, count);
         await _mediator.Send(new DeliverRoomMessagesCommand(rid, user));
 
-        await Clients.User(user.Value.ToString())
-            .SendAsync("RoomUpdated", new RoomUpdatedDto
-            {
-                RoomId = rid.Value,
-                MessageId = Guid.Empty,
-                SenderId = user.Value,
-                Preview = "",
-                CreatedAt = DateTime.UtcNow,
-                UnreadDelta = int.MinValue
-            });
+       
     }
 
 
@@ -234,8 +229,33 @@ public sealed class ChatHub : Hub
         await Clients.Group(roomId.ToString()).SendAsync("MemberAdded", roomId, userId, displayName);
     }
 
-   
 
+    public async Task SendMessageWithReply(SendMessageWithReplyRequest request)
+    {
+        var userId = GetUserId();
+
+        var command = new SendMessageCommand(
+            new RoomId(request.RoomId),
+            userId,
+            request.Content,
+            request.ReplyToMessageId.HasValue ?
+                new MessageId(request.ReplyToMessageId.Value) : null);
+
+        var result = await _mediator.Send(command);
+
+        // ✅ إرسال الـ ReplyInfo كاملة
+        await Clients.Group(request.RoomId.ToString())
+            .SendAsync("MessageReceived", new
+            {
+                Id = result.Id,
+                RoomId = result.RoomId,
+                SenderId = result.SenderId,
+                Content = result.Content,
+                CreatedAt = result.CreatedAt,
+                ReplyToMessageId = result.ReplyToMessageId,
+                ReplyInfo = result.ReplyInfo // ✅ هيرسل كل البيانات
+            });
+    }
     private UserId GetUserId()
 {
     var raw =

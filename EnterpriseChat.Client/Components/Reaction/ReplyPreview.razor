@@ -17,13 +17,11 @@
 
 @code {
     [Parameter] public ReplyInfoModel? ReplyInfo { get; set; }
-    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public EventCallback<Guid> OnClick { get; set; } // ✅
 
     private async Task NavigateToReply()
     {
         if (ReplyInfo != null)
-        {
-            await OnClick.InvokeAsync();
-        }
+            await OnClick.InvokeAsync(ReplyInfo.MessageId);
     }
 }

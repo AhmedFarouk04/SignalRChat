@@ -14,13 +14,9 @@ public sealed class ChatRoomMemberConfiguration
 
         builder.HasKey(x => new { x.RoomId, x.UserId });
 
-        builder.Property(x => x.RoomId)
-            .HasConversion(id => id.Value, value => new RoomId(value))
-            .IsRequired();
-
-        builder.Property(x => x.UserId)
-            .HasConversion(id => id.Value, value => new UserId(value))
-            .IsRequired();
+        // ✅ حذف الـ HasConversion من هنا
+        builder.Property(x => x.RoomId).IsRequired();
+        builder.Property(x => x.UserId).IsRequired();
 
         builder.Property(x => x.IsAdmin)
             .IsRequired()
@@ -35,10 +31,9 @@ public sealed class ChatRoomMemberConfiguration
 
         builder.HasIndex(x => x.UserId);
 
-        // ✅ مهم: اربطها بـ RoomId فقط
+        // ✅ العلاقة
         builder.HasOne<ChatRoom>()
             .WithMany(r => r.Members)
             .HasForeignKey(m => m.RoomId);
     }
-
 }

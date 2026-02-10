@@ -59,18 +59,27 @@
         window.notifyPlay = playNotify;
 
         // ✅ تعيين دوال إضافية
-        window.scrollToMessage = window.scrollToMessage || ((id) => {
-            const el = document.getElementById(id);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
+      // ✅ تحسين الوصول للرسالة وجعلها في منتصف الشاشة
+window.scrollToMessage = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+};
 
-        window.highlightMessage = window.highlightMessage || ((id) => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.classList.add('highlighted');
-                setTimeout(() => el.classList.remove('highlighted'), 2000);
-            }
-        });
+// ✅ تنفيذ الوميض باستخدام الكلاس المتفق عليه في الـ CSS
+window.highlightMessage = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+        // نستخدم نفس الاسم اللي في الـ CSS
+        el.classList.add('highlight-flash'); 
+        
+        // نشيله بعد ثانيتين (مدة الأنميشن)
+        setTimeout(() => {
+            el.classList.remove('highlight-flash');
+        }, 2000);
+    }
+};
     </script>
 </body>
 </html>

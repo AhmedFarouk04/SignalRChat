@@ -1,4 +1,6 @@
-﻿using EnterpriseChat.Application.DTOs;
+﻿using EnterpriseChat.API.Contracts.Messaging;
+using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Features.Messaging.Queries;
 using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
@@ -42,5 +44,24 @@ public sealed class RoomsController : BaseController
                 GetCurrentUserId()),
             ct));
     }
+
+    [HttpPost("{roomId}/pin")]
+    public async Task<IActionResult> PinMessage(Guid roomId, [FromBody] PinRequest dto)
+    {
+        var duration = dto.Duration switch
+        {
+            "24h" => TimeSpan.FromHours(24),
+            "7d" => TimeSpan.FromDays(7),
+            "30d" => TimeSpan.FromDays(30),
+            _ => (TimeSpan?)null
+        };
+
+        await _mediator.Send(new PinMessageCommand(new RoomId(roomId),
+            dto.MessageId.HasValue ? new MessageId(dto.MessageId.Value) : null,
+            duration));
+
+        return Ok();
+    }
+
 }
 

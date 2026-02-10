@@ -1,0 +1,58 @@
+﻿@using EnterpriseChat.Application.DTOs
+@using EnterpriseChat.Domain.Enums
+
+@if (Data != null)
+{
+    <div class="reaction-modal-backdrop" @onclick="Close">
+        <div class="reaction-modal" @onclick:stopPropagation="true">
+
+            <div class="reaction-list">
+                @foreach (var r in Data.Entries)
+                {
+                    <div class="reaction-row"
+                         @onclick="() => OnRowClicked(r)">
+                        <span class="name">@r.DisplayName</span>
+                        <span class="emoji">@GetEmoji(r.Type)</span>
+
+                        @if (r.IsMe)
+                        {
+                            <small class="me">Click to remove</small>
+                        }
+                    </div>
+                }
+            </div>
+
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public MessageReactionsDetailsDto? Data { get; set; }
+    [Parameter] public EventCallback<Guid> OnRemoveMyReaction { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task OnRowClicked(ReactionEntryDto entry)
+    {
+        if (!entry.IsMe) return;
+
+        await OnRemoveMyReaction.InvokeAsync(entry.UserId);
+        await OnClose.InvokeAsync(); // ✅ close after remove
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private string GetEmoji(ReactionType type) => type switch
+    {
+        ReactionType.Like => "👍",
+        ReactionType.Love => "❤️",
+        ReactionType.Laugh => "😂",
+        ReactionType.Wow => "😮",
+        ReactionType.Sad => "😢",
+        ReactionType.Angry => "😠",
+        ReactionType.Fire => "🔥",
+        ReactionType.Party => "🎉",
+        ReactionType.Clap => "👏",
+        ReactionType.Pray => "🙏",
+        _ => "❓"
+    };
+}

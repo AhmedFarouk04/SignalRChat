@@ -21,6 +21,10 @@ public class Message
     public DateTime CreatedAt { get; private set; }
     private readonly List<Reaction> _reactions = new();
     public IReadOnlyCollection<Reaction> Reactions => _reactions.AsReadOnly();
+    public bool IsEdited { get; private set; }
+    public bool IsDeleted { get; private set; }
+    public DateTime? UpdatedAt { get; private set; }
+    public DateTime? DeletedAt { get; private set; }
     private Message() { }
 
     public Message(
@@ -83,7 +87,27 @@ public class Message
 
         AddDomainEvent(new MessageReadEvent(Id, userId));
     }
+    public void Edit(string newContent)
+    {
+        if (IsDeleted) throw new InvalidOperationException("Cannot edit a deleted message.");
 
+        Content = newContent;
+        IsEdited = true;
+        UpdatedAt = DateTime.UtcNow;
+
+        // هنضيف Domain Event هنا لاحقاً عشان الـ Real-time
+        // AddDomainEvent(new MessageUpdatedEvent(Id, RoomId, Content, UpdatedAt.Value));
+    }
+
+    // Method لحذف الرسالة
+    public void Delete()
+    {
+        IsDeleted = true;
+        DeletedAt = DateTime.UtcNow;
+        Content = "This message was deleted"; // Placeholder
+
+        // AddDomainEvent(new MessageDeletedEvent(Id, RoomId, DeletedAt.Value));
+    }
 
     private void AddDomainEvent(DomainEvent domainEvent)
     {

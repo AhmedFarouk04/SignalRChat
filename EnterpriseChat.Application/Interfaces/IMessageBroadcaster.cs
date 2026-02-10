@@ -35,6 +35,10 @@ public interface IMessageBroadcaster
     Task AdminDemotedAsync(RoomId roomId, UserId userId, IEnumerable<UserId> users);
     Task OwnerTransferredAsync(RoomId roomId, UserId newOwnerId, IEnumerable<UserId> users);
 
+
+    Task MessageUpdatedAsync(MessageId messageId, string newContent, IEnumerable<UserId> recipients);
+    Task MessageDeletedAsync(MessageId messageId, IEnumerable<UserId> recipients);
+
     // في IMessageBroadcaster.cs
     Task MessageStatusUpdatedAsync(
         MessageId messageId,
@@ -59,4 +63,5 @@ public interface IMessageBroadcaster
         ReactionType reactionType,
         bool isNewReaction,
         IEnumerable<UserId> roomMembers);
+    Task NotifyMessagePinned(Guid roomId, Guid? messageId);
 }

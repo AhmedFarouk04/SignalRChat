@@ -14,43 +14,9 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         builder.HasKey(x => x.Id);
 
-        // MessageId
-        builder.Property(x => x.Id)
-            .HasConversion(
-                id => id.Value,
-                value => MessageId.From(value))
-            .Metadata.SetValueComparer(
-                new ValueComparer<MessageId>(
-                    (a, b) => a.Value == b.Value,
-                    v => v.Value.GetHashCode(),
-                    v => MessageId.From(v.Value)));
-
+        // ✅ حذف الـ Value Converters من هنا لأنها في DbContext
         builder.Property(x => x.Id).IsRequired();
-
-        // RoomId
-        builder.Property(x => x.RoomId)
-            .HasConversion(
-                id => id.Value,
-                value => new RoomId(value))
-            .Metadata.SetValueComparer(
-                new ValueComparer<RoomId>(
-                    (a, b) => a.Value == b.Value,
-                    v => v.Value.GetHashCode(),
-                    v => new RoomId(v.Value)));
-
         builder.Property(x => x.RoomId).IsRequired();
-
-        // SenderId
-        builder.Property(x => x.SenderId)
-            .HasConversion(
-                id => id.Value,
-                value => new UserId(value))
-            .Metadata.SetValueComparer(
-                new ValueComparer<UserId>(
-                    (a, b) => a.Value == b.Value,
-                    v => v.Value.GetHashCode(),
-                    v => new UserId(v.Value)));
-
         builder.Property(x => x.SenderId).IsRequired();
 
         builder.Property(x => x.Content)
@@ -60,7 +26,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 
-        // Receipts navigation uses backing field
+        // ✅ Receipts navigation
         builder.Metadata
             .FindNavigation(nameof(Message.Receipts))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
