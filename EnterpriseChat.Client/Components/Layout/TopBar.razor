@@ -9,7 +9,6 @@
             <div class="search-input-wrapper">
                 <input type="text" class="search-input" placeholder="Search in chat..."
                        @bind="VM.SearchQuery" @bind:event="oninput" autofocus />
-
                 @if (VM.SearchResults.Any())
                 {
                     <div class="search-results-dropdown">
@@ -38,7 +37,6 @@
             <div class="room-header">
                 <div class="room-main">
                     <div class="room-title">@Title</div>
-
                     <div class="room-sub">
                         @if (IsPrivate && OtherUser != null)
                         {
@@ -64,36 +62,29 @@
                         }
                     </div>
                 </div>
-
                 <div class="room-actions">
                     <!-- زر البحث الجديد -->
                     <button class="icon-btn" title="Search" @onclick="() => VM.IsSearching = true">🔍</button>
-
                     @if (!IsPrivate)
                     {
                         <button class="icon-btn" type="button" title="Members" @onclick="() => OnMembers.InvokeAsync()">
                             👥
                         </button>
                     }
-
                     @if (IsPrivate)
                     {
-                        <button class="icon-btn" type="button" title="@(IsBlocked ? "Unblock" : "Block")" @onclick="() => (IsBlocked ? OnUnblock : OnBlock).InvokeAsync()">
-                            @(IsBlocked ? "🔓" : "🚫")
+                        <button class="icon-btn" type="button" title="@(IsBlockedByMe ? "Unblock" : "Block")" @onclick="() => (IsBlockedByMe ? OnUnblock : OnBlock).InvokeAsync()">
+                            @(IsBlockedByMe ? "🔓" : "🚫")
                         </button>
                     }
-
                     <button class="icon-btn" type="button" title="Mute" @onclick="() => OnMuteToggle.InvokeAsync()">
                         @(IsMuted ? "🔕" : "🔔")
                     </button>
                 </div>
             </div>
-
             @if (VM?.PinnedMessages != null && VM.PinnedMessages.Any())
             {
-                // الحصول على الرسالة المراد عرضها بناءً على الـ Index الحالي
                 var currentPinned = GetCurrentPinned();
-
                 <div class="pinned-msg-bar" @onclick="RotatePinnedMessages">
                     <div class="pin-indicator-group">
                         <span class="pin-icon-small">📌</span>
@@ -106,8 +97,6 @@
                         <span style="color: var(--accent-main); font-weight: bold;">Pinned: </span>
                         @currentPinned.Content
                     </div>
-
-                    @* زر صغير اختياري للذهاب للرسالة الأصلية *@
                     <button class="icon-btn" style="font-size: 10px;" @onclick:stopPropagation="true"
                             @onclick="() => OnScrollToMessage.InvokeAsync(currentPinned.Id)">
                         ➡️
@@ -122,7 +111,6 @@
     [Parameter] public RoomModel? Room { get; set; }
     [Parameter] public ChatViewModel? VM { get; set; }
     [Parameter] public EventCallback<Guid> OnScrollToMessage { get; set; }
-
     [Parameter] public int MembersCount { get; set; }
     [Parameter] public int OnlineCount { get; set; }
     [Parameter] public UserModel? OtherUser { get; set; }
@@ -130,7 +118,7 @@
     [Parameter] public EventCallback OnMuteToggle { get; set; }
     [Parameter] public EventCallback OnBlock { get; set; }
     [Parameter] public EventCallback OnMembers { get; set; }
-    [Parameter] public bool IsBlocked { get; set; }
+    [Parameter] public bool IsBlockedByMe { get; set; }   // ← التغيير الرئيسي هنا
     [Parameter] public EventCallback OnUnblock { get; set; }
 
     private bool IsPrivate => Room?.Type == "Private";
@@ -140,7 +128,6 @@
 
     private MessageModel GetCurrentPinned()
     {
-        // حماية لو الـ index خرج عن النطاق
         if (_displayIndex >= VM.PinnedMessages.Count) _displayIndex = 0;
         return VM.PinnedMessages[_displayIndex];
     }
@@ -149,12 +136,9 @@
     {
         if (VM.PinnedMessages.Count <= 1)
         {
-            // لو واحدة بس، اضغط يوديك ليها علطول
             OnScrollToMessage.InvokeAsync(VM.PinnedMessages[0].Id);
             return;
         }
-
-        // لو أكتر من واحدة، يقلب الـ Index
         _displayIndex++;
         if (_displayIndex >= VM.PinnedMessages.Count)
         {
@@ -165,13 +149,8 @@
 
     private async Task OnSearchResultClick(Guid messageId)
     {
-        // 1. نقفل وضع البحث
         VM.IsSearching = false;
-
-        // 2. نستنى لحظة عشان الـ UI يستقر ويبطل يحاول ينزل تحت
         await Task.Delay(100);
-
-        // 3. نطلع للرسالة
         await OnScrollToMessage.InvokeAsync(messageId);
     }
 }

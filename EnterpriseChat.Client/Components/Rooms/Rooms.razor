@@ -7,6 +7,8 @@
 @inject IChatRealtimeClient Realtime
 @inject NavigationManager Nav
 @implements IAsyncDisposable
+@inject RoomFlagsStore Flags
+
 
 
 @implements IDisposable
@@ -82,13 +84,16 @@
             {
                 <RoomListItem @key="room.Id"
                               Room="room"
-                              IsOnline="@(room.Type == "Private" && room.OtherUserId != null
-                                                                  && _onlineMap.TryGetValue(room.OtherUserId.Value, out var on)
-                                                                      ? on
-                                                                      : (bool?)null)"
-                      LastSeenText="@(GetLastSeenText(room))"
-                      IsTyping="@(room.Type == "Private" && room.OtherUserId != null
-                                                          && _typingMap.Contains(room.OtherUserId.Value))" />
+                              IsOnline="@(IsBlockedPrivate(room) ? (bool?)null :
+                                                       (room.Type == "Private" && room.OtherUserId != null
+                                                           && _onlineMap.TryGetValue(room.OtherUserId.Value, out var on)
+                                                               ? on
+                                                               : (bool?)null))"
+                      LastSeenText="@(IsBlockedPrivate(room) ? null : GetLastSeenText(room))"
+                      IsTyping="@(IsBlockedPrivate(room) ? false :
+                                               (room.Type == "Private" && room.OtherUserId != null
+                                                   && _typingMap.Contains(room.OtherUserId.Value)))" />
+
                 }
         </ul>
     }
@@ -112,28 +117,52 @@
     {
         VM.Changed += OnVmChanged;
         SubscribeRealtime();
-        await Realtime.ConnectAsync();
-        Console.WriteLine("[RoomsPage] SignalR Connected - now loading rooms and joining");
 
-        await VM.LoadAsync(); // initial load
+        // 1️⃣ الأول: ابدأ الاتصال
+        Console.WriteLine("[RoomsPage] Starting SignalR connection...");
+        var connectTask = Realtime.ConnectAsync();
 
-        Console.WriteLine($"[RoomsPage] Loaded {VM.Rooms.Count()} rooms - now joining all");
+        // 2️⃣ ابدأ تحميل الرومات بالتوازي
+        Console.WriteLine("[RoomsPage] Loading rooms...");
+        var loadTask = VM.LoadAsync();
 
-        foreach (var room in VM.Rooms)
+        // 3️⃣ استنى الاتصال يكتمل
+        await connectTask;
+        Console.WriteLine("[RoomsPage] SignalR Connected ✅");
+
+        // 4️⃣ استنى الرومات تتحمل
+        await loadTask;
+        Console.WriteLine($"[RoomsPage] Loaded {VM.Rooms.Count()} rooms");
+
+        // 5️⃣ اتأكد إن الاتصال لسه شغال
+        if (!Realtime.State.IsConnected)
         {
-            await Realtime.JoinRoomAsync(room.Id);
+            Console.WriteLine("[RoomsPage] ⚠️ SignalR disconnected, retrying...");
+            await Realtime.ConnectAsync();
         }
 
-        Console.WriteLine("[RoomsPage] All rooms joined");
+        // 6️⃣ انضم للرومات واحدة واحدة مع delay صغير
+        var joinTasks = new List<Task>();
+        foreach (var room in VM.Rooms)
+        {
+            try
+            {
+                await Realtime.JoinRoomAsync(room.Id);
+                await Task.Delay(50); // منع الـ race condition
+                Console.WriteLine($"[RoomsPage] Joined room {room.Id}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RoomsPage] Failed to join room {room.Id}: {ex.Message}");
+            }
+        }
 
-        // انتظر وقت قصير جدًا (أقل من 500ms) عشان الـ server يخلّص الـ Deliver ويبعت events
+        Console.WriteLine("[RoomsPage] All rooms joined ✅");
 
-        // لو لسه مش محدث، force re-render + log
-        Console.WriteLine("[RoomsPage] Forcing UI refresh after initial deliver");
-        await VM.RefreshRoomStatusesAsync();  // ← ده هيحدث الـ status فورًا بدون delay أو events
-        await InvokeAsync(StateHasChanged);
-
+        // 7️⃣ أخيراً، حدث الـ UI
+        await VM.RefreshRoomStatusesAsync();
         ApplyOnlineSnapshot();
+        await InvokeAsync(StateHasChanged);
     }
 
     private void SubscribeRealtime()
@@ -221,10 +250,18 @@
         _typingMap.Remove(userId);
         _ = InvokeAsync(StateHasChanged);
     }
+    private bool IsBlockedPrivate(RoomListItemModel room)
+    {
+        if (room.Type != "Private" || room.OtherUserId == null) return false;
+        return Flags.GetBlocked(room.OtherUserId.Value);
+    }
 
     private string? GetLastSeenText(RoomListItemModel room)
     {
         if (room.Type != "Private" || room.OtherUserId == null) return null;
+
+        if (Flags.GetBlocked(room.OtherUserId.Value))
+            return null; // ✅ اخفاء بالكامل
 
         var id = room.OtherUserId.Value;
 
@@ -236,6 +273,7 @@
 
         return "Offline";
     }
+
 
     private void OnSearch(ChangeEventArgs e)
     {

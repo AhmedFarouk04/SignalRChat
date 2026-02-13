@@ -28,9 +28,13 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddScoped(sp =>
 {
-    // prefer config if present
     var apiBase = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7188";
-    return new HttpClient { BaseAddress = new Uri(apiBase.EndsWith("/") ? apiBase : apiBase + "/") };
+    var client = new HttpClient
+    {
+        BaseAddress = new Uri(apiBase.EndsWith("/") ? apiBase : apiBase + "/"),
+        Timeout = TimeSpan.FromSeconds(30)
+    };
+    return client;
 });
 
 builder.Services.AddScoped<IApiClient, ApiClient>();

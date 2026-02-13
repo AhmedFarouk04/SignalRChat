@@ -18,6 +18,8 @@ public sealed class RoomListItemDto
     public Guid? LastMessageId { get; init; }
 
     // ✅ NEW
+    public Guid? LastReadMessageId { get; set; }
+    public DateTime? LastReadAt { get; set; }
     public Guid? LastMessageSenderId { get; init; }
     public MessageStatus? LastMessageStatus { get; init; } // only meaningful when last msg is mine
 }

@@ -1,24 +1,34 @@
 ﻿@page "/groups/new"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-
+@using EnterpriseChat.Client.Authentication.Services
 @using EnterpriseChat.Client.Models
 @using EnterpriseChat.Client.Services.Http
 @using EnterpriseChat.Client.Services.Ui
-
+@using EnterpriseChat.Client.Authentication.Abstractions
+@using System.ComponentModel.DataAnnotations
 @inject UsersApi UsersApi
 @inject GroupsApi GroupsApi
 @inject NavigationManager Nav
 @inject ToastService Toasts
-
+@inject ICurrentUser CurrentUser
 
 <div class="rooms-page">
     <div class="rooms-header">
         <h2 class="rooms-title">Create group</h2>
     </div>
 
+    <!-- حقل الاسم بدون أي رسالة خطأ تلقائية -->
     <div class="rooms-toolbar" style="display:flex; gap:12px; flex-wrap:wrap;">
-        <input class="rooms-search" placeholder="Group name…" @bind="GroupName" />
-        <input class="rooms-search" placeholder="Search users…" @bind="query" @bind:event="oninput" />
+        <div style="flex:1; min-width:200px;">
+            <InputText class="rooms-search"
+                       placeholder="Group name…"
+                       @bind-Value="createModel.Name" />
+        </div>
+
+        <input class="rooms-search"
+               placeholder="Search users…"
+               @bind="query"
+               @bind:event="oninput" />
     </div>
 
     <div class="rooms-empty" style="padding:0; margin-top:12px;">
@@ -42,7 +52,6 @@
             @foreach (var u in results)
             {
                 var isSelected = selected.Any(x => x.Id == u.Id);
-
                 <li class="user-row">
                     <div class="user-left">
                         <div class="room-avatar"><span>@u.DisplayName.Substring(0, 1).ToUpper()</span></div>
@@ -51,7 +60,6 @@
                             <div class="room-preview">@u.Email</div>
                         </div>
                     </div>
-
                     <button type="button" class="mini-btn" @onclick="@(() => Toggle(u))">
                         @(isSelected ? "Remove" : "Add")
                     </button>
@@ -61,28 +69,58 @@
     }
 
     <div style="margin-top:14px; display:flex; gap:12px;">
-        <button type="button" class="auth-btn" disabled="@busy" @onclick="CreateAsync">
+        <button type="button"
+                class="auth-btn"
+                disabled="@(busy || !createModel.IsValid)"
+                @onclick="CreateAsync">
             @(busy ? "Creating..." : "Create")
         </button>
 
-        <button type="button" class="auth-btn secondary" @onclick="@(() => Nav.NavigateTo("/rooms"))">
+        <button type="button"
+                class="auth-btn secondary"
+                @onclick="@(() => Nav.NavigateTo("/rooms"))">
             Cancel
         </button>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(error))
+    <!-- كل رسايل الخطأ في مكان واحد تحت الأزرار -->
+    @if (!string.IsNullOrWhiteSpace(error) || (createModel.Submitted && !createModel.IsValid))
     {
-        <div class="auth-error" style="margin-top:12px;">@error</div>
+        <div class="auth-error" style="margin-top:12px;">
+            @if (createModel.Submitted && !createModel.IsValid)
+            {
+                @if (string.IsNullOrWhiteSpace(createModel.Name))
+                {
+                    <div>Group name is required.</div>
+                }
+                else if (createModel.Name.Trim().Length < 3)
+                {
+                    <div>Group name must be at least 3 characters.</div>
+                }
+                else if (createModel.Name.Trim().Length > 50)
+                {
+                    <div>Group name cannot exceed 50 characters.</div>
+                }
+            }
+            @if (!string.IsNullOrWhiteSpace(error))
+            {
+                <div>@error</div>
+            }
+        </div>
     }
 </div>
 
 @code {
-    private string GroupName = "";
+    private CreateGroupModel createModel = new();
 
-    // ✅ field
+    private class CreateGroupModel
+    {
+        public string Name { get; set; } = "";
+        public bool Submitted { get; set; }
+
+        public bool IsValid => !string.IsNullOrWhiteSpace(Name) && Name.Trim().Length <= 50;
+    }
     private string _query = "";
-
-    // ✅ property اسمها query (ده اللي الـ UI بيربط عليه)
     private string query
     {
         get => _query;
@@ -90,17 +128,15 @@
         {
             if (_query == value) return;
             _query = value;
-            _ = DebouncedSearchAsync(); // fire & forget
+            _ = DebouncedSearchAsync();
         }
     }
 
     private bool isLoading;
     private bool busy;
     private string? error;
-
     private readonly List<UserModel> results = new();
     private readonly List<UserModel> selected = new();
-
     private CancellationTokenSource? _cts;
 
     protected override void OnInitialized()
@@ -114,43 +150,34 @@
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
-
         var q = (query ?? "").Trim();
-        if (q.Length < 2)
+        if (q.Length < 1)
         {
             results.Clear();
             isLoading = false;
             await InvokeAsync(StateHasChanged);
             return;
         }
-
         isLoading = true;
         await InvokeAsync(StateHasChanged);
-
         try
         {
-            await Task.Delay(250, ct);
+            await Task.Delay(250);
             if (ct.IsCancellationRequested) return;
-
             results.Clear();
-
-            var res = await UsersApi.SearchAsync(q, 25, ct);
-
-            // ✅ mapping DTO -> UserModel
+            var currentUserId = await CurrentUser.GetUserIdAsync() ?? Guid.Empty;
+            var res = await UsersApi.SearchAsync(q, currentUserId, 25, ct);
             results.AddRange(res.Select(d => new UserModel
             {
                 Id = d.Id,
                 DisplayName = d.DisplayName,
                 Email = d.Email
             }));
-
         }
-        
-        
         catch (Exception ex)
-             {
-            Toasts.Error("Search failed", ex.Message);
-             }
+        {
+            error = ex.Message;
+        }
         finally
         {
             isLoading = false;
@@ -168,17 +195,35 @@
     private async Task CreateAsync()
     {
         error = null;
+        createModel.Submitted = true;
 
-        var name = (GroupName ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(name))
+        // فحص الاسم يدويًا
+        if (string.IsNullOrWhiteSpace(createModel.Name))
         {
             error = "Group name is required.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var trimmed = createModel.Name.Trim();
+        if (trimmed.Length < 3)
+        {
+            error = "Group name must be at least 3 characters.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (trimmed.Length > 50)
+        {
+            error = "Group name cannot exceed 50 characters.";
+            await InvokeAsync(StateHasChanged);
             return;
         }
 
         if (selected.Count == 0)
         {
             error = "Pick at least one member.";
+            await InvokeAsync(StateHasChanged);
             return;
         }
 
@@ -189,10 +234,9 @@
         {
             var dto = await GroupsApi.CreateGroupAsync(new GroupsApi.CreateGroupRequest
             {
-                Name = name,
+                Name = trimmed,
                 Members = selected.Select(x => x.Id).ToList()
             });
-
             Nav.NavigateTo("/chat/" + dto.RoomId);
         }
         catch (Exception ex)
@@ -206,4 +250,3 @@
         }
     }
 }
-

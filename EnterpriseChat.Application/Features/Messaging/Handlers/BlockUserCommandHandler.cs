@@ -4,18 +4,17 @@ using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Interfaces;
 using MediatR;
 
-namespace EnterpriseChat.Application.Features.Messaging.Handlers;
-
-public sealed class BlockUserCommandHandler
-    : IRequestHandler<BlockUserCommand, Unit>
+public sealed class BlockUserCommandHandler : IRequestHandler<BlockUserCommand, Unit>
 {
     private readonly IUserBlockRepository _repo;
     private readonly IUnitOfWork _uow;
+    private readonly IUserPresenceNotifier _presenceNotifier;
 
-    public BlockUserCommandHandler(IUserBlockRepository repo, IUnitOfWork uow)
+    public BlockUserCommandHandler(IUserBlockRepository repo, IUnitOfWork uow, IUserPresenceNotifier presenceNotifier)
     {
         _repo = repo;
         _uow = uow;
+        _presenceNotifier = presenceNotifier;
     }
 
     public async Task<Unit> Handle(BlockUserCommand command, CancellationToken ct)
@@ -25,6 +24,15 @@ public sealed class BlockUserCommandHandler
 
         await _repo.AddAsync(BlockedUser.Create(command.BlockerId, command.BlockedId), ct);
         await _uow.CommitAsync(ct);
+
+        // ✅ اخفاء presence فورًا
+        await _presenceNotifier.HideUsersFromEachOtherAsync(
+            command.BlockerId.Value,
+            command.BlockedId.Value,
+            ct);
+
+        // (اختياري) تحديث flag
+        await _presenceNotifier.BlockChangedAsync(command.BlockerId.Value, command.BlockedId.Value, true, ct);
 
         return Unit.Value;
     }

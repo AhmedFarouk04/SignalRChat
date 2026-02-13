@@ -28,6 +28,14 @@ public sealed class ModerationApi
     => _api.PostAsync<EmptyRequest, object>(ApiEndpoints.Block(userId), new EmptyRequest(), ct);
 
     public sealed record EmptyRequest;
-
+    // اليوزرز اللي عملوا بلوك للمستخدم الحالي (اللي بيعمل بلوك ليا)
+    public async Task<IReadOnlyList<BlockedUserDto>> GetBlockedByMeAsync(CancellationToken ct = default)
+    {
+        // نفس النمط اللي مستخدم في GetBlockedAsync
+        return await _api.GetAsync<IReadOnlyList<BlockedUserDto>>(
+            "api/moderation/blocked-by-me",  // ← ده الـ endpoint الجديد اللي هتعمله في الـ backend
+            ct
+        ) ?? Array.Empty<BlockedUserDto>();
+    }
 
 }

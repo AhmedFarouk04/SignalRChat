@@ -83,4 +83,7 @@ public static class ApiEndpoints
     // EnterpriseChat.Client/Services/Http/ApiEndpoints.cs
     public static string SearchMessages(Guid roomId, string query, int take)
         => $"api/chat/rooms/{roomId}/messages/search?query={Uri.EscapeDataString(query)}&take={take}";
+
+    public static string UserSearch(string query, int take, Guid excludeUserId)  // ✅ تعديل
+        => $"api/users/search?query={Uri.EscapeDataString(query)}&take={take}&excludeUserId={excludeUserId}";
 }

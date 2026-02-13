@@ -45,29 +45,25 @@ public sealed class ReadMessageCommandHandler
         receipt.MarkRead();
         await _uow.CommitAsync(ct);
 
-        // ✅ جديد: احصل على أعضاء الغرفة
-        var room = await _roomRepo.GetByIdAsync(msg.RoomId, ct);
-        if (room is not null)
-        {
-            var roomMembers = room.GetMemberIds();
+        var receipts = await _receiptRepo.GetReceiptsForMessageAsync(command.MessageId, ct);
 
-            // أرسل للمرسل (للتوافق مع الكود الحالي)
-            await _broadcaster.MessageReadAsync(command.MessageId, msg.SenderId);
+        var notifyUsers = receipts
+            .Select(r => r.UserId)
+            .Append(msg.SenderId)
+            .DistinctBy(u => u.Value)
+            .ToList();
 
-            // أرسل لكل الأعضاء (النظام الجديد)
-            await _broadcaster.MessageReadToAllAsync(
-                command.MessageId,
-                msg.SenderId,
-                roomMembers);
+        await _broadcaster.MessageReadAsync(command.MessageId, msg.SenderId);
 
-            // أرسل تحديث الحالة للقارئ
-            await _broadcaster.MessageStatusUpdatedAsync(
-                command.MessageId,
-                command.UserId,
-                MessageStatus.Read,
-                roomMembers);
-        }
+        await _broadcaster.MessageReadToAllAsync(command.MessageId, msg.SenderId, notifyUsers);
+
+        await _broadcaster.MessageStatusUpdatedAsync(
+            command.MessageId,
+            command.UserId,
+            MessageStatus.Read,
+            notifyUsers);
 
         return Unit.Value;
     }
+
 }

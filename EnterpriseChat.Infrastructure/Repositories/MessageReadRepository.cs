@@ -18,10 +18,11 @@ public sealed class MessageReadRepository : IMessageReadRepository
     }
 
     public async Task<IReadOnlyList<MessageReadDto>> GetMessagesAsync(
-     RoomId roomId,
-     int skip = 0,
-     int take = 100,
-     CancellationToken ct = default)
+        RoomId roomId,
+        UserId forUserId,
+        int skip = 0,
+        int take = 100,
+        CancellationToken ct = default)
     {
         IQueryable<Message> query = _context.Messages
             .AsNoTracking()
@@ -32,8 +33,56 @@ public sealed class MessageReadRepository : IMessageReadRepository
         if (skip > 0) query = query.Skip(skip);
         if (take > 0) query = query.Take(take);
 
+        var currentUserIdValue = forUserId.Value;
+
         var messages = await query
-            .Select(m => new MessageReadDto
+            .Include(m => m.Receipts)
+            .Select(m => new
+            {
+                Message = m,
+                Receipts = m.Receipts
+            })
+            .ToListAsync(ct);
+
+        var result = messages.Select(x =>
+        {
+            var m = x.Message;
+            var receipts = x.Receipts.ToList();
+            var isSender = m.SenderId.Value == currentUserIdValue;
+
+            MessageStatus personalStatus;
+
+            if (isSender)
+            {
+                // ✅ حالة الرسالة بالنسبة للـ sender: تعتمد على حالة المستلمين
+                if (!receipts.Any())
+                {
+                    personalStatus = MessageStatus.Sent;
+                }
+                else if (receipts.All(r => r.Status >= MessageStatus.Read))
+                {
+                    personalStatus = MessageStatus.Read;
+                }
+                else if (receipts.All(r => r.Status >= MessageStatus.Delivered))
+                {
+                    personalStatus = MessageStatus.Delivered;
+                }
+                else
+                {
+                    personalStatus = MessageStatus.Sent;
+                }
+            }
+            else
+            {
+                // ✅ حالة الرسالة بالنسبة للمستلم: receipt بتاعي أنا
+                var myReceipt = receipts.FirstOrDefault(r => r.UserId.Value == currentUserIdValue);
+                personalStatus = myReceipt?.Status ?? MessageStatus.Sent;
+            }
+
+            var deliveredCount = receipts.Count(r => r.Status >= MessageStatus.Delivered);
+            var readCount = receipts.Count(r => r.Status >= MessageStatus.Read);
+
+            return new MessageReadDto
             {
                 Id = m.Id.Value,
                 RoomId = m.RoomId.Value,
@@ -41,26 +90,27 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 Content = m.Content,
                 CreatedAt = m.CreatedAt,
 
-                // ✅ أهم سطرين: حساب الـ Status على مستوى الرسالة
-                Status =
-                    m.Receipts.Any(r => r.Status == MessageStatus.Read) ? MessageStatus.Read :
-                    m.Receipts.Any(r => r.Status == MessageStatus.Delivered) ? MessageStatus.Delivered :
-                    MessageStatus.Sent,
+                PersonalStatus = personalStatus,
 
-                Receipts = m.Receipts.Select(r => new MessageReceiptDto
+                DeliveredCount = deliveredCount,
+                ReadCount = readCount,
+
+                Receipts = receipts.Select(r => new MessageReceiptDto
                 {
                     UserId = r.UserId.Value,
                     Status = r.Status
                 }).ToList()
-            })
-            .ToListAsync(ct);
+            };
+        }).ToList();
 
-        return messages;
+        // Debug بسيط
+        foreach (var msg in result.Take(3))
+        {
+            Console.WriteLine($"[REPO] Msg {msg.Id} sender={msg.SenderId} personal={msg.PersonalStatus} deliveredCount={msg.DeliveredCount} readCount={msg.ReadCount}");
+        }
+
+        return result;
     }
-    // EnterpriseChat.Infrastructure/Repositories/MessageReadRepository.cs
-    // EnterpriseChat.Infrastructure/Repositories/MessageReadRepository.cs
-
-    // EnterpriseChat.Infrastructure/Repositories/MessageReadRepository.cs
 
     public async Task<IReadOnlyList<MessageReadDto>> SearchMessagesAsync(
         RoomId roomId,
@@ -70,12 +120,10 @@ public sealed class MessageReadRepository : IMessageReadRepository
     {
         var term = searchTerm.Trim().ToLower();
 
-        // ملاحظة: شيلنا m.IsSystem واستبدلناها بمنطق يتناسب مع الـ Entity بتاعتك
         return await _context.Messages
             .AsNoTracking()
             .Where(m => m.RoomId == roomId &&
                         !m.IsDeleted &&
-                        // إذا كنت لا تريد البحث في الرسائل الفارغة أو النظامية (حسب الحاجة)
                         !string.IsNullOrEmpty(m.Content) &&
                         m.Content.ToLower().Contains(term))
             .OrderByDescending(m => m.CreatedAt)
@@ -87,11 +135,42 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 SenderId = m.SenderId.Value,
                 Content = m.Content,
                 CreatedAt = m.CreatedAt,
-                Status = m.Receipts.Any(r => r.Status == MessageStatus.Read) ? MessageStatus.Read :
-                         m.Receipts.Any(r => r.Status == MessageStatus.Delivered) ? MessageStatus.Delivered :
-                         MessageStatus.Sent
+
+                // في البحث (مش شخصي) — نعرض “أعلى حالة” كمؤشر عام
+                PersonalStatus = m.Receipts.Any(r => r.Status >= MessageStatus.Read)
+                    ? MessageStatus.Read
+                    : m.Receipts.Any(r => r.Status >= MessageStatus.Delivered)
+                        ? MessageStatus.Delivered
+                        : MessageStatus.Sent,
+
+                DeliveredCount = m.Receipts.Count(r => r.Status >= MessageStatus.Delivered),
+                ReadCount = m.Receipts.Count(r => r.Status >= MessageStatus.Read),
+
+                Receipts = m.Receipts.Select(r => new MessageReceiptDto
+                {
+                    UserId = r.UserId.Value,
+                    Status = r.Status
+                }).ToList()
             })
             .ToListAsync(ct);
     }
 
+    // الدالة دي تقدر تحذفها لو مش بتستخدمها
+    private static MessageStatus CalculateMessageStatusForSender(Message m)
+    {
+        var recipientReceipts = m.Receipts
+            .Where(r => r.UserId != m.SenderId)
+            .ToList();
+
+        if (!recipientReceipts.Any())
+            return MessageStatus.Sent;
+
+        if (recipientReceipts.All(r => r.Status == MessageStatus.Read))
+            return MessageStatus.Read;
+
+        if (recipientReceipts.All(r => r.Status >= MessageStatus.Delivered))
+            return MessageStatus.Delivered;
+
+        return MessageStatus.Sent;
+    }
 }

@@ -296,15 +296,24 @@ else
 
         try
         {
-            await Task.Delay(250, ct);
+            await Task.Delay(250); // ✅ من غير CancellationToken
             if (ct.IsCancellationRequested) return;
-            var res = await UsersApi.SearchAsync(q, 25, ct);
+
+            // ✅ أضف currentUserId
+            var currentUserId = await CurrentUser.GetUserIdAsync() ?? Guid.Empty;
+            var res = await UsersApi.SearchAsync(q, currentUserId, 25, ct); // ✅ الترتيب صح
+
             var currentIds = group.Members.Select(m => m.UserId).ToHashSet();
-            searchResults.AddRange(res.Where(u => !currentIds.Contains(u.Id)).Select(u => new EnterpriseChat.Client.Models.UserModel { Id = u.Id, DisplayName = u.DisplayName, Email = u.Email ?? "" }));
+            searchResults.AddRange(res.Where(u => !currentIds.Contains(u.Id))
+                .Select(u => new EnterpriseChat.Client.Models.UserModel
+                {
+                    Id = u.Id,
+                    DisplayName = u.DisplayName,
+                    Email = u.Email ?? ""
+                }));
         }
         catch (Exception ex)
         {
-            Toasts.Error("Search failed", ex.Message);
         }
         StateHasChanged();
     }

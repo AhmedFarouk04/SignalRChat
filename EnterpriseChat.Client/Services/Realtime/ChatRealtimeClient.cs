@@ -40,7 +40,6 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action? Disconnected;
     public event Action? Reconnected;
     public event Action<RoomUpdatedModel>? RoomUpdated;
-    public event Action<Guid, bool>? UserBlockChanged;
     public event Action<Guid, string>? GroupRenamed;
     public event Action<Guid, Guid, string>? MemberAdded;
     public event Action<Guid, Guid, string?>? MemberRemoved;
@@ -55,7 +54,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action<Guid, Guid, int, bool>? MessageReactionUpdated;
     public event Action<Guid, string>? MessageUpdated;
     public event Action<Guid>? MessageDeleted;
-
+    public event Action<Guid, bool>? UserBlockedByMeChanged;
+    public event Action<Guid, bool>? UserBlockedMeChanged;
     public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http, RoomFlagsStore flags)
     {
         _tokenStore = tokenStore;
@@ -65,50 +65,167 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
     public async Task ConnectAsync()
     {
-        if (_connection != null)
+        if (_connection != null && _connection.State == HubConnectionState.Connected)
+        {
+            Console.WriteLine("[SignalR] Already connected");
+            State.IsConnected = true;
             return;
+        }
 
-        var apiBase = _http.BaseAddress?.ToString()?.TrimEnd('/') ?? "https://localhost:5001";
+        if (_connection != null)
+        {
+            await _connection.DisposeAsync();
+            _connection = null;
+        }
+
+        var apiBase = _http.BaseAddress?.ToString()?.TrimEnd('/') ?? "https://localhost:7188";
         var hubUrl = $"{apiBase}/hubs/chat";
+
+        Console.WriteLine($"[SignalR] Connecting to {hubUrl}");
 
         _connection = new HubConnectionBuilder()
             .WithUrl(hubUrl, options =>
             {
-                options.AccessTokenProvider = _tokenStore.GetAsync;
+                options.AccessTokenProvider = async () =>
+                {
+                    var token = await _tokenStore.GetAsync();
+                    Console.WriteLine($"[SignalR] Using token: {(token?.Length > 20 ? token.Substring(0, 20) + "..." : token)}");
+                    return token;
+                };
+                options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
+                options.SkipNegotiation = true;
+                options.CloseTimeout = TimeSpan.FromSeconds(30);
             })
-            .WithAutomaticReconnect()
+            .WithAutomaticReconnect(new[]
+{
+    TimeSpan.FromSeconds(2),
+    TimeSpan.FromSeconds(5),
+    TimeSpan.FromSeconds(10),
+    TimeSpan.FromSeconds(20),
+    TimeSpan.FromSeconds(30)
+})
             .Build();
 
         RegisterHandlers();
 
-        _connection.Reconnecting += _ =>
+        _connection.Closed += async (error) =>
         {
+            Console.WriteLine($"[SignalR] ⚠️ Connection closed: {error?.Message}");
+            State.IsConnected = false;
+            Disconnected?.Invoke();
+
+            // ✅ حاول تعيد الاتصال كل 5 ثواني
+            while (_connection?.State != HubConnectionState.Connected)
+            {
+                try
+                {
+                    await Task.Delay(5000);
+                    await _connection?.StartAsync();
+                    Console.WriteLine("[SignalR] Reconnected successfully!");
+                    State.IsConnected = true;
+                    Reconnected?.Invoke();
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SignalR] Reconnect failed: {ex.Message}");
+                }
+            }
+        };
+
+        _connection.Reconnecting += error =>
+        {
+            Console.WriteLine($"[SignalR] 🔄 Reconnecting: {error?.Message}");
             State.IsConnected = false;
             Disconnected?.Invoke();
             return Task.CompletedTask;
         };
 
-        _connection.Reconnected += _ =>
+        _connection.Reconnected += id =>
         {
+            Console.WriteLine($"[SignalR] ✅ Reconnected: {id}");
             State.IsConnected = true;
             Reconnected?.Invoke();
+
+            // ✅ إعادة الانضمام للرومات بعد إعادة الاتصال
+            if (_currentRoomId.HasValue)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await JoinRoomAsync(_currentRoomId.Value);
+                        Console.WriteLine($"[SignalR] Re-joined room {_currentRoomId.Value}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[SignalR] Failed to re-join room: {ex.Message}");
+                    }
+                });
+            }
+
             return Task.CompletedTask;
         };
 
-        _connection.Closed += _ =>
+        try
         {
+            await _connection.StartAsync();
+            Console.WriteLine("[SignalR] ✅ Connected successfully!");
+            State.IsConnected = true;
+
+            // جلب الـ online users بعد الاتصال
+            try
+            {
+                var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers", cancellationToken: CancellationToken.None);
+                State.OnlineUsers = onlineUsers ?? new List<Guid>();
+                Console.WriteLine($"[SignalR] Online users loaded: {State.OnlineUsers.Count}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Failed to get online users: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SignalR] ❌ Connection failed: {ex.Message}");
             State.IsConnected = false;
-            Disconnected?.Invoke();
-            return Task.CompletedTask;
-        };
-
-        await _connection.StartAsync();
-        State.IsConnected = true;
-
-        var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers");
-        State.OnlineUsers = onlineUsers;
+            throw;
+        }
     }
 
+    // ✅ أضف خاصية تخزين الـ Room ID الحالي
+    private Guid? _currentRoomId;
+
+    public async Task JoinRoomAsync(Guid roomId)
+    {
+        _currentRoomId = roomId;  // ✅ احفظ الروم الحالي
+
+        if (_connection?.State != HubConnectionState.Connected)
+        {
+            await ConnectAsync();
+        }
+
+        await _connection!.InvokeAsync("JoinRoom", roomId.ToString());
+    }
+    private async Task StartPingLoop()
+    {
+        while (_connection?.State == HubConnectionState.Connected)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30));
+                if (_connection?.State == HubConnectionState.Connected)
+                {
+                    await _connection.InvokeAsync("Ping");
+                    Console.WriteLine("[SignalR] Ping sent");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Ping failed: {ex.Message}");
+            }
+        }
+    }
     public async Task DisconnectAsync()
     {
         if (_connection == null)
@@ -127,9 +244,29 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
         }
     }
 
-    public Task JoinRoomAsync(Guid roomId)
-        => _connection!.InvokeAsync("JoinRoom", roomId.ToString());
+   
+    public async Task EnsureConnectedAsync()
+    {
+        if (_connection?.State == HubConnectionState.Connected)
+            return;
 
+        if (_connection?.State == HubConnectionState.Disconnected)
+        {
+            await ConnectAsync();
+        }
+        else
+        {
+            // Reconnecting or something - wait
+            var startTime = DateTime.UtcNow;
+            while (DateTime.UtcNow - startTime < TimeSpan.FromSeconds(10))
+            {
+                if (_connection?.State == HubConnectionState.Connected)
+                    return;
+                await Task.Delay(100);
+            }
+            throw new TimeoutException("Failed to connect to SignalR");
+        }
+    }
     public Task LeaveRoomAsync(Guid roomId)
         => _connection!.InvokeAsync("LeaveRoom", roomId.ToString());
 
@@ -168,9 +305,47 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
     private void RegisterHandlers()
     {
-        _connection!.On<MessageModel>("MessageReceived", msg => MessageReceived?.Invoke(msg));
+        _connection!.On<MessageDto>("MessageReceived", dto =>
+        {
+            Console.WriteLine($"[SignalR] 🟢 MESSAGE RECEIVED! ID: {dto.Id}, Type: {dto.GetType().Name}");
+
+            var message = new MessageModel
+            {
+                Id = dto.Id,
+                RoomId = dto.RoomId,
+                SenderId = dto.SenderId,
+                Content = dto.Content,
+                CreatedAt = dto.CreatedAt,
+                Status = (Client.Models.MessageStatus)dto.Status,
+                ReplyToMessageId = dto.ReplyToMessageId,
+                IsEdited = dto.IsEdited,
+                IsDeleted = dto.IsDeleted,
+                ReadCount = dto.ReadCount,
+                DeliveredCount = dto.DeliveredCount,
+                TotalRecipients = dto.TotalRecipients
+            };
+
+            if (dto.ReplyInfo != null)
+            {
+                message.ReplyInfo = new ReplyInfoModel
+                {
+                    MessageId = dto.ReplyInfo.MessageId,
+                    SenderId = dto.ReplyInfo.SenderId,
+                    SenderName = dto.ReplyInfo.SenderName,
+                    ContentPreview = dto.ReplyInfo.ContentPreview,
+                    CreatedAt = dto.ReplyInfo.CreatedAt,
+                    IsDeleted = dto.ReplyInfo.IsDeleted
+                };
+            }
+
+            MessageReceived?.Invoke(message);
+        });
 
 
+        _connection!.On("Pong", () =>
+        {
+            Console.WriteLine("[SignalR] Pong received");
+        });
         _connection.On<Guid>("MessageDelivered", id => MessageDelivered?.Invoke(id));
         _connection.On<Guid>("MessageRead", id => MessageRead?.Invoke(id));
 
@@ -178,7 +353,17 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
         _connection.On<RoomListItemDto>("RoomUpserted", dto =>
       RoomUpserted?.Invoke(dto));
+        _connection.On<Guid, bool>("UserBlockedByMeChanged", (uid, blocked) =>
+        {
+            _flags.SetBlockedByMe(uid, blocked);
+            UserBlockedByMeChanged?.Invoke(uid, blocked);
+        });
 
+        _connection.On<Guid, bool>("UserBlockedMeChanged", (uid, blocked) =>
+        {
+            _flags.SetBlockedMe(uid, blocked);
+            UserBlockedMeChanged?.Invoke(uid, blocked);
+        });
 
         _connection.On<Guid, bool>("RoomMuteChanged", (rid, muted) =>
         {
@@ -186,11 +371,16 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
             RoomMuteChanged?.Invoke(rid, muted);
         });
 
-        _connection.On<Guid, bool>("UserBlockChanged", (uid, blocked) =>
+        _connection.On<Guid, bool>("UserBlockedByMeChanged", (uid, blocked) =>
         {
-            _flags.SetBlocked(uid, blocked);
-            UserBlockChanged?.Invoke(uid, blocked);
+            _flags.SetBlockedByMe(uid, blocked);
         });
+
+        _connection.On<Guid, bool>("UserBlockedMeChanged", (uid, blocked) =>
+        {
+            _flags.SetBlockedMe(uid, blocked);
+        });
+
 
         _connection.On<Guid>("UserOnline", id =>
         {

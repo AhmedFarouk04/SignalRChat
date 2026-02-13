@@ -1,6 +1,7 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Queries;
 using EnterpriseChat.Application.Interfaces;
+using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
@@ -33,12 +34,13 @@ public sealed class GetMyRoomsQueryHandler
         var myRooms = await _rooms.GetForUserAsync(query.CurrentUserId, ct);
 
         var mutedRoomIds = (await _mutes.GetMutedRoomIdsAsync(query.CurrentUserId, ct))
-            .ToHashSet(); // غالباً Guid HashSet
+            .ToHashSet();
 
-        // ✅ ابعت RoomId list مش Guid
         var roomIds = myRooms.Select(r => r.Id.Value).ToList();
         var lastByRoom = await _messages.GetLastMessagesAsync(roomIds, ct);
-        var unreadByRoom = await _messages.GetUnreadCountsAsync(roomIds, query.CurrentUserId, ct);
+
+        // ✅ استخدم الميثود الجديدة اللي بتحسب unread count باستخدام LastReadMessageId
+        var unreadByRoom = await GetUnreadCountsWithLastReadAsync(myRooms, query.CurrentUserId, ct);
 
         var nameCache = new Dictionary<Guid, string?>();
         var result = new List<RoomListItemDto>(myRooms.Count);
@@ -49,14 +51,12 @@ public sealed class GetMyRoomsQueryHandler
             unreadByRoom.TryGetValue(room.Id.Value, out var unreadCount);
 
             // last message info
-            // last message info
-            DateTime? lastAt = lastMsg?.CreatedAt ?? room.CreatedAt; // ✅ fallback مهم
+            DateTime? lastAt = lastMsg?.CreatedAt ?? room.CreatedAt;
             Guid? lastId = lastMsg?.Id.Value;
 
             string? preview = lastMsg?.Content;
             if (!string.IsNullOrWhiteSpace(preview) && preview.Length > 60)
                 preview = preview[..60];
-
 
             // NEW fields for rooms UI (status)
             Guid? lastSenderId = lastMsg?.SenderId.Value;
@@ -92,7 +92,11 @@ public sealed class GetMyRoomsQueryHandler
                 }
             }
 
-            // ✅ ONE result.Add فقط
+            // ✅ جلب LastReadMessageId من الـ Member
+            var member = room.Members.FirstOrDefault(m => m.UserId.Value == query.CurrentUserId.Value);
+            Guid? lastReadMessageId = member?.LastReadMessageId?.Value;
+            DateTime? lastReadAt = member?.LastReadAt;
+
             result.Add(new RoomListItemDto
             {
                 Id = room.Id.Value,
@@ -105,10 +109,12 @@ public sealed class GetMyRoomsQueryHandler
                 LastMessageAt = lastAt,
                 LastMessageId = lastId,
                 LastMessagePreview = preview,
-
-                // ✅ NEW
                 LastMessageSenderId = lastSenderId,
-                LastMessageStatus = lastStatus
+                LastMessageStatus = lastStatus,
+
+                // ✅ NEW - إرسال LastReadMessageId للـ Client
+                LastReadMessageId = lastReadMessageId,
+                LastReadAt = lastReadAt
             });
         }
 
@@ -116,5 +122,52 @@ public sealed class GetMyRoomsQueryHandler
             .OrderByDescending(x => x.LastMessageAt ?? DateTime.MinValue)
             .ToList()
             .AsReadOnly();
+    }
+
+    // ✅ ميثود مساعدة لحساب unread count باستخدام LastReadMessageId
+    private async Task<Dictionary<Guid, int>> GetUnreadCountsWithLastReadAsync(
+      IEnumerable<ChatRoom> rooms,
+      UserId userId,
+      CancellationToken ct)
+    {
+        var result = new Dictionary<Guid, int>();
+
+        foreach (var room in rooms)
+        {
+            var member = room.Members.FirstOrDefault(m => m.UserId == userId);
+            var lastReadId = member?.LastReadMessageId;
+            int unreadCount = 0;
+
+            if (lastReadId is not null)  // ✅ التعديل هنا
+            {
+                var lastReadMsg = await _messages.GetByIdAsync(lastReadId, ct);
+                if (lastReadMsg != null)
+                {
+                    unreadCount = await _messages.GetUnreadCountAsync(
+                        new RoomId(room.Id),
+                        lastReadMsg.CreatedAt,
+                        userId,
+                        ct);
+                }
+                else
+                {
+                    unreadCount = await _messages.GetTotalUnreadCountAsync(
+                        new RoomId(room.Id),
+                        userId,
+                        ct);
+                }
+            }
+            else
+            {
+                unreadCount = await _messages.GetTotalUnreadCountAsync(
+                    new RoomId(room.Id),
+                    userId,
+                    ct);
+            }
+
+            result[room.Id.Value] = unreadCount;
+        }
+
+        return result;
     }
 }

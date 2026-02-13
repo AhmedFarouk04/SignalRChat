@@ -36,7 +36,7 @@
             OnlineCount="@VM.OnlineUsers.Count"
             OtherUser="@VM.OtherUser"
             IsMuted="@VM.IsMuted"
-            IsBlocked="@VM.IsBlocked"
+            IsBlockedByMe="@VM.IsBlockedByMe"
             OnMuteToggle="ToggleMute"
             OnBlock="BlockOtherUser"
             OnUnblock="UnblockOtherUser"
@@ -128,12 +128,13 @@
                 {
                     <div class="blocked-banner">This user is no longer available.</div>
                 }
-                else if (VM.IsBlocked)
+                else if (VM.IsBlockedByMe)
                 {
                     <div class="blocked-banner">You blocked this user. Unblock to send messages.</div>
                 }
                 else
                 {
+                    <!-- الـ input يظهر دايماً في كل الحالات التانية (حتى لو هو عملك بلوك) -->
                     <div class="composer">
                         <!-- Reply Context -->
                         @if (ReplyCtx.MessageId != Guid.Empty)
@@ -146,14 +147,12 @@
                                 <div class="reply-preview-text">@ReplyCtx.ContentPreview</div>
                             </div>
                         }
-
                         <!-- Message Composer -->
                         <div class="composer-box">
                             <!-- Attachment Button & Menu -->
                             <button type="button" class="attach-btn" @onclick="ToggleAttachMenu" @onclick:stopPropagation="true" title="Attach">
                                 📎
                             </button>
-
                             @if (_attachMenuOpen)
                             {
                                 <div class="attach-popup" @onclick:stopPropagation="true">
@@ -165,10 +164,8 @@
                                     </button>
                                 </div>
                             }
-
                             <!-- Hidden File Input -->
                             <InputFile OnChange="OnFileSelected" multiple id="attach-file-input" style="display:none;" />
-
                             <!-- Text Input -->
                             <textarea class="composer-input"
                                       @ref="inputRef"
@@ -176,8 +173,7 @@
                                       @bind="currentMessage"
                                       @bind:event="oninput"
                                       @onkeydown="OnKeyDown">
-                                            </textarea>
-
+                        </textarea>
                             <!-- Send Button -->
                             <button class="composer-send"
                                     type="button"
@@ -558,12 +554,14 @@
         }
 
         await InvokeAsync(StateHasChanged);
+        await ScrollToBottom(); // ✅ التمرير للأسفل تلقائياً
     }
-
     private Task HandleReachedBottom(Guid lastMessageId)
     {
         if (lastMessageId == Guid.Empty) return Task.CompletedTask;
         if (lastMessageId == _lastSentReadId) return Task.CompletedTask;
+
+        Console.WriteLine($"[Chat] 📖 Reached bottom, marking room as read: {lastMessageId}");
 
         _readCts?.Cancel();
         _readCts?.Dispose();
@@ -579,15 +577,22 @@
 
                 _lastSentReadId = lastMessageId;
 
+                // ✅ Mark room as read
                 await VM.MarkRoomReadAsync(RoomId, lastMessageId);
+
+                // ✅ Update local rooms list
                 await InvokeAsync(() => RoomsVM.MarkRoomAsReadLocal(RoomId, lastMessageId));
+
+                Console.WriteLine($"[Chat] ✅ Room marked as read: {RoomId}");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Chat] ❌ Mark read failed: {ex.Message}");
+            }
         }, ct);
 
         return Task.CompletedTask;
     }
-
     #endregion
 
     #region UI Actions

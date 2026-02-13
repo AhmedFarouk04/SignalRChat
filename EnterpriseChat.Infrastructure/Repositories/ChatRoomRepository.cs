@@ -15,7 +15,25 @@ public sealed class ChatRoomRepository : IChatRoomRepository
     {
         _context = context;
     }
+    public async Task UpdateMemberLastReadAsync(
+      RoomId roomId,
+      UserId userId,
+      MessageId lastReadMessageId,
+      CancellationToken ct = default)
+    {
+        var member = await _context.ChatRoomMembers
+            .FirstOrDefaultAsync(m => m.RoomId == roomId && m.UserId == userId, ct);
 
+        if (member != null)
+        {
+            member.UpdateLastReadMessageId(lastReadMessageId);
+
+            // ✅ تأكد إن ChatUserId معمول Set
+            _context.Entry(member).Property<Guid?>("ChatUserId").CurrentValue = userId.Value;
+
+            await _context.SaveChangesAsync(ct);
+        }
+    }
     public Task AddAsync(ChatRoom room, CancellationToken cancellationToken = default)
         => _context.ChatRooms.AddAsync(room, cancellationToken).AsTask();
 
@@ -53,7 +71,7 @@ public sealed class ChatRoomRepository : IChatRoomRepository
     public async Task<IReadOnlyList<ChatRoom>> GetForUserAsync(UserId userId, CancellationToken cancellationToken = default)
     {
         return await _context.ChatRooms
-            .Include(r => r.Members)
+            .Include(r => r.Members)  // ✅ مهم جداً!
             .Where(r => r.Members.Any(m => m.UserId == userId))
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(cancellationToken);

@@ -12,18 +12,23 @@ public sealed class UsersApi
         _api = api;
     }
 
-    public async Task<IReadOnlyList<UserDirectoryItemDto>> SearchAsync(string query, int take = 20, CancellationToken ct = default)
+    public async Task<IReadOnlyList<UserDirectoryItemDto>> SearchAsync(
+     string query,
+     Guid currentUserId,
+     int take = 20,
+     CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query))
             return Array.Empty<UserDirectoryItemDto>();
 
-        var res = await _api.GetAsync<IReadOnlyList<UserDirectoryItemDto>>(ApiEndpoints.UserSearch(query, take), ct);
+        // ✅ شيل الشرط بتاع Length < 2 برضه
+        // if (query.Length < 2) 
+        //     return Array.Empty<UserDirectoryItemDto>();
+
+        var res = await _api.GetAsync<IReadOnlyList<UserDirectoryItemDto>>(
+            ApiEndpoints.UserSearch(query, take, currentUserId),
+            ct);
+
         return res ?? Array.Empty<UserDirectoryItemDto>();
     }
-
-
-
-
-
-
 }

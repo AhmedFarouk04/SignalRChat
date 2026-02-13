@@ -41,7 +41,6 @@ public sealed class SendMessageCommandHandler
     public async Task<MessageDto> Handle(SendMessageCommand command, CancellationToken ct)
     {
         await _authorization.EnsureUserIsMemberAsync(command.RoomId, command.SenderId, ct);
-
         var room = await _roomRepository.GetByIdWithMembersAsync(command.RoomId, ct)
             ?? throw new InvalidOperationException("Chat room not found.");
 
@@ -50,44 +49,42 @@ public sealed class SendMessageCommandHandler
             .Where(id => id != command.SenderId)
             .ToList();
 
+        // 1. فحص الحظر (هل الـ receiver عمل بلوك للـ sender؟)
+        bool isBlocked = false;
         if (room.Type == RoomType.Private && recipients.Count == 1)
         {
-            var blocked = await _blockRepository.IsBlockedAsync(command.SenderId, recipients[0], ct);
-            if (blocked)
-                throw new InvalidOperationException("User is blocked.");
+            var receiverId = recipients[0];
+            isBlocked = await _blockRepository.IsBlockedAsync(receiverId, command.SenderId, ct);
+            Console.WriteLine($"[Handler] Private room check - receiver={receiverId}, sender={command.SenderId}, isBlockedByReceiver={isBlocked}");
         }
 
-        // ✅ الحل النهائي: تحقق من وجود رد باستخدام طريقة آمنة
-        bool hasReply = command.ReplyToMessageId != null &&
-                       command.ReplyToMessageId.Value != Guid.Empty;
+        if (isBlocked)
+        {
+            recipients = new List<UserId>(); // مفيش receipts ولا بث للمستلم
+        }
 
+        // معالجة الرد (Reply)
+        bool hasReply = command.ReplyToMessageId != null && command.ReplyToMessageId.Value != Guid.Empty;
         ReplyInfoDto? replyInfo = null;
         if (hasReply && command.ReplyToMessageId != null)
         {
-            // ✅ استخدم Value مباشرة
             var repliedMessage = await _messageRepository.GetByIdAsync(command.ReplyToMessageId, ct);
-
-            if (repliedMessage is null || repliedMessage.RoomId != command.RoomId)
-                throw new InvalidOperationException("Cannot reply to a message in a different room or non-existent message.");
-
-            // إنشاء ReplyInfo
-            var sender = await _userDirectory.GetUserAsync(repliedMessage.SenderId, ct);
-
-            // ✅ استخدم Value مباشرة
-            replyInfo = new ReplyInfoDto
+            if (repliedMessage is not null && repliedMessage.RoomId == command.RoomId)
             {
-                MessageId = repliedMessage.Id.Value,
-                SenderId = repliedMessage.SenderId.Value,
-                SenderName = sender?.DisplayName ?? "User",
-                ContentPreview = repliedMessage.Content.Length > 60
-                    ? repliedMessage.Content[..60] + "…"
-                    : repliedMessage.Content,
-                CreatedAt = repliedMessage.CreatedAt,
-                IsDeleted = false
-            };
+                var sender = await _userDirectory.GetUserAsync(repliedMessage.SenderId, ct);
+                replyInfo = new ReplyInfoDto
+                {
+                    MessageId = repliedMessage.Id.Value,
+                    SenderId = repliedMessage.SenderId.Value,
+                    SenderName = sender?.DisplayName ?? "User",
+                    ContentPreview = repliedMessage.Content.Length > 60 ? repliedMessage.Content[..60] + "…" : repliedMessage.Content,
+                    CreatedAt = repliedMessage.CreatedAt,
+                    IsDeleted = false
+                };
+            }
         }
 
-        // إنشاء الرسالة
+        // 2. إنشاء الرسالة وحفظها
         var message = new Message(
             command.RoomId,
             command.SenderId,
@@ -97,6 +94,8 @@ public sealed class SendMessageCommandHandler
 
         await _messageRepository.AddAsync(message, ct);
         await _unitOfWork.CommitAsync(ct);
+
+        Console.WriteLine($"[SEND] Message {message.Id.Value} created with {message.Receipts.Count} receipts");
 
         var dto = new MessageDto
         {
@@ -115,40 +114,68 @@ public sealed class SendMessageCommandHandler
             IsDeleted = false
         };
 
+        // 3. البث
         if (_broadcaster is not null)
         {
-            // 1) ابعت الرسالة الجديدة للـ recipients
-            await _broadcaster.BroadcastMessageAsync(dto, recipients);
-
-            // 2) ابعت RoomUpdated للـ recipients (+1 unread)
             var preview = dto.Content.Length > 80 ? dto.Content[..80] + "…" : dto.Content;
 
-            var updateForRecipients = new RoomUpdatedDto
+            if (isBlocked)
             {
-                RoomId = dto.RoomId,
-                MessageId = dto.Id,
-                SenderId = dto.SenderId,
-                Preview = preview,
-                CreatedAt = dto.CreatedAt,
-                UnreadDelta = 1,
-                IsReply = hasReply,
-                ReplyToMessageId = hasReply ? command.ReplyToMessageId?.Value : null
-            };
-            await _broadcaster.RoomUpdatedAsync(updateForRecipients, recipients);
+                Console.WriteLine($"[Handler] Blocked mode - broadcasting only to sender {command.SenderId}");
+                var updateForSender = new RoomUpdatedDto
+                {
+                    RoomId = dto.RoomId,
+                    MessageId = dto.Id,
+                    SenderId = dto.SenderId,
+                    Preview = preview,
+                    CreatedAt = dto.CreatedAt,
+                    UnreadDelta = 0,
+                    IsReply = hasReply,
+                    ReplyToMessageId = hasReply ? command.ReplyToMessageId?.Value : null,
+                    RoomName = room.Name,
+                    RoomType = room.Type.ToString()
+                };
+                await _broadcaster.RoomUpdatedAsync(updateForSender, new[] { command.SenderId });
 
-            // 3) ابعت RoomUpdated للـ sender (+0 unread)
-            var updateForSender = new RoomUpdatedDto
+                // بث الرسالة للـ sender بس
+                await _broadcaster.BroadcastMessageAsync(dto, new[] { command.SenderId });
+            }
+            else
             {
-                RoomId = dto.RoomId,
-                MessageId = dto.Id,
-                SenderId = dto.SenderId,
-                Preview = preview,
-                CreatedAt = dto.CreatedAt,
-                UnreadDelta = 0,
-                IsReply = hasReply,
-                ReplyToMessageId = hasReply ? command.ReplyToMessageId?.Value : null
-            };
-            await _broadcaster.RoomUpdatedAsync(updateForSender, new[] { command.SenderId });
+                // طبيعي: بث للكل
+                Console.WriteLine($"[Handler] Normal mode - broadcasting to {recipients.Count} recipients + sender");
+                await _broadcaster.BroadcastMessageAsync(dto, recipients.Concat(new[] { command.SenderId }).ToList());
+
+                var updateForRecipients = new RoomUpdatedDto
+                {
+                    RoomId = dto.RoomId,
+                    MessageId = dto.Id,
+                    SenderId = dto.SenderId,
+                    Preview = preview,
+                    CreatedAt = dto.CreatedAt,
+                    UnreadDelta = 1,
+                    IsReply = hasReply,
+                    ReplyToMessageId = hasReply ? command.ReplyToMessageId?.Value : null,
+                    RoomName = room.Name,
+                    RoomType = room.Type.ToString()
+                };
+                await _broadcaster.RoomUpdatedAsync(updateForRecipients, recipients);
+
+                var updateForSender = new RoomUpdatedDto
+                {
+                    RoomId = dto.RoomId,
+                    MessageId = dto.Id,
+                    SenderId = dto.SenderId,
+                    Preview = preview,
+                    CreatedAt = dto.CreatedAt,
+                    UnreadDelta = 0,
+                    IsReply = hasReply,
+                    ReplyToMessageId = hasReply ? command.ReplyToMessageId?.Value : null,
+                    RoomName = room.Name,
+                    RoomType = room.Type.ToString()
+                };
+                await _broadcaster.RoomUpdatedAsync(updateForSender, new[] { command.SenderId });
+            }
         }
 
         return dto;

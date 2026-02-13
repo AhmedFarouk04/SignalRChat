@@ -3,24 +3,28 @@ using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Interfaces;
 using MediatR;
 
-namespace EnterpriseChat.Application.Features.Messaging.Handlers;
-
-public sealed class UnblockUserCommandHandler
-    : IRequestHandler<UnblockUserCommand, Unit>
+public sealed class UnblockUserCommandHandler : IRequestHandler<UnblockUserCommand, Unit>
 {
     private readonly IUserBlockRepository _repo;
     private readonly IUnitOfWork _uow;
+    private readonly IUserPresenceNotifier _presenceNotifier;
 
-    public UnblockUserCommandHandler(IUserBlockRepository repo, IUnitOfWork uow)
+    public UnblockUserCommandHandler(IUserBlockRepository repo, IUnitOfWork uow, IUserPresenceNotifier presenceNotifier)
     {
         _repo = repo;
         _uow = uow;
+        _presenceNotifier = presenceNotifier;
     }
 
     public async Task<Unit> Handle(UnblockUserCommand request, CancellationToken ct)
     {
         await _repo.RemoveAsync(request.BlockerId, request.BlockedId, ct);
         await _uow.CommitAsync(ct);
+
+        // ✅ بس flag… بدون ما نرجع presence Online
+        await _presenceNotifier.BlockChangedAsync(request.BlockerId.Value, request.BlockedId.Value, false, ct);
+        await _presenceNotifier.BlockChangedAsync(request.BlockedId.Value, request.BlockerId.Value, false, ct);
+
         return Unit.Value;
     }
 }

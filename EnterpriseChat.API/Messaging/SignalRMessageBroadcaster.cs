@@ -27,14 +27,18 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
     public async Task BroadcastMessageAsync(MessageDto message, IEnumerable<UserId> recipients)
     {
-        var tasks = recipients.Select(r =>
-            _hub.Clients.User(r.Value.ToString())
+        var users = recipients?.DistinctBy(u => u.Value).ToList() ?? new();
+        if (users.Count == 0) return;
+
+        var tasks = users.Select(u =>
+            _hub.Clients.User(u.Value.ToString())
                 .SendAsync("MessageReceived", message));
 
         await Task.WhenAll(tasks);
     }
 
-  
+
+
 
     // عدل الطرق الحالية لترسل لكل الأعضاء
     public async Task MessageDeliveredAsync(
@@ -129,16 +133,21 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
                 SenderId = update.SenderId,
                 Preview = update.Preview,
                 CreatedAt = update.CreatedAt,
-                UnreadDelta = delta
+                UnreadDelta = delta,
+                IsReply = update.IsReply,
+                ReplyToMessageId = update.ReplyToMessageId,
+                RoomName = update.RoomName,
+                RoomType = update.RoomType
             };
 
             tasks.Add(_hub.Clients.User(userId.Value.ToString())
                 .SendAsync("RoomUpdated", perUserUpdate));
         }
 
+       
         await Task.WhenAll(tasks);
+        Console.WriteLine($"[Broadcast] RoomUpdated sent for room {update.RoomId}, delta={update.UnreadDelta}, recipients={users.Count()}");
     }
-
     public async Task RoomUpsertedAsync(RoomListItemDto room, IEnumerable<UserId> users)
     {
         var roomId = new RoomId(room.Id);
@@ -185,7 +194,6 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
                 .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName));
         }
 
-        // ✅ أضف هذا الـ Call للمجموعة
         await _hub.Clients.Group(roomId.Value.ToString())
             .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName);
 
@@ -220,48 +228,10 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
             .SendAsync("MessageRead", messageId.Value);
     }
 
-    public async Task MessageReadToAllAsync(
-    MessageId messageId,
-    UserId senderId,
-    IEnumerable<UserId> roomMembers)
-    {
-        var tasks = roomMembers.Select(memberId =>
-            _hub.Clients.User(memberId.Value.ToString())
-                .SendAsync("MessageReadToAll",
-                    messageId.Value,
-                    senderId.Value));
+    
+ 
 
-        await Task.WhenAll(tasks);
-    }
-    public async Task MessageDeliveredToAllAsync(
-    MessageId messageId,
-    UserId senderId,
-    IEnumerable<UserId> roomMembers)
-    {
-        var tasks = roomMembers.Select(memberId =>
-            _hub.Clients.User(memberId.Value.ToString())
-                .SendAsync("MessageDeliveredToAll",
-                    messageId.Value,
-                    senderId.Value));
-
-        await Task.WhenAll(tasks);
-    }
-
-    public async Task MessageStatusUpdatedAsync(
-    MessageId messageId,
-    UserId userId,
-    MessageStatus newStatus,
-    IEnumerable<UserId> roomMembers)
-    {
-        var tasks = roomMembers.Select(memberId =>
-            _hub.Clients.User(memberId.Value.ToString())
-                .SendAsync("MessageStatusUpdated",
-                    messageId.Value,
-                    userId.Value,
-                    (int)newStatus));
-
-        await Task.WhenAll(tasks);
-    }
+    
     // في SignalRMessageBroadcaster.cs أضف:
     public async Task MessageReactionUpdatedAsync(
         MessageId messageId,
@@ -286,5 +256,43 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await _hub.Clients.Group(roomId.ToString())
             .SendAsync("MessagePinned", roomId, messageId);
     }
+
+
+    public async Task MessageDeliveredToAllAsync(MessageId messageId, UserId senderId, IEnumerable<UserId> users)
+    {
+        var list = users?.DistinctBy(u => u.Value).ToList() ?? new();
+        if (list.Count == 0) return;
+
+        var tasks = list.Select(u =>
+            _hub.Clients.User(u.Value.ToString())
+                .SendAsync("MessageDeliveredToAll", messageId.Value, senderId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task MessageStatusUpdatedAsync(MessageId messageId, UserId userId, MessageStatus newStatus, IEnumerable<UserId> users)
+    {
+        var list = users?.DistinctBy(u => u.Value).ToList() ?? new();
+        if (list.Count == 0) return;
+
+        var tasks = list.Select(u =>
+            _hub.Clients.User(u.Value.ToString())
+                .SendAsync("MessageStatusUpdated", messageId.Value, userId.Value, (int)newStatus));
+
+        await Task.WhenAll(tasks);
+    }
+
+    public async Task MessageReadToAllAsync(MessageId messageId, UserId senderId, IEnumerable<UserId> users)
+    {
+        var list = users?.DistinctBy(u => u.Value).ToList() ?? new();
+        if (list.Count == 0) return;
+
+        var tasks = list.Select(u =>
+            _hub.Clients.User(u.Value.ToString())
+                .SendAsync("MessageReadToAll", messageId.Value, senderId.Value));
+
+        await Task.WhenAll(tasks);
+    }
+
 
 }

@@ -44,29 +44,28 @@ public sealed class DeliverMessageCommandHandler
 
         await _uow.CommitAsync(ct);
 
-        // ✅ جديد: احصل على أعضاء الغرفة
-        var room = await _roomRepo.GetByIdAsync(info.Value.RoomId, ct);
-        if (room is not null)
-        {
-            var roomMembers = room.GetMemberIds();
+        // ✅ recipients الحقيقيين = اللي ليهم receipts على الرسالة
+        var receipts = await _receiptRepo.GetReceiptsForMessageAsync(command.MessageId, ct);
 
-            // أرسل للمرسل (للتوافق مع الكود الحالي)
-            await _broadcaster.MessageDeliveredAsync(command.MessageId, info.Value.SenderId);
+        var notifyUsers = receipts
+            .Select(r => r.UserId)
+            .Append(info.Value.SenderId)
+            .DistinctBy(u => u.Value)
+            .ToList();
 
-            // أرسل لكل الأعضاء (النظام الجديد)
-            await _broadcaster.MessageDeliveredToAllAsync(
-                command.MessageId,
-                info.Value.SenderId,
-                roomMembers);
+        // Sender (للـ legacy)
+        await _broadcaster.MessageDeliveredAsync(command.MessageId, info.Value.SenderId);
 
-            // أرسل تحديث الحالة للمستلم
-            await _broadcaster.MessageStatusUpdatedAsync(
-                command.MessageId,
-                command.UserId,
-                MessageStatus.Delivered,
-                roomMembers);
-        }
+        // ✅ ابعت بس للي يخصهم الأمر
+        await _broadcaster.MessageDeliveredToAllAsync(command.MessageId, info.Value.SenderId, notifyUsers);
+
+        await _broadcaster.MessageStatusUpdatedAsync(
+            command.MessageId,
+            command.UserId,
+            MessageStatus.Delivered,
+            notifyUsers);
 
         return Unit.Value;
     }
+
 }

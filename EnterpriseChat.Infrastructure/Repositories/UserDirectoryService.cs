@@ -18,16 +18,27 @@ public sealed class UserDirectoryService : IUserDirectoryService
         _presence = presence;
     }
 
-    public async Task<IReadOnlyList<UserDirectoryItemDto>> SearchAsync(string query, int take, CancellationToken ct = default)
+    public async Task<IReadOnlyList<UserDirectoryItemDto>> SearchAsync(
+     string query,
+     Guid? excludeUserId,
+     int take,
+     CancellationToken ct = default)
     {
         query = query.Trim();
         take = Math.Clamp(take, 1, 50);
 
-        return await _db.Users
+        var queryable = _db.Users
             .AsNoTracking()
             .Where(u =>
                 u.DisplayName.Contains(query) ||
-                (u.Email != null && u.Email.Contains(query)))
+                (u.Email != null && u.Email.Contains(query)));
+
+        if (excludeUserId.HasValue && excludeUserId.Value != Guid.Empty)
+        {
+            queryable = queryable.Where(u => u.Id != excludeUserId.Value);
+        }
+
+        return await queryable
             .OrderBy(u => u.DisplayName)
             .Take(take)
             .Select(u => new UserDirectoryItemDto(u.Id, u.DisplayName, u.Email))

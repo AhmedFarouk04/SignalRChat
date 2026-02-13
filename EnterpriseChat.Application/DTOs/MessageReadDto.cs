@@ -1,6 +1,5 @@
-﻿using EnterpriseChat.Domain.Enums;
-
-namespace EnterpriseChat.Application.DTOs;
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Domain.Enums;
 
 public sealed class MessageReadDto
 {
@@ -8,8 +7,17 @@ public sealed class MessageReadDto
     public Guid RoomId { get; init; }
     public Guid SenderId { get; init; }
     public string Content { get; init; } = string.Empty;
-    public MessageStatus Status { get; init; }
-    public DateTime CreatedAt { get; init; }
 
+    // القديم (يمكن نحتفظ به للـ group info لو عايزين)
+    public MessageStatus GlobalStatus { get; init; }  // اختياري – لو عايز تحتفظ بالحساب القديم
+
+    // الجديد – ده اللي هنستخدمه في الـ UI
+    public MessageStatus PersonalStatus { get; init; }
+
+    public DateTime CreatedAt { get; init; }
     public List<MessageReceiptDto> Receipts { get; set; } = new();
+
+    // اختياري: لو عايز تعرض عدد اللي وصلوا
+    public int DeliveredCount { get; init; }
+    public int ReadCount { get; init; }
 }

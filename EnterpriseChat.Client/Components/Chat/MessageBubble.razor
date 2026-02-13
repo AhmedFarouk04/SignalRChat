@@ -22,7 +22,7 @@ else
 
     @if (isSystem)
     {
-        <div class="system-message-container" id="@($"message-{Message.Id}")">
+        <div class="system-message-container" id="@($"message-{Message.Id}")" @key="@($"sys-{Message.Id}")">
             <div class="system-message @systemType">
                 <div class="system-content">
                     <span class="system-text">@GetSystemMessageText()</span>
@@ -32,8 +32,8 @@ else
     }
     else
     {
-        @* الحل الجذري: Wrapper يمتد بكامل العرض ولكن لا يؤثر على مكان الرسالة إلا في وضع الاختيار *@
         <div class="msg-selection-wrapper @(IsMine ? "mine-wrapper" : "theirs-wrapper") @(VM.IsSelectionMode ? "selection-active" : "")"
+             @key="@($"msg-{Message.Id}")"
              @onclick="() => { if (VM.IsSelectionMode) VM.ToggleMessageSelection(Message.Id); }">
 
             @if (VM.IsSelectionMode && !Message.IsDeleted)
@@ -121,28 +121,27 @@ else
                         <span class="message-time">@Message.CreatedAt.ToLocalTime().ToString("h:mm tt")</span>
                         @if (IsMine)
                         {
-                            <span class="message-status-icon @StatusClass">
-                                @switch (Message.Status)
+                            <span class="message-status-icon @GetStatusClass()">
+                                @switch (Message.PersonalStatus)
                                 {
                                     case ClientMessageStatus.Pending:
                                         <span class="st">⌛</span>
-                                        ; break;
+                                        break;
                                     case ClientMessageStatus.Sent:
-
                                         <span class="st">✓</span>
-                                        ; break;
+                                        break;
                                     case ClientMessageStatus.Delivered:
-
                                         <span class="st">✓✓</span>
-                                        ; break;
+                                        break;
                                     case ClientMessageStatus.Read:
-
                                         <span class="st" style="color: #38bdf8;">✓✓</span>
-                                        ; break;
+                                        break;
                                     case ClientMessageStatus.Failed:
-
                                         <span class="st">!</span>
-                                        ; break;
+                                        break;
+                                    default:
+                                        <span class="st">?</span>
+                                        break;
                                 }
                             </span>
                         }
@@ -172,6 +171,7 @@ else
         </div>
     }
 }
+
 @code {
     [Parameter] public MessageModel? Message { get; set; }
     [Parameter] public Guid CurrentUserId { get; set; }
@@ -205,7 +205,10 @@ else
         if (IsMine) await OnDeleteRequested.InvokeAsync(Message);
         else await VM.DeleteMessageAsync(Message!.Id, false);
     }
-
+    private string GetStatusClass()
+    {
+        return Message?.PersonalStatus.ToString().ToLower() ?? "sent";
+    }
     private async Task HandleReaction(ReactionPayload payload)
     {
         if (Message?.Reactions?.CurrentUserReactionType == payload.Type)
@@ -219,8 +222,7 @@ else
     private Task OnReplyPreviewClick() => (Message?.ReplyInfo != null && !Message.ReplyInfo.IsDeleted) ? OnScrollToMessage.InvokeAsync(Message.ReplyInfo.MessageId) : Task.CompletedTask;
 
     private string GroupPosClass => GroupPosition switch { "start" => "g-start", "mid" => "g-mid", "end" => "g-end", _ => "g-single" };
-    private string StatusClass => Message!.Status.ToString().ToLower();
-
+    private string StatusClass => Message?.PersonalStatus.ToString().ToLower() ?? "sent";
     private string GetSystemMessageType()
     {
         var lower = (Message!.Content ?? "").ToLower();
@@ -231,8 +233,9 @@ else
         if (lower.Contains("pinned")) return "pin";
         return "";
     }
-
+    private string PersonalStatusClass => Message?.PersonalStatus.ToString().ToLower() ?? "sent";
     private string GetSystemMessageText() => Message!.Content ?? "";
+
     private string GetReactionEmoji(ReactionType type) => type switch
     {
         ReactionType.Like => "👍",

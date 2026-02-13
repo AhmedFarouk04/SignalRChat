@@ -60,18 +60,23 @@ public class Message
     public void MarkDelivered(UserId userId)
     {
         var receipt = _receipts.FirstOrDefault(r => r.UserId == userId);
-
         if (receipt == null)
+        {
+            Console.WriteLine($"[ENTITY] NO RECEIPT found for user {userId.Value} on message {Id.Value}");
             return;
+        }
 
         if (receipt.Status >= MessageStatus.Delivered)
+        {
+            Console.WriteLine($"[ENTITY] Already delivered for user {userId.Value} on message {Id.Value}");
             return;
+        }
 
         receipt.MarkDelivered();
+        Console.WriteLine($"[ENTITY] Marked delivered for user {userId.Value} on message {Id.Value}, new status: {receipt.Status}");
 
         AddDomainEvent(new MessageDeliveredEvent(Id, userId));
     }
-
 
     public void MarkRead(UserId userId)
     {

@@ -121,6 +121,8 @@ public sealed class ChatRoom
             _members.Remove(member);
     }
 
+  
+
     public void SetOwner(UserId newOwnerId)
     {
         if (Type != RoomType.Group)
@@ -131,13 +133,11 @@ public sealed class ChatRoom
         foreach (var m in _members)
         {
             if (m.UserId.Value == newOwnerId.Value)
-                m.SetOwner(true);
+                m.SetOwner(true);   // ✅ دي بتشتغل دلوقتي
             else
-                m.SetOwner(false);
+                m.SetOwner(false);  // ✅ دي برضه
         }
     }
-
-
     public IReadOnlyList<UserId> GetMemberIds()
     => _members.Select(m => m.UserId).ToList();
     public bool IsMember(UserId userId)

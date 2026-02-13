@@ -12,10 +12,10 @@
         }
 
         @{
-            // ✅ تصفية الرسائل: الأصلية فقط لترتيب العرض
             var originalMessages = Messages
-            .Where(m => !m.ReplyToMessageId.HasValue)
-            .ToList();
+                .Where(m => !m.ReplyToMessageId.HasValue)
+                .OrderBy(m => m.CreatedAt)
+                .ToList();
         }
 
         @for (int i = 0; i < originalMessages.Count; i++)
@@ -29,14 +29,13 @@
 
             if (prev is null || prevDate != currDate)
             {
-                <div class="date-sep">@FormatDateLabel(currDate)</div>
+                <div class="date-sep" @key="@($"date-{currDate}")">@FormatDateLabel(currDate)</div>
             }
 
             @if (IsSystemMessage(msg))
             {
-                <div class="system-message-container">
+                <div class="system-message-container" @key="@($"system-{msg.Id}")">
                     <div class="system-content">
-                        @* النص فقط في المنتصف بدون وقت *@
                         <span class="system-text">@FormatSystemMessage(msg.Content)</span>
                     </div>
                 </div>
@@ -45,12 +44,12 @@
             {
                 var samePrev = IsSameGroup(prev, msg);
                 var sameNext = IsSameGroup(msg, next);
-
                 var pos = (!samePrev && !sameNext) ? "single" :
-                (!samePrev && sameNext) ? "start" :
-                (samePrev && sameNext) ? "mid" : "end";
+                         (!samePrev && sameNext) ? "start" :
+                         (samePrev && sameNext) ? "mid" : "end";
 
-                <MessageBubble Message="@msg"
+                <MessageBubble @key="@($"msg-{msg.Id}")"
+                               Message="@msg"
                                CurrentUserId="@CurrentUserId"
                                GroupMembers="@GroupMembers"
                                GroupPosition="@pos"
@@ -66,10 +65,9 @@
                                OnDeleteRequested="OnDeleteRequested"
                                OnToggleReaction="@OnToggleReaction" />
 
-                @* عرض الردود المتداخلة لهذه الرسالة *@
                 @foreach (var reply in GetRepliesForMessage(msg.Id))
                 {
-                    <div class="reply-container" data-parent="@msg.Id">
+                    <div class="reply-container" @key="@($"reply-{reply.Id}")" data-parent="@msg.Id">
                         <MessageBubble Message="@reply"
                                        CurrentUserId="@CurrentUserId"
                                        GroupMembers="@GroupMembers"
@@ -120,16 +118,12 @@
     private bool showNewDivider;
     private readonly HashSet<Guid> newIds = new();
 
-    // ✅ ميثود موحدة لفحص رسائل النظام
     private bool IsSystemMessage(MessageModel msg)
     {
         if (msg == null) return false;
-
-        // 1. الاعتماد على النوع الصريح
         if (msg.IsSystem || msg.Type == "System") return true;
-
-        // 2. التحقق من المحتوى (للتوافق)
         if (string.IsNullOrEmpty(msg.Content)) return false;
+        
         var lower = msg.Content.ToLower();
         return lower.Contains("created the group") ||
                lower.Contains("was added by") ||
@@ -141,24 +135,14 @@
     private List<MessageModel> GetRepliesForMessage(Guid messageId)
     {
         return Messages.Where(m => m.ReplyToMessageId == messageId)
-                       .OrderBy(m => m.CreatedAt).ToList();
+                       .OrderBy(m => m.CreatedAt)
+                       .ToList();
     }
 
     private string FormatSystemMessage(string content)
         => content.Replace("created the group", "created group")
                   .Replace("was added by", "added by")
                   .Replace("was removed by", "removed by");
-
-    private string GetSystemIcon(string content)
-    {
-        var lower = content.ToLower();
-        if (lower.Contains("pinned")) return "📌";
-        if (lower.Contains("created")) return "🏗️";
-        if (lower.Contains("added") || lower.Contains("joined")) return "➕";
-        if (lower.Contains("removed")) return "➖";
-        if (lower.Contains("left")) return "👋";
-        return "";
-    }
 
     private static bool IsSameGroup(MessageModel? a, MessageModel? b)
     {
@@ -233,5 +217,10 @@
         showNewDivider = false;
         newIds.Clear();
         if (Messages.Count > 0) await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+    }
+
+    public async Task ForceRefreshAsync()
+    {
+        await InvokeAsync(StateHasChanged);
     }
 }

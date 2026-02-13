@@ -234,7 +234,6 @@ public sealed class RoomsViewModel
         }
         catch
         {
-            _toasts.Error("Failed", "Could not load rooms. Check API / token.");
             Rooms = Array.Empty<RoomListItemModel>();
             VisibleRooms = Array.Empty<RoomListItemModel>();
             NotifyChanged();
@@ -291,13 +290,6 @@ public sealed class RoomsViewModel
     }
     private void OnMemberAddedRealtime(Guid roomId, Guid userId, string displayName)
        => _toasts.Success("Member added", $"{displayName} joined");
-
-   
-
-
-
-  
-
 
     private void OnMessageReceived(MessageModel msg)
     {
@@ -389,72 +381,50 @@ public sealed class RoomsViewModel
 
     private async void OnRoomUpdated(RoomUpdatedModel upd)
     {
+        Console.WriteLine($"[RoomsVM] 📥 RoomUpdated RECEIVED! RoomId={upd.RoomId}, Delta={upd.UnreadDelta}");
+
         var list = Rooms.ToList();
         var idx = list.FindIndex(r => r.Id == upd.RoomId);
-
-        // ✅ لو الروم مش موجودة: ضيفها
         if (idx < 0)
         {
-            string name = upd.RoomName ?? "";
-            string type = upd.RoomType ?? "";
-
-            // لو السيرفر مبعتش الاسم/النوع، هاتهم من API
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(type))
-            {
-                try
-                {
-                    var room = await _roomService.GetRoomAsync(upd.RoomId);
-                    if (room != null)
-                    {
-                        name = string.IsNullOrWhiteSpace(name) ? room.Name : name;
-                        type = string.IsNullOrWhiteSpace(type) ? room.Type : type;
-                    }
-                }
-                catch { }
-            }
-
-            list.Insert(0, new RoomListItemModel
-            {
-                Id = upd.RoomId,
-                Name = string.IsNullOrWhiteSpace(name) ? "Room" : name,
-                Type = string.IsNullOrWhiteSpace(type) ? "Group" : type,
-                UnreadCount = 0,
-                IsMuted = _flags.GetMuted(upd.RoomId),
-                LastMessageAt = upd.CreatedAt,
-                LastMessagePreview = upd.Preview,
-                LastMessageId = (upd.MessageId == Guid.Empty ? null : upd.MessageId)
-            });
-
-            Rooms = list;
-            ApplyFilter();
-            NotifyChanged();
+            Console.WriteLine($"[RoomsVM] Room {upd.RoomId} not found, ignoring");
             return;
         }
-
-        // باقي كودك زي ما هو (duplicate check + unread logic + update room)
-        if (_lastUpdateMessageByRoom.TryGetValue(upd.RoomId, out var lastMsg) && lastMsg == upd.MessageId)
-            return;
-
-        _lastUpdateMessageByRoom[upd.RoomId] = upd.MessageId;
 
         var r = list[idx];
         var isActive = _flags.ActiveRoomId == upd.RoomId;
         var currentUnread = _flags.GetUnread(upd.RoomId);
 
-        var nextUnread =
-            upd.UnreadDelta < 0 ? 0 :
-            (isActive ? 0 : Math.Max(0, currentUnread + upd.UnreadDelta));
+        int nextUnread;
 
-        _flags.SetUnread(upd.RoomId, nextUnread);
-
-        if (upd.UnreadDelta > 0 && upd.MessageId != Guid.Empty && _userIdCached && upd.SenderId != _cachedUserId)
+        // ✅ مهم جداً: التعامل مع Delta=-1
+        if (upd.UnreadDelta < 0)
         {
-            _ = Task.Run(async () =>
-            {
-                try { await _chatService.MarkMessageDeliveredAsync(upd.MessageId); } catch { }
-            });
+            // Delta سالب = قراءة الروم
+            nextUnread = 0;
+            Console.WriteLine($"[RoomsVM] 📖 Room marked as read, setting unread=0");
+        }
+        else if (isActive)
+        {
+            // الروم مفتوحة = unread=0
+            nextUnread = 0;
+            Console.WriteLine($"[RoomsVM] Active room, forcing unread=0");
+        }
+        else
+        {
+            // رسالة جديدة
+            nextUnread = currentUnread + upd.UnreadDelta;
+            Console.WriteLine($"[RoomsVM] New message, unread: {currentUnread} + {upd.UnreadDelta} = {nextUnread}");
         }
 
+        // ✅ تأكد من إنها مش سالبة
+        nextUnread = Math.Max(0, nextUnread);
+
+        // ✅ حدث الـ Flags Store
+        _flags.SetUnread(upd.RoomId, nextUnread);
+        Console.WriteLine($"[RoomsVM] Unread count for room {upd.RoomId}: {currentUnread} -> {nextUnread}");
+
+        // ✅ تحديث الـ Room في القائمة
         list[idx] = new RoomListItemModel
         {
             Id = r.Id,
@@ -463,17 +433,18 @@ public sealed class RoomsViewModel
             OtherUserId = r.OtherUserId,
             OtherDisplayName = r.OtherDisplayName,
             IsMuted = r.IsMuted,
-            UnreadCount = nextUnread,
-            LastMessageAt = upd.CreatedAt,
-            LastMessagePreview = upd.Preview,
-            LastMessageId = upd.MessageId
+            UnreadCount = nextUnread,  // ✅ هنا الأهم!
+            LastMessageAt = upd.CreatedAt != DateTime.MinValue ? upd.CreatedAt : r.LastMessageAt,
+            LastMessagePreview = !string.IsNullOrEmpty(upd.Preview) ? upd.Preview : r.LastMessagePreview,
+            LastMessageId = upd.MessageId != Guid.Empty ? upd.MessageId : r.LastMessageId,
+            LastMessageSenderId = upd.SenderId != Guid.Empty ? upd.SenderId : r.LastMessageSenderId,
+            LastMessageStatus = r.LastMessageStatus
         };
 
         Rooms = list;
         ApplyFilter();
         NotifyChanged();
     }
-
     private void ApplyFilter()
     {
         IEnumerable<RoomListItemModel> q = Rooms;

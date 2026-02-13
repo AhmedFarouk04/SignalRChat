@@ -4,11 +4,12 @@
 @using EnterpriseChat.Application.DTOs
 @using EnterpriseChat.Client.Services.Http
 @using EnterpriseChat.Client.Services.Ui
+@using EnterpriseChat.Client.Authentication.Abstractions
 @inject UsersApi UsersApi
 @inject ChatApi ChatApi
 @inject NavigationManager Nav
 @inject ToastService Toasts
-
+@inject ICurrentUser CurrentUser
 
 <div class="rooms-page">
     <div class="rooms-header">
@@ -53,10 +54,9 @@
         <ul class="rooms-list">
             @foreach (var u in results)
             {
-                <li class="user-row">
+                <li class="user-row" @key="u.Id">
                     <div class="user-left">
                         <div class="user-avatar">@u.DisplayName[..1].ToUpper()</div>
-
                         <div class="user-main">
                             <div class="user-name">@u.DisplayName</div>
                             @if (!string.IsNullOrWhiteSpace(u.Email))
@@ -65,7 +65,6 @@
                             }
                         </div>
                     </div>
-
                     <button class="mini-btn" disabled="@busyStart" @onclick="() => StartPrivate(u.Id)">
                         Message
                     </button>
@@ -80,52 +79,77 @@
     private bool loading;
     private bool busyStart;
     private string? error;
+    private Guid _currentUserId;
 
     private readonly List<UserDirectoryItemDto> results = new();
     private CancellationTokenSource? cts;
 
-    private void OnInput(ChangeEventArgs e)
+    protected override async Task OnInitializedAsync()
     {
-        q = e.Value?.ToString() ?? "";
-        _ = DebouncedSearchAsync();
+        var userId = await CurrentUser.GetUserIdAsync();
+        _currentUserId = userId ?? Guid.Empty;
+        Console.WriteLine($"[Users] CurrentUserId: {_currentUserId}");
     }
 
-    private async Task DebouncedSearchAsync()
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        q = e.Value?.ToString() ?? "";
+        Console.WriteLine($"[Users] Query changed to: '{q}'");
+
+        await SearchDebouncedAsync();
+    }
+
+    private async Task SearchDebouncedAsync()
     {
         cts?.Cancel();
         cts?.Dispose();
         cts = new CancellationTokenSource();
-        var ct = cts.Token;
+        var token = cts.Token;
 
-        try
+        if (string.IsNullOrWhiteSpace(q))
         {
-            await Task.Delay(250, ct);
-            if (ct.IsCancellationRequested) return;
-
-            await SearchAsync(ct);
+            results.Clear();
+            loading = false;
+            error = null;
+            await InvokeAsync(StateHasChanged);
+            return;
         }
-        catch (Exception ex)
-        {
-            Toasts.Error("Search failed", ex.Message);
-        }
-    }
 
+        // ✅ شيل الشرط بتاع Length < 2 عشان يبحث من أول حرف
+        // if (q.Length < 2)
+        // {
+        //     results.Clear();
+        //     loading = false;
+        //     await InvokeAsync(StateHasChanged);
+        //     return;
+        // }
 
-    private async Task SearchAsync(CancellationToken ct)
-    {
-        error = null;
         loading = true;
+        error = null;
         await InvokeAsync(StateHasChanged);
 
         try
         {
-            results.Clear();
-            var res = await UsersApi.SearchAsync(q.Trim(), 25, ct);
-            results.AddRange(res);
+            await Task.Delay(300, token);
+            token.ThrowIfCancellationRequested();
+
+            var searchResults = await UsersApi.SearchAsync(q.Trim(), _currentUserId, 25, token);
+
+            if (!token.IsCancellationRequested)
+            {
+                results.Clear();
+                results.AddRange(searchResults);
+                Console.WriteLine($"[Users] Found {results.Count} results for '{q}'");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("[Users] Search cancelled");
         }
         catch (Exception ex)
         {
             error = ex.Message;
+            Console.WriteLine($"[Users] Search error: {ex.Message}");
         }
         finally
         {
@@ -149,7 +173,6 @@
                 return;
             }
 
-            // dto.Id is roomId
             Nav.NavigateTo($"/chat/{dto.Id}");
         }
         catch (Exception ex)

@@ -7,6 +7,9 @@ using System.Text;
 using System.Text.Json;
 using static System.Net.WebRequestMethods;
 
+using ClientMessageStatus = EnterpriseChat.Client.Models.MessageStatus;
+using DomainMessageStatus = EnterpriseChat.Domain.Enums.MessageStatus;
+
 namespace EnterpriseChat.Client.Services.Chat;
 
 public sealed class ChatService : IChatService
@@ -18,9 +21,14 @@ public sealed class ChatService : IChatService
         _api = api;
     }
 
-    public async Task<IReadOnlyList<MessageModel>> GetMessagesAsync(Guid roomId, int skip = 0, int take = 50)
+    public async Task<IReadOnlyList<MessageModel>> GetMessagesAsync(
+        Guid roomId,
+        Guid currentUserId,
+        int skip = 0,
+        int take = 50)
     {
-        var dtos = await _api.GetAsync<IReadOnlyList<MessageReadDto>>(ApiEndpoints.RoomMessages(roomId, skip, take))
+        var dtos = await _api.GetAsync<IReadOnlyList<MessageReadDto>>(
+            ApiEndpoints.RoomMessages(roomId, skip, take))
                    ?? [];
 
         var ordered = dtos.OrderBy(m => m.CreatedAt);
@@ -32,15 +40,22 @@ public sealed class ChatService : IChatService
             SenderId = m.SenderId,
             Content = m.Content,
             CreatedAt = m.CreatedAt,
-            Status = (Models.MessageStatus)(int)m.Status,
+
+            // استخدم PersonalStatus (اللي راجع من الـ backend دلوقتي)
+            PersonalStatus = (ClientMessageStatus)(int)m.PersonalStatus,
+
+            // لو عايز fallback للـ Status القديم (اختياري)
+            // Status = (ClientMessageStatus)(int)(m.Status ?? DomainMessageStatus.Sent),
+
             Receipts = (m.Receipts ?? new()).Select(r => new MessageReceiptModel
             {
                 UserId = r.UserId,
-                Status = (Models.MessageStatus)(int)m.Status,
+                Status = (ClientMessageStatus)(int)r.Status
             }).ToList()
         }).ToList();
     }
 
+    // باقي الدوال بدون تغيير (كوبي-بيست الباقي من الكود القديم)
     public Task<MessageDto?> SendMessageAsync(Guid roomId, string content)
         => _api.PostAsync<object, MessageDto>(ApiEndpoints.SendMessage, new
         {
@@ -76,7 +91,6 @@ public sealed class ChatService : IChatService
     {
         var json = JsonSerializer.Serialize(new { LastMessageId = lastMessageId });
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
         await _api.SendAsync(HttpMethod.Post, ApiEndpoints.MarkRoomRead(roomId), content);
     }
 
@@ -84,13 +98,15 @@ public sealed class ChatService : IChatService
     {
         return await _api.GetAsync<MessageReceiptStatsDto>($"/api/chat/messages/{messageId}/stats", ct);
     }
+
     public async Task<MessageReactionsDetailsDto?> GetMessageReactionsDetailsAsync(Guid messageId)
     {
         return await _api.GetAsync<MessageReactionsDetailsDto>(
             $"/api/chat/messages/{messageId}/reactions/details");
     }
+
     public Task EditMessageAsync(Guid messageId, string newContent)
-    => _api.PatchAsync<string, object>(ApiEndpoints.EditMessage(messageId), newContent);
+        => _api.PatchAsync<string, object>(ApiEndpoints.EditMessage(messageId), newContent);
 
     public Task DeleteMessageAsync(Guid messageId, bool deleteForEveryone)
         => _api.DeleteAsync(ApiEndpoints.DeleteMessage(messageId, deleteForEveryone));
@@ -120,7 +136,11 @@ public sealed class ChatService : IChatService
     {
         await _api.PostAsync(ApiEndpoints.StopTyping(roomId), ct: ct);
     }
-    public async Task<MessageReactionsModel?> ReactToMessageAsync(Guid messageId, ReactionType reactionType, CancellationToken ct = default)
+
+    public async Task<MessageReactionsModel?> ReactToMessageAsync(
+        Guid messageId,
+        ReactionType reactionType,
+        CancellationToken ct = default)
     {
         var request = new { ReactionType = reactionType };
         return await _api.PostAsync<object, MessageReactionsModel>(
@@ -128,21 +148,19 @@ public sealed class ChatService : IChatService
             request,
             ct);
     }
-    // داخل ميثود PinMessageAsync في ChatService.cs
+
     public async Task PinMessageAsync(Guid roomId, Guid? messageId)
     {
-        // حل مشكلة الـ PostAsync باستخدام ميثود مخصصة أو الـ SendAsync العام
-        var json = System.Text.Json.JsonSerializer.Serialize(new { MessageId = messageId });
-        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
+        var json = JsonSerializer.Serialize(new { MessageId = messageId });
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
         await _api.SendAsync(HttpMethod.Post, $"api/rooms/{roomId}/pin", content);
     }
+
     public async Task<MessageReactionsModel?> GetMessageReactionsAsync(Guid messageId, CancellationToken ct = default)
     {
         return await _api.GetAsync<MessageReactionsModel>($"/api/chat/messages/{messageId}/reactions", ct);
     }
-    // EnterpriseChat.Client/Services/ChatService.cs
-    // EnterpriseChat.Client/Services/ChatService.cs
+
     public async Task<MessageDto?> SendMessageWithReplyAsync(
          Guid roomId,
          string content,
@@ -153,9 +171,8 @@ public sealed class ChatService : IChatService
             RoomId = roomId,
             Content = content,
             ReplyToMessageId = replyInfo?.MessageId,
-            ReplyInfo = replyInfo // ✅ هتبعت الـ snapshot مع الطلب
+            ReplyInfo = replyInfo
         };
-
         return await _api.PostAsync<object, MessageDto>(
             ApiEndpoints.SendMessage,
             request);
@@ -164,14 +181,11 @@ public sealed class ChatService : IChatService
     public async Task PinMessageAsync(Guid roomId, Guid? messageId, string? duration = null)
     {
         var payload = new { MessageId = messageId, Duration = duration };
-        var json = System.Text.Json.JsonSerializer.Serialize(payload);
-        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
         await _api.SendAsync(HttpMethod.Post, $"api/rooms/{roomId}/pin", content);
     }
-    // EnterpriseChat.Client/Services/Chat/ChatService.cs
 
-    // EnterpriseChat.Client/Services/Chat/ChatService.cs
     public async Task<IReadOnlyList<MessageModel>> SearchMessagesAsync(Guid roomId, string term, int take = 50)
     {
         if (string.IsNullOrWhiteSpace(term)) return [];
@@ -186,19 +200,14 @@ public sealed class ChatService : IChatService
             SenderId = m.SenderId,
             Content = m.Content,
             CreatedAt = m.CreatedAt,
-            Status = (Models.MessageStatus)(int)m.Status
-            // يمكنك إضافة باقي الحقول حسب الحاجة
+            PersonalStatus = (ClientMessageStatus)(int)m.PersonalStatus,
+            // لو عايز Status كـ fallback
+            // Status = (ClientMessageStatus)(int)(m.Status ?? DomainMessageStatus.Sent),
         }).ToList();
     }
 
-    // EnterpriseChat.Client/Services/Chat/ChatService.cs
-
-    // EnterpriseChat.Client/Services/Chat/ChatService.cs
-
     public async Task ForwardMessagesAsync(ForwardMessagesRequest request)
     {
-        // ✅ التعديل هنا: حدد الـ Types عشان الـ Compiler ميتلخبطش
-        // <RequestType, ResponseType>
         await _api.PostAsync<ForwardMessagesRequest, object>("api/chat/messages/forward", request);
     }
 }

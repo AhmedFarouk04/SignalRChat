@@ -47,4 +47,11 @@ public sealed class UserBlockRepository : IUserBlockRepository
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync(ct);
     }
+    public async Task<IReadOnlyList<BlockedUser>> GetBlockersOfUserAsync(UserId userId, CancellationToken ct = default)
+    {
+        return await _context.BlockedUsers
+            .Where(b => b.BlockedId == userId)
+            .OrderByDescending(b => b.CreatedAt)
+            .ToListAsync(ct);
+    }
 }

@@ -3,6 +3,7 @@ using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
+using EnterpriseChat.Infrastructure.Repositories;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -20,6 +21,7 @@ public sealed class ChatHub : Hub
     private readonly IChatRoomRepository _roomRepository;
     private readonly IRoomPresenceService _roomPresence;
     private readonly ITypingService _typing;
+    private readonly IUserBlockRepository _blockRepository;  // ← أضف ده
     private static readonly ConcurrentDictionary<string, DateTime> _typingBroadcastGate = new();
     private static readonly ConcurrentDictionary<string, byte> _joinedRooms = new();
 
@@ -28,25 +30,37 @@ public sealed class ChatHub : Hub
         IMediator mediator,
         IChatRoomRepository roomRepository,
         IRoomPresenceService roomPresence,
-        ITypingService typing)
+        ITypingService typing,
+        IUserBlockRepository blockRepository)
     {
         _presence = presence;
         _mediator = mediator;
         _roomRepository = roomRepository;
         _roomPresence = roomPresence;
         _typing = typing;
+        _blockRepository = blockRepository;
     }
 
     public override async Task OnConnectedAsync()
     {
         var userId = GetUserId();
         var connectionId = Context.ConnectionId;
-
         var wasOnline = await _presence.IsOnlineAsync(userId);
+
         await _presence.UserConnectedAsync(userId, connectionId);
 
         if (!wasOnline)
-            await Clients.Others.SendAsync("UserOnline", userId.Value);
+        {
+            // أنت تشوف نفسك Online دائمًا
+            await Clients.Caller.SendAsync("UserOnline", userId.Value);
+
+            // ابعت للناس اللي مسموح لهم يشوفوك (مش محظورين)
+            var visibleTo = await GetVisibleOnlineUsersForMe(userId);
+            foreach (var target in visibleTo)
+            {
+                await Clients.User(target.Value.ToString()).SendAsync("UserOnline", userId.Value);
+            }
+        }
 
         await base.OnConnectedAsync();
     }
@@ -87,8 +101,14 @@ public sealed class ChatHub : Hub
                 .SendAsync("RoomPresenceUpdated", rid.Value, count);
         }
 
-        await Clients.Others.SendAsync("UserOffline", userId.Value);
-
+if (!stillOnline)
+{
+    var visibleTo = await GetVisibleOnlineUsersForMe(userId);
+    foreach (var target in visibleTo)
+    {
+        await Clients.User(target.Value.ToString()).SendAsync("UserOffline", userId.Value);
+    }
+}
         await base.OnDisconnectedAsync(exception);
     }
 
@@ -102,6 +122,7 @@ public sealed class ChatHub : Hub
     {
         var user = GetUserId();
         var rid = new RoomId(Guid.Parse(roomId));
+        Console.WriteLine($"[JoinRoom] User {user.Value} joining room {roomId}"); // ✅
 
         var room = await _roomRepository.GetByIdWithMembersAsync(rid, Context.ConnectionAborted); if (room is null)
             throw new HubException("Room not found.");
@@ -127,6 +148,8 @@ public sealed class ChatHub : Hub
             return;
 
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
+        Console.WriteLine($"[JoinRoom] Added {Context.ConnectionId} to group {roomId}"); // ✅
+
         await _roomPresence.JoinRoomAsync(rid, user);
 
         var count = await _roomPresence.GetOnlineCountAsync(rid);
@@ -137,7 +160,10 @@ public sealed class ChatHub : Hub
        
     }
 
-
+    public async Task Ping()
+    {
+        await Clients.Caller.SendAsync("Pong");
+    }
 
     public async Task LeaveRoom(string roomId)
     {
@@ -209,9 +235,22 @@ public sealed class ChatHub : Hub
 
     public async Task<IReadOnlyCollection<Guid>> GetOnlineUsers()
     {
-        var users = await _presence.GetOnlineUsersAsync();
-        return users.Select(u => u.Value).ToList();
+        var me = GetUserId();
+        var allOnline = await _presence.GetOnlineUsersAsync();
+
+        var visible = new List<Guid>();
+
+        foreach (var u in allOnline)
+        {
+            if (u == me) continue;
+
+            var blocked = await _blockRepository.IsBlockedAsync(me, u, Context.ConnectionAborted);
+            if (!blocked) visible.Add(u.Value);
+        }
+
+        return visible;
     }
+
 
     public async Task RemoveMember(Guid roomId, Guid userId)
     {
@@ -243,18 +282,35 @@ public sealed class ChatHub : Hub
 
         var result = await _mediator.Send(command);
 
-        // ✅ إرسال الـ ReplyInfo كاملة
-        await Clients.Group(request.RoomId.ToString())
-            .SendAsync("MessageReceived", new
+        // ✅ حول الـ result لـ MessageDto
+        var messageDto = new MessageDto
+        {
+            Id = result.Id,
+            RoomId = result.RoomId,
+            SenderId = result.SenderId,
+            Content = result.Content,
+            CreatedAt = result.CreatedAt,
+            Status = result.Status,
+            ReplyToMessageId = result.ReplyToMessageId,
+            ReplyInfo = result.ReplyInfo != null ? new ReplyInfoDto
             {
-                Id = result.Id,
-                RoomId = result.RoomId,
-                SenderId = result.SenderId,
-                Content = result.Content,
-                CreatedAt = result.CreatedAt,
-                ReplyToMessageId = result.ReplyToMessageId,
-                ReplyInfo = result.ReplyInfo // ✅ هيرسل كل البيانات
-            });
+                MessageId = result.ReplyInfo.MessageId,
+                SenderId = result.ReplyInfo.SenderId,
+                SenderName = result.ReplyInfo.SenderName,
+                ContentPreview = result.ReplyInfo.ContentPreview,
+                CreatedAt = result.ReplyInfo.CreatedAt,
+                IsDeleted = result.ReplyInfo.IsDeleted
+            } : null,
+            IsEdited = result.IsEdited,
+            IsDeleted = result.IsDeleted,
+            ReadCount = result.ReadCount,
+            DeliveredCount = result.DeliveredCount,
+            TotalRecipients = result.TotalRecipients
+        };
+
+        //// ✅ ابعت MessageDto مش Object
+        //await Clients.Group(request.RoomId.ToString())
+        //    .SendAsync("MessageReceived", messageDto);
     }
     private UserId GetUserId()
 {
@@ -268,6 +324,31 @@ public sealed class ChatHub : Hub
 
     return new UserId(id);
 }
+    private async Task<List<UserId>> GetVisibleOnlineUsersForMe(UserId me)
+    {
+        var allOnline = await _presence.GetOnlineUsersAsync();
+
+        // لو الـ context مش متاح، ارجع كل الـ online (بدون فلتر بلوك)
+        // أو استخدم cache إن وجد
+        try
+        {
+            var result = new List<UserId>();
+            foreach (var u in allOnline)
+            {
+                if (u == me) continue;
+
+                // حاول بس لو الـ context شغال
+                var blocked = await _blockRepository.IsBlockedAsync(me, u, Context.ConnectionAborted);
+                if (!blocked) result.Add(u);
+            }
+            return result;
+        }
+        catch (TaskCanceledException)
+        {
+            // في حالة disconnect، ارجع كل الناس (مش مهم الفلتر دقيق هنا)
+            return allOnline.Where(u => u != me).ToList();
+        }
+    }
 
 
 }

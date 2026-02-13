@@ -9,6 +9,7 @@ public sealed class ChatDbContext : DbContext
 {
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
+    public DbSet<ChatRoomMember> ChatRoomMembers => Set<ChatRoomMember>();
     public DbSet<BlockedUser> BlockedUsers => Set<BlockedUser>();
     public DbSet<MutedRoom> MutedRooms => Set<MutedRoom>();
     public DbSet<MessageReceipt> MessageReceipts => Set<MessageReceipt>();
@@ -93,6 +94,7 @@ public sealed class ChatDbContext : DbContext
                 .Metadata.SetValueComparer(userIdComparer);
         });
 
+        // ✅ ChatRoomMember - التعديل النهائي مع Shadow Property Nullable
         modelBuilder.Entity<ChatRoomMember>(entity =>
         {
             entity.Property(e => e.RoomId)
@@ -101,11 +103,42 @@ public sealed class ChatDbContext : DbContext
                     v => new RoomId(v))
                 .Metadata.SetValueComparer(roomIdComparer);
 
+            // ✅ UserId Value Object - يقرأ من عامود UserId
             entity.Property(e => e.UserId)
                 .HasConversion(
                     v => v.Value,
                     v => new UserId(v))
+                .HasColumnName("UserId")
                 .Metadata.SetValueComparer(userIdComparer);
+
+            // ✅ Shadow property للـ FK - Nullable! (مش Required)
+            entity.Property<Guid?>("ChatUserId")
+                .HasColumnName("ChatUserId")
+                .IsRequired(false);  // ✅ Nullable
+
+            // ✅ LastReadMessageId
+            entity.Property(e => e.LastReadMessageId)
+                .HasConversion(
+                    v => v != null ? v.Value : (Guid?)null,
+                    v => v.HasValue ? new MessageId(v.Value) : null)
+                .IsRequired(false)
+                .Metadata.SetValueComparer(messageIdComparer);
+
+            entity.Property(e => e.LastReadAt)
+                .IsRequired(false);
+
+            // ✅ العلاقات
+            entity.HasOne<ChatRoom>()
+                .WithMany(r => r.Members)
+                .HasForeignKey(e => e.RoomId)
+                .HasPrincipalKey(r => r.Id)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<ChatUser>()
+                .WithMany()
+                .HasForeignKey("ChatUserId")
+                .HasPrincipalKey(u => u.Id)
+                .OnDelete(DeleteBehavior.SetNull);  // ✅ SetNull مش Cascade
         });
 
         modelBuilder.Entity<MessageReceipt>(entity =>
@@ -121,12 +154,11 @@ public sealed class ChatDbContext : DbContext
                     v => v.Value,
                     v => new UserId(v))
                 .Metadata.SetValueComparer(userIdComparer);
-
-            modelBuilder.Entity<Message>()
-        .HasIndex(m => m.Content)
-        .HasDatabaseName("IX_Message_Content");
         });
 
-        // ✅ أضف باقي Entities حسب الحاجة
+        // ✅ Index للبحث في المحتوى
+        modelBuilder.Entity<Message>()
+            .HasIndex(m => m.Content)
+            .HasDatabaseName("IX_Message_Content");
     }
 }

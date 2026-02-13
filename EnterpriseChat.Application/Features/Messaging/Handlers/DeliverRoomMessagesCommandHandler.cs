@@ -31,17 +31,38 @@ public sealed class DeliverRoomMessagesCommandHandler
     {
         await _auth.EnsureUserIsMemberAsync(request.RoomId, request.UserId, ct);
 
+        Console.WriteLine($"[Deliver] Starting for user {request.UserId.Value} in room {request.RoomId.Value}");
+
         var messages = await _messageRepo.GetByRoomForUpdateAsync(request.RoomId, 0, 200, ct);
 
-        var deliveredSenders = new Dictionary<Guid, List<MessageId>>(); // group by sender
+        Console.WriteLine($"[Deliver] Found {messages.Count} messages to process");
+
+        var deliveredSenders = new Dictionary<Guid, List<MessageId>>();
+
+        int deliveredCount = 0;
 
         foreach (var msg in messages)
         {
             if (msg.SenderId == request.UserId) continue;
 
-            msg.MarkDelivered(request.UserId);
+            var receipt = msg.Receipts.FirstOrDefault(r => r.UserId == request.UserId);
+            if (receipt == null)
+            {
+                Console.WriteLine($"[Deliver] NO RECEIPT for msg {msg.Id} from user {request.UserId.Value}");
+                continue;
+            }
 
-            // جمع للbroadcast
+            if (receipt.Status >= MessageStatus.Delivered)
+            {
+                Console.WriteLine($"[Deliver] Already delivered: msg {msg.Id} status {receipt.Status}");
+                continue;
+            }
+
+            msg.MarkDelivered(request.UserId);
+            deliveredCount++;
+
+            Console.WriteLine($"[Deliver] Marked delivered: msg {msg.Id} for user {request.UserId.Value}");
+
             if (!deliveredSenders.TryGetValue(msg.SenderId.Value, out var list))
             {
                 list = new List<MessageId>();
@@ -50,11 +71,13 @@ public sealed class DeliverRoomMessagesCommandHandler
             list.Add(msg.Id);
         }
 
+        Console.WriteLine($"[Deliver] Total newly delivered: {deliveredCount}");
+
         await _uow.CommitAsync(ct);
 
-        // ✅ جديد: ابعت Delivered لكل sender
-        if (_broadcaster is not null)
+        if (_broadcaster is not null && deliveredSenders.Any())
         {
+            Console.WriteLine($"[Deliver] Broadcasting {deliveredSenders.Sum(kv => kv.Value.Count)} deliveries");
             foreach (var kv in deliveredSenders)
             {
                 var senderId = new UserId(kv.Key);

@@ -244,7 +244,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string? UiError { get; private set; }
     public Guid CurrentUserId { get; private set; }
     public bool IsMuted { get; private set; }
-    public bool IsBlocked { get; private set; }
+    public bool IsBlockedByMe { get; private set; }
+    public bool IsBlockedMe { get; private set; }
     public bool IsDisconnected { get; private set; }
     public bool IsOtherDeleted { get; private set; }
     public bool IsRemoved { get; private set; }
@@ -272,12 +273,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
 
     // ✅ InitializeAsync
+    // ✅ InitializeAsync
     public async Task InitializeAsync(Guid roomId)
     {
         UnregisterRealtimeEvents();
         _flags.RoomMuteChanged -= OnRoomMuteChanged;
-        _flags.UserBlockChanged -= OnUserBlockChanged;
-
+        _flags.BlockedByMeChanged -= OnBlockedByMeChanged;
+        _flags.BlockedMeChanged -= OnBlockedMeChanged;
         TypingUsers.Clear();
         OnlineUsers.Clear();
         Messages.Clear();
@@ -288,8 +290,6 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         _currentRoomId = roomId;
         _flags.SetActiveRoom(roomId);
-        IsMuted = _flags.GetMuted(roomId);
-        IsBlocked = false;
 
         NotifyChanged();
 
@@ -306,7 +306,12 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 return;
             }
 
-            // ✅ Load group members إذا كانت group
+            // ✅ 1. جلب الـ Muted state من الـ API
+            var mutedRooms = await _mod.GetMutedAsync();
+            IsMuted = mutedRooms.Any(r => r.RoomId == roomId);
+            _flags.SetMuted(roomId, IsMuted);
+
+            // ✅ 2. Load group members
             GroupMembersModel? groupMembers = null;
             if (Room.Type == "Group")
             {
@@ -327,7 +332,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 GroupMembers = null;
             }
 
-            // ✅ Private other user
+            // ✅ 3. Private other user + جلب الـ Blocked state
             if (Room.Type == "Private")
             {
                 if (Room.OtherUserId == null)
@@ -343,7 +348,17 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                         DisplayName = Room.OtherDisplayName ?? "User",
                         IsOnline = false
                     };
-                    IsBlocked = _flags.GetBlocked(OtherUser.Id);
+
+                    // ✅ جلب الـ Blocked state من الـ API
+                    var myBlocks = await _mod.GetBlockedAsync();           // اللي أنا عملتهم بلوك
+                    var blockedMe = await _mod.GetBlockedByMeAsync();      // ← لازم تضيف الـ endpoint ده في الـ API
+
+                    IsBlockedByMe = myBlocks.Any(b => b.UserId == OtherUser.Id);
+                    IsBlockedMe = blockedMe.Any(b => b.UserId == OtherUser.Id);
+
+                    _flags.SetBlockedByMe(OtherUser.Id, IsBlockedByMe);
+                    _flags.SetBlockedMe(OtherUser.Id, IsBlockedMe);
+
                 }
             }
             else
@@ -351,39 +366,34 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 OtherUser = null;
             }
 
-            // ✅ Load messages
-            var loaded = (await _chatService.GetMessagesAsync(roomId, 0, 200)).ToList();
-            loaded.Reverse();
-
+            // ✅ 4. Load messages
+            var loaded = (await _chatService.GetMessagesAsync(
+                roomId,
+                CurrentUserId,     // ← مرر الـ current user id هنا
+                0,
+                200)).ToList();
             Messages.Clear();
-            foreach (var msg in loaded)
-            {
-                Messages.Add(msg);
-            }
-            // جوه InitializeAsync بعد تحميل الرسائل
+            foreach (var msg in loaded) Messages.Add(msg);
+            // Force update status for incoming messages after load/refresh
+            // Force update status for incoming messages after load/refresh
+           
+
             var pinnedMsg = loaded.FirstOrDefault(m => m.Id == Room.PinnedMessageId);
-            if (pinnedMsg != null)
-            {
-                PinnedMessages.Add(pinnedMsg);
-            }
-            // أو لو عندك API خاص بالـ Pinned Messages ناديه هنا
+            if (pinnedMsg != null) PinnedMessages.Add(pinnedMsg);
 
             NotifyChanged();
 
-            // ✅ حساب TotalRecipients
+            // ✅ 5. حساب TotalRecipients
             var myId = CurrentUserId;
             var memberCount = Room.Type == "Group" ? (groupMembers?.Members.Count ?? 1) - 1 : 1;
+            foreach (var msg in Messages) msg.TotalRecipients = memberCount;
 
-            foreach (var msg in Messages)
-            {
-                msg.TotalRecipients = memberCount;
-            }
-
-            // ✅ Mark delivered
+            // ✅ 6. Mark delivered
             var toDeliver = Messages
-                .Where(m => m.SenderId != myId && (int)m.Status < (int)ClientMessageStatus.Delivered)
-                .Select(m => m.Id)
-                .ToList();
+      .Where(m => m.SenderId != myId && (int)m.PersonalStatus < (int)ClientMessageStatus.Delivered)
+      .Select(m => m.Id)
+      .ToList();
+
 
             if (toDeliver.Any())
             {
@@ -391,15 +401,15 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 {
                     foreach (var id in toDeliver)
                     {
-                        try { await _chatService.MarkMessageDeliveredAsync(id); }
-                        catch { }
+                        try { await _chatService.MarkMessageDeliveredAsync(id); } catch { }
                     }
                 });
             }
 
-            // ✅ Subscribe to events
+            // ✅ 7. Subscribe to events
             _flags.RoomMuteChanged += OnRoomMuteChanged;
-            _flags.UserBlockChanged += OnUserBlockChanged;
+            _flags.BlockedByMeChanged += OnBlockedByMeChanged;
+            _flags.BlockedMeChanged += OnBlockedMeChanged;
             RegisterRealtimeEvents(roomId);
 
             await _realtime.ConnectAsync();
@@ -408,8 +418,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             var lastMsg = Messages.OrderByDescending(m => m.CreatedAt).FirstOrDefault();
             if (lastMsg != null)
             {
-                try { await MarkRoomReadAsync(roomId, lastMsg.Id); }
-                catch { }
+                try { await MarkRoomReadAsync(roomId, lastMsg.Id); } catch { }
             }
 
             _flags.SetUnread(roomId, 0);
@@ -433,7 +442,6 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             NotifyChanged();
         }
     }
-
     public async Task<MessageReactionsDetailsDto?> GetMessageReactionsDetailsAsync(Guid messageId)
     {
         try
@@ -455,13 +463,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         UnregisterRealtimeEvents();
         _eventsRoomId = roomId;
-
+        Console.WriteLine($"[VM] Registering realtime events for room {roomId}"); // ✅
         _realtime.MessageReceived += OnRealtimeMessageReceived;
         _realtime.MessageDelivered += OnMessageDelivered;
         _realtime.MessageRead += OnMessageRead;
         _realtime.RoomMuteChanged += OnRealtimeRoomMuteChanged;
         _realtime.UserOnline += OnUserOnline;
-        _realtime.UserOffline += OnUserOffline;
+        _realtime.UserOffline += OnUserOffline; 
         _realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
         _realtime.TypingStarted += OnTypingStarted;
         _realtime.TypingStopped += OnTypingStopped;
@@ -520,50 +528,99 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     // ✅ Realtime Event Handlers
     private void OnRealtimeMessageReceived(MessageModel message)
     {
+        Console.WriteLine(
+            $"[VM] 🟢 MESSAGE RECEIVED IN VM! ID: {message.Id}, Room: {message.RoomId}, CurrentRoom: {_currentRoomId}, " +
+            $"Sender: {message.SenderId}, MyId: {CurrentUserId}, Initial PersonalStatus: {message.PersonalStatus}, Status: {message.Status}"
+        );
+
+        if (_currentRoomId != message.RoomId)
+        {
+            Console.WriteLine($"[VM] Message for different room, ignoring");
+            return;
+        }
+
+        // 1) محاولة مطابقة الرسالة مع Pending/Sent محلياً (قبل ما السيرفر يرجّع ID الحقيقي)
         var existing = Messages.FirstOrDefault(m =>
-             (m.Status == ClientMessageStatus.Pending || m.Status == ClientMessageStatus.Sent) &&
-             m.Content == message.Content &&
-             m.SenderId == message.SenderId &&
-             Math.Abs((m.CreatedAt - message.CreatedAt).TotalSeconds) < 5);
+            (m.Status == ClientMessageStatus.Pending || m.Status == ClientMessageStatus.Sent) &&
+            m.Content == message.Content &&
+            m.SenderId == message.SenderId &&
+            Math.Abs((m.CreatedAt - message.CreatedAt).TotalSeconds) < 5);
 
         if (existing != null)
         {
+            // تحديث الرسالة المحلية بدل إضافة نسخة جديدة
             existing.Id = message.Id;
             existing.Status = ClientMessageStatus.Sent;
+
+            // ✅ أهم تغيير: ما تعملش Reset اجباري للـ PersonalStatus هنا
+            // لأن ممكن تكون اتحركت بالفعل عن طريق events (Delivered/Read/StatusUpdated)
+            // خليك حذر: لو existing.PersonalStatus = Delivered مثلاً، متخليش event جديد يرجّعها Sent
+            if ((int)existing.PersonalStatus < (int)message.PersonalStatus)
+                existing.PersonalStatus = message.PersonalStatus;
+
             existing.Error = null;
             existing.ReplyInfo = message.ReplyInfo;
             existing.ReplyToMessageId = message.ReplyToMessageId;
+
+            Console.WriteLine($"[VM] Replaced pending/local message -> server messageId={message.Id}, kept PersonalStatus={existing.PersonalStatus}");
         }
         else
         {
+            // 2) إضافة الرسالة الجديدة
+            // ✅ أهم تغيير: لا تعمل auto-set Delivered للرسائل الواردة
+            // خلي PersonalStatus كما جاء من السيرفر (غالباً Sent) وسيتم ترقيته عبر events فقط
+            if (message.SenderId == CurrentUserId)
+            {
+                // رسالتك: خليها Sent افتراضياً
+                if (message.PersonalStatus == default)
+                    message.PersonalStatus = ClientMessageStatus.Sent;
+            }
+            else
+            {
+                // رسالة واردة: متلمسش PersonalStatus
+                // (خصوصاً في سيناريو block حيث قد لا توجد receipts أصلاً)
+            }
+
             Messages.Add(message);
+
+            Console.WriteLine(
+                $"[VM] Added new message {message.Id} sender={message.SenderId} " +
+                $"PersonalStatus={message.PersonalStatus} Status={message.Status}"
+            );
         }
 
         MessageReceived?.Invoke(message);
         NotifyChanged();
     }
-
     private void OnMessageDelivered(Guid messageId)
     {
+        Console.WriteLine($"[VM] OnMessageDelivered received for msg {messageId}");
         var msg = Messages.FirstOrDefault(m => m.Id == messageId);
-        if (msg?.Status == ClientMessageStatus.Sent)
+        if (msg != null)
         {
-            msg.Status = ClientMessageStatus.Delivered;
+            msg.PersonalStatus = ClientMessageStatus.Delivered;
             UpdateMessageStatusStats(msg);
             MessageUpdated?.Invoke(msg);
             NotifyChangedThrottled();
+            Console.WriteLine($"[VM] Updated msg {messageId} to Delivered (PersonalStatus)");
+        }
+        else
+        {
+            Console.WriteLine($"[VM] Message {messageId} not found in local list");
         }
     }
 
-    private void OnMessageRead(Guid id)
+    private void OnMessageRead(Guid messageId)
     {
-        var msg = Messages.FirstOrDefault(m => m.Id == id);
-        if (msg != null && msg.Status != ClientMessageStatus.Read)
+        Console.WriteLine($"[VM] OnMessageRead received for msg {messageId}");
+        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg != null)
         {
-            msg.Status = ClientMessageStatus.Read;
+            msg.PersonalStatus = ClientMessageStatus.Read;
             UpdateMessageStatusStats(msg);
             MessageUpdated?.Invoke(msg);
             NotifyChangedThrottled();
+            Console.WriteLine($"[VM] Updated msg {messageId} to Read (PersonalStatus)");
         }
     }
 
@@ -738,25 +795,14 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void OnMessageDeliveredToAll(Guid messageId, Guid senderId)
     {
-        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
-        if (msg != null && msg.SenderId == CurrentUserId)
-        {
-            msg.Status = ClientMessageStatus.Delivered;
-            UpdateMessageStatusStats(msg);
-            NotifyChangedThrottled();
-        }
+        return;
     }
 
     private void OnMessageReadToAll(Guid messageId, Guid senderId)
     {
-        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
-        if (msg != null && msg.SenderId == CurrentUserId)
-        {
-            msg.Status = ClientMessageStatus.Read;
-            UpdateMessageStatusStats(msg);
-            NotifyChangedThrottled();
-        }
+        return;
     }
+
 
     private void OnMessageReactionUpdated(Guid messageId, Guid userId, int reactionTypeInt, bool isNewReaction)
     {
@@ -838,15 +884,12 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void UpdateMessageStatusStats(MessageModel message)
     {
-        if (message.Status == ClientMessageStatus.Delivered)
-        {
+        if (message.PersonalStatus == ClientMessageStatus.Delivered)
             message.DeliveredCount = Math.Max(message.DeliveredCount, 1);
-        }
-        else if (message.Status == ClientMessageStatus.Read)
-        {
+        else if (message.PersonalStatus == ClientMessageStatus.Read)
             message.ReadCount = Math.Max(message.ReadCount, 1);
-        }
     }
+
 
     private void NotifyChangedThrottled()
     {
@@ -959,9 +1002,9 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             return;
         }
 
-        if (IsBlocked)
+        if (IsBlockedByMe)
         {
-            _toasts.Warning("Blocked", "You can't send messages to this user.");
+            _toasts.Warning("Blocked", "You blocked this user. Unblock to send messages.");
             return;
         }
 
@@ -988,7 +1031,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             SenderId = CurrentUserId,
             Content = text,
             CreatedAt = DateTime.UtcNow,
-            Status = ClientMessageStatus.Pending,
+            Status = ClientMessageStatus.Sent,
+            PersonalStatus = ClientMessageStatus.Sent,
             ReplyToMessageId = replyToMessageId,
             ReplyInfo = replySnapshot   // ✅ ده اللي هيخلي الشكل يظهر فورًا
         };
@@ -1065,15 +1109,32 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     public async Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId)
     {
+        Console.WriteLine($"[VM] MarkRoomReadAsync: room={roomId}, lastMsg={lastMessageId}");
+
         try
         {
+            // 1. حاول عبر SignalR (أسرع)
             await _realtime.MarkRoomReadAsync(roomId, lastMessageId);
+            Console.WriteLine($"[VM] MarkRoomRead via SignalR successful");
         }
-        catch
+        catch (Exception ex)
         {
-            try { await _chatService.MarkRoomReadAsync(roomId, lastMessageId); }
-            catch { }
+            Console.WriteLine($"[VM] SignalR MarkRoomRead failed: {ex.Message}");
+            try
+            {
+                // 2. Fallback للـ HTTP API
+                await _chatService.MarkRoomReadAsync(roomId, lastMessageId);
+                Console.WriteLine($"[VM] MarkRoomRead via HTTP successful");
+            }
+            catch (Exception ex2)
+            {
+                Console.WriteLine($"[VM] HTTP MarkRoomRead failed: {ex2.Message}");
+            }
         }
+
+        // 3. تحديث محلي فوري (بدون انتظار السيرفر)
+        _flags.SetUnread(roomId, 0);
+        Console.WriteLine($"[VM] Local unread reset to 0");
     }
 
     public async Task RemoveMemberAsync(Guid roomId, Guid userId)
@@ -1095,33 +1156,35 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         try
         {
-            await _chatService.BlockUserAsync(userId);
-            IsBlocked = true;
-            _flags.SetBlocked(userId, true);
+            await _mod.BlockAsync(userId);
+            IsBlockedByMe = true;                    // ← التغيير
+            _flags.SetBlockedByMe(userId, true);     // ← التغيير (مش SetBlocked)
             TypingUsers.Clear();
+            if (OtherUser?.Id == userId)
+            {
+                OtherUser.IsOnline = false;
+                OtherUser.LastSeen = null;
+            }
             NotifyChanged();
         }
-        catch
+        catch (Exception ex)
         {
-            _toasts.Error("Failed", "Could not block user.");
+            _toasts.Error("Block failed", ex.Message);
         }
     }
-
     public async Task UnblockUserAsync(Guid userId)
     {
         try
         {
-            await _mod.UnblockAsync(userId);
-            IsBlocked = false;
+            await _mod.UnblockAsync(userId);  // ✅ API + DB
+            IsBlockedByMe = false;
             _flags.SetBlocked(userId, false);
             NotifyChanged();
         }
-        catch
+        catch (Exception ex)
         {
-            _toasts.Error("Failed", "Could not unblock user.");
         }
     }
-
     public async Task ToggleMuteAsync(Guid roomId)
     {
         try
@@ -1130,18 +1193,18 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             var nextMuted = !currentlyMuted;
 
             if (nextMuted)
-                await _chatService.MuteAsync(roomId);
+                await _chatService.MuteAsync(roomId);  // ✅ API + DB
             else
-                await _chatService.UnmuteAsync(roomId);
+                await _chatService.UnmuteAsync(roomId); // ✅ API + DB
 
             _flags.SetMuted(roomId, nextMuted);
             IsMuted = nextMuted;
 
             NotifyChanged();
         }
-        catch
+        catch (Exception ex)
         {
-            _toasts.Error("Failed", "Could not toggle mute.");
+            _toasts.Error("Failed", $"Could not toggle mute: {ex.Message}");
         }
     }
 
@@ -1250,20 +1313,53 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         NotifyChanged();
     }
 
-    private void OnUserBlockChanged(Guid userId)
+    private bool _blockedByMe;
+    private bool _blockedMe;
+
+    private void WireBlockEvents()
+    {
+        _flags.BlockedByMeChanged += OnBlockedByMeChanged;
+        _flags.BlockedMeChanged += OnBlockedMeChanged;
+    }
+
+    private void OnBlockedByMeChanged(Guid userId)
     {
         if (OtherUser?.Id != userId) return;
-        IsBlocked = _flags.GetBlocked(userId);
+
+        _blockedByMe = _flags.GetBlockedByMe(userId);
+
+        if (IsBlockedByMe && OtherUser != null)
+        {
+            OtherUser.IsOnline = false;
+            OtherUser.LastSeen = null;
+        }
+
         NotifyChanged();
     }
+
+    private void OnBlockedMeChanged(Guid userId)
+    {
+        if (OtherUser?.Id != userId) return;
+
+        _blockedMe = _flags.GetBlockedMe(userId);
+
+        if (IsBlockedByMe && OtherUser != null)
+        {
+            OtherUser.IsOnline = false;
+            OtherUser.LastSeen = null;
+        }
+
+        NotifyChanged();
+    }
+
 
     // ✅ DisposeAsync - واحدة فقط
     public async ValueTask DisposeAsync()
     {
         _flags.SetActiveRoom(null);
         _flags.RoomMuteChanged -= OnRoomMuteChanged;
-        _flags.UserBlockChanged -= OnUserBlockChanged;
-
+        _flags.BlockedByMeChanged -= OnBlockedByMeChanged;
+        _flags.BlockedMeChanged -= OnBlockedMeChanged;
         UnregisterRealtimeEvents();
 
         if (_currentRoomId != null)
@@ -1278,7 +1374,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         // Sync cleanup if needed
         _flags.RoomMuteChanged -= OnRoomMuteChanged;
-        _flags.UserBlockChanged -= OnUserBlockChanged;
+        _flags.BlockedByMeChanged -= OnBlockedByMeChanged;
+        _flags.BlockedMeChanged -= OnBlockedMeChanged;
         UnregisterRealtimeEvents();
     }
     public void DebugMessages()

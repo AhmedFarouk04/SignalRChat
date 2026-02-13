@@ -12,7 +12,11 @@ public interface IChatRoomRepository
     Task<ChatRoom?> GetByIdWithMembersAsync(RoomId roomId, CancellationToken cancellationToken = default);
 
     Task<bool> ExistsAsync(RoomId roomId, CancellationToken cancellationToken = default);
-
+    Task UpdateMemberLastReadAsync(
+      RoomId roomId,
+      UserId userId,
+      MessageId lastReadMessageId,
+      CancellationToken ct = default);
     Task<ChatRoom?> FindPrivateRoomAsync(UserId a, UserId b, CancellationToken ct = default);
 
     Task<IReadOnlyList<ChatRoom>> GetForUserAsync(UserId userId, CancellationToken cancellationToken = default);

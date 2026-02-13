@@ -5,8 +5,11 @@ using EnterpriseChat.Domain.Enums;
 
 public interface IChatService
 {
-    Task<IReadOnlyList<MessageModel>> GetMessagesAsync(Guid roomId, int skip = 0, int take = 50);
-    Task<MessageDto?> SendMessageAsync(Guid roomId, string content);
+    Task<IReadOnlyList<MessageModel>> GetMessagesAsync(
+            Guid roomId,
+            Guid currentUserId,     // ← أضف هذا الباراميتر الجديد
+            int skip = 0,
+            int take = 50); Task<MessageDto?> SendMessageAsync(Guid roomId, string content);
     Task<IReadOnlyList<MessageReadReceiptDto>> GetReadersAsync(Guid messageId);
     Task StartTypingAsync(Guid roomId, int ttlSeconds = 5, CancellationToken ct = default);
     Task StopTypingAsync(Guid roomId, CancellationToken ct = default);

@@ -25,9 +25,9 @@ public interface IChatRealtimeClient
 
     event Action? Disconnected;
     event Action? Reconnected;
-
+    event Action<Guid, bool>? UserBlockedByMeChanged;
+    event Action<Guid, bool>? UserBlockedMeChanged;
     event Action<Guid, bool>? RoomMuteChanged;
-    event Action<Guid, bool>? UserBlockChanged;
 
     event Action<Guid, string>? GroupRenamed;
     event Action<Guid, Guid, string>? MemberAdded;

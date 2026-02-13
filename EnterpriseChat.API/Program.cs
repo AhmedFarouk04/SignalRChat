@@ -2,6 +2,7 @@
 using EnterpriseChat.API.Hubs;
 using EnterpriseChat.API.Messaging;
 using EnterpriseChat.API.Middleware;
+using EnterpriseChat.API.Presence;
 using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Interfaces; // IPasswordHasher (Application)
 using EnterpriseChat.Infrastructure;
@@ -97,16 +98,24 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, Ente
 // SignalR
 builder.Services.AddSignalR(options =>
 {
-    options.EnableDetailedErrors = true; // مكانها الصحيح هنا في الـ Hub options
+    options.EnableDetailedErrors = true;
+    options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(30);
 })
 .AddStackExchangeRedis(redisConnectionString, options =>
 {
-    options.Configuration.ChannelPrefix = "EnterpriseChat";
+    options.Configuration.ChannelPrefix = "EnterpriseChat";  // ✅ وحد الاسم
     options.Configuration.AbortOnConnectFail = false;
-    // تم حذف السطر المسبب للخطأ من هنا
+    options.Configuration.AllowAdmin = true;
+    options.Configuration.ConnectTimeout = 5000;
+    options.Configuration.SyncTimeout = 5000;
+    options.Configuration.DefaultDatabase = 0;
 });
 
 builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
+builder.Services.AddScoped<IUserPresenceNotifier, SignalRUserPresenceNotifier>();
 
 // AuthN/AuthZ
 builder.Services

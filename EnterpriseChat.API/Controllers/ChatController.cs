@@ -4,6 +4,7 @@ using EnterpriseChat.API.Hubs;
 using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Features.Messaging.Queries;
+using EnterpriseChat.Application.Features.Moderation.Queries;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Application.Services;
 using EnterpriseChat.Domain.Interfaces;
@@ -108,7 +109,9 @@ public sealed class ChatController : BaseController
         await _mediator.Send(new BlockUserCommand(me, new UserId(userId)), ct);
 
         await _hub.Clients.User(me.Value.ToString())
-            .SendAsync("UserBlockChanged", userId, true, ct);
+  .SendAsync("UserBlockedByMeChanged", userId, true, ct);
+        await _hub.Clients.User(userId.ToString())
+  .SendAsync("UserBlockedMeChanged", me.Value, true, ct);
 
         return NoContent();
     }
@@ -218,7 +221,11 @@ public sealed class ChatController : BaseController
         await _mediator.Send(new UnblockUserCommand(me, new UserId(userId)), ct);
 
         await _hub.Clients.User(me.Value.ToString())
-            .SendAsync("UserBlockChanged", userId, false, ct);
+  .SendAsync("UserBlockedByMeChanged", userId, false, ct);
+
+        await _hub.Clients.User(userId.ToString())
+          .SendAsync("UserBlockedMeChanged", me.Value, false, ct);
+
 
         return NoContent();
     }
@@ -521,5 +528,5 @@ public async Task<IActionResult> UploadAttachment(
         return result ? Ok() : BadRequest("Forward failed");
     }
 
-
+    
 }
