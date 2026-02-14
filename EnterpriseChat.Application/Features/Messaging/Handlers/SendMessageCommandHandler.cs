@@ -103,18 +103,7 @@ public sealed class SendMessageCommandHandler
 
         await _messageRepository.AddAsync(message, ct);
         await _unitOfWork.CommitAsync(ct);
-        if (!isBlocked && recipients.Any())
-        {
-            foreach (var recipientId in recipients)
-            {
-                var isOnline = await _presenceService.IsOnlineAsync(recipientId);
-                if (isOnline)
-                {
-                    // لو أونلاين، هنعمل Deliver فوري
-                    await _mediator.Send(new DeliverMessageCommand(message.Id, recipientId), ct);
-                }
-            }
-        }
+      
         var stats = message.GetReceiptStats();
     
 
@@ -123,20 +112,20 @@ public sealed class SendMessageCommandHandler
         // ────────────────────────────────────────────────────────────────
 
         // 1. جيب كل المستخدمين الأونلاين حاليًا (من Redis Presence)
-        var allOnlineUsers = await _presenceService.GetOnlineUsersAsync(); // بدون ct
-        // 2. فلتر المستلمين اللي أونلاين (من recipients)
-        var onlineRecipients = recipients
-            .Where(r => allOnlineUsers.Contains(r))
-            .ToList();
+        //var allOnlineUsers = await _presenceService.GetOnlineUsersAsync(); // بدون ct
+        //// 2. فلتر المستلمين اللي أونلاين (من recipients)
+        //var onlineRecipients = recipients
+        //    .Where(r => allOnlineUsers.Contains(r))
+        //    .ToList();
 
-        // 3. لكل مستلم أونلاين → اعمل Delivered فورًا (من غير ما يفتح الشات)
-        foreach (var onlineUser in onlineRecipients)
-        {
-            // استدعي الـ command أو اعمل broadcast مباشر
-            await _mediator.Send(new DeliverMessageCommand(message.Id, onlineUser), ct);
-            // أو لو عايز أسرع: broadcast مباشر بدون command
-            // await _broadcaster.MessageDeliveredAsync(message.Id.Value, onlineUser.Value);
-        }
+        //// 3. لكل مستلم أونلاين → اعمل Delivered فورًا (من غير ما يفتح الشات)
+        //foreach (var onlineUser in onlineRecipients)
+        //{
+        //    // استدعي الـ command أو اعمل broadcast مباشر
+        //    await _mediator.Send(new DeliverMessageCommand(message.Id, onlineUser), ct);
+        //    // أو لو عايز أسرع: broadcast مباشر بدون command
+        //    // await _broadcaster.MessageDeliveredAsync(message.Id.Value, onlineUser.Value);
+        //}
 
         // 4. (اختياري) لو عايز تحدث الـ stats للمرسل فورًا بعد الـ Delivered الجديد
         var statsAfterOnline = await _receiptRepo.GetMessageStatsAsync(message.Id, ct);

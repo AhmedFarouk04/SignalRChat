@@ -13,6 +13,11 @@
 @implements IDisposable
 @inject IJSRuntime JS
 
+@{
+    var total = Message.TotalRecipients;
+    var half = (int)Math.Ceiling(total / 2.0);
+}
+
 @if (Message is null)
 {
     <div class="system-message-container">
@@ -108,19 +113,22 @@ else
                                 @if (VM.Room?.Type == "Group" && Message.TotalRecipients > 1)
                                 {
                                     <!-- في الجروب: عرض الأرقام -->
-                                    @if (Message.ReadCount > 0)
+                                    @if (total > 1)
                                     {
-                                        <span class="read-count">@Message.ReadCount</span>
-                                        <span class="status-icon read">✓✓</span>
-                                    }
-                                    else if (Message.DeliveredCount > 0)
-                                    {
-                                        <span class="delivered-count">@Message.DeliveredCount</span>
-                                        <span class="status-icon delivered">✓✓</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="status-icon sent">✓</span>
+                                        if (Message.ReadCount >= total)
+                                        {
+                                            <span class="read-count">@Message.ReadCount</span>
+                                            <span class="status-icon read">✓✓</span>
+                                        }
+                                        else if (Message.DeliveredCount >= half)
+                                        {
+                                            <span class="delivered-count">@Message.DeliveredCount</span>
+                                            <span class="status-icon delivered">✓✓</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-icon sent">✓</span>
+                                        }
                                     }
                                 }
                                 else

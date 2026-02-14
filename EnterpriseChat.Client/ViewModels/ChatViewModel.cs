@@ -416,10 +416,19 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             await _realtime.ConnectAsync();
             await _realtime.JoinRoomAsync(roomId);
 
-            var lastMsg = Messages.OrderByDescending(m => m.CreatedAt).FirstOrDefault();
-            if (lastMsg != null)
+            if (Messages.Any())
             {
-                try { await MarkRoomReadAsync(roomId, lastMsg.Id); } catch { }
+                // لو آخر رسالة "مش مني" فقط
+                var last = Messages.OrderByDescending(m => m.CreatedAt).First();
+                if (last.SenderId != CurrentUserId)
+                {
+                    // (اختياري) Delay بسيط يضمن إن UI رسمت الرسائل
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(600);
+                        try { await MarkRoomReadAsync(roomId, last.Id); } catch { }
+                    });
+                }
             }
 
             _flags.SetUnread(roomId, 0);
@@ -552,10 +561,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                         msg.DeliveredCount = stats.DeliveredCount;
                         msg.TotalRecipients = stats.TotalRecipients;
 
-                        if (msg.ReadCount >= msg.TotalRecipients - 1)
+                        if (msg.ReadCount >= msg.TotalRecipients) // ✅
                             msg.PersonalStatus = ClientMessageStatus.Read;
                         else if (msg.DeliveredCount > 0)
                             msg.PersonalStatus = ClientMessageStatus.Delivered;
+                        else
+                            msg.PersonalStatus = ClientMessageStatus.Sent;
+
 
                         NotifyChanged();
                     }
@@ -625,11 +637,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Console.WriteLine($"[VM] Auto-delivered message {message.Id}");
 
                 // 2. لو أنا فاتح الروم دلوقتي، أعمل Read فوري
-                if (_currentRoomId == message.RoomId)
-                {
-                    await _chatService.MarkMessageReadAsync(message.Id);
-                    Console.WriteLine($"[VM] Auto-read message {message.Id} because room is open");
-                }
+                
             }
             catch (Exception ex)
             {
@@ -1574,14 +1582,19 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         msg.ReadCount = read;
 
         // تحديث الحالة
-        if (read >= total - 1) // الكل قرأ
+        if (read >= total) // ✅ الكل قرأ (في private total=1)
         {
             msg.PersonalStatus = ClientMessageStatus.Read;
         }
-        else if (delivered > 0) // في ناس وصلت
+        else if (delivered >= 1)
         {
             msg.PersonalStatus = ClientMessageStatus.Delivered;
         }
+        else
+        {
+            msg.PersonalStatus = ClientMessageStatus.Sent;
+        }
+        NotifyChanged();
 
         // لو الحالة اتغيرت، حدث الـ UI
         if (oldStatus != msg.PersonalStatus)

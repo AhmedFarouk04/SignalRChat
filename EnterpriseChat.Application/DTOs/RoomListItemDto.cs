@@ -21,5 +21,8 @@ public sealed class RoomListItemDto
     public Guid? LastReadMessageId { get; set; }
     public DateTime? LastReadAt { get; set; }
     public Guid? LastMessageSenderId { get; init; }
-    public MessageStatus? LastMessageStatus { get; init; } // only meaningful when last msg is mine
+    public MessageStatus? LastMessageStatus { get; init; }
+    public int? LastMessageTotalRecipients { get; init; }
+    public int? LastMessageDeliveredCount { get; init; }
+    public int? LastMessageReadCount { get; init; }
 }

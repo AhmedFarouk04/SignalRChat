@@ -265,7 +265,7 @@ GROUP BY m.RoomId";
         var json = JsonSerializer.Serialize(ids);
 
         var sql = @"
-WITH Ranked AS (
+;WITH Ranked AS (
     SELECT
         m.Id,
         m.RoomId,
@@ -283,15 +283,23 @@ SELECT
     r.SenderId,
     r.Content,
     r.CreatedAt,
-    ISNULL(x.MaxStatus, 1) AS MaxStatus
+    ISNULL(x.TotalRecipients, 0) AS TotalRecipients,
+    ISNULL(x.DeliveredCount, 0)  AS DeliveredCount,
+    ISNULL(x.ReadCount, 0)       AS ReadCount,
+    ISNULL(x.MaxStatus, 1)       AS MaxStatus
 FROM Ranked r
 OUTER APPLY (
-    SELECT MAX(CAST(rr.Status AS int)) AS MaxStatus
+    SELECT
+        COUNT(*) AS TotalRecipients,
+        SUM(CASE WHEN CAST(rr.Status AS int) >= 2 THEN 1 ELSE 0 END) AS DeliveredCount,
+        SUM(CASE WHEN CAST(rr.Status AS int) >= 3 THEN 1 ELSE 0 END) AS ReadCount,
+        MAX(CAST(rr.Status AS int)) AS MaxStatus
     FROM MessageReceipts rr
     WHERE rr.MessageId = r.Id
 ) x
 WHERE r.rn = 1
 ";
+
 
         var paramJson = new SqlParameter("@json", json);
 
@@ -311,8 +319,11 @@ WHERE r.rn = 1
                 SenderId = new UserId(r.SenderId),
                 Content = r.Content,
                 CreatedAt = r.CreatedAt,
-                ComputedStatusForSender = (MessageStatus)r.MaxStatus
+                TotalRecipients = r.TotalRecipients,
+                DeliveredCount = r.DeliveredCount,
+                ReadCount = r.ReadCount
             };
+
         }
 
         return dict;
@@ -348,5 +359,9 @@ public sealed class LastMessageRow
     public Guid SenderId { get; set; }
     public string Content { get; set; } = "";
     public DateTime CreatedAt { get; set; }
-    public int MaxStatus { get; set; } // int من DB
+
+    public int TotalRecipients { get; set; }
+    public int DeliveredCount { get; set; }
+    public int ReadCount { get; set; }
+    public int MaxStatus { get; set; }
 }

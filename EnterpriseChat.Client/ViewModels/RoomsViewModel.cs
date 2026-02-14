@@ -21,7 +21,8 @@ public sealed class RoomsViewModel
     private readonly ICurrentUser _currentUser; // جديد، عشان نعرف id بتاعنا
     private readonly Dictionary<Guid, Guid> _lastUpdateMessageByRoom = new();
     private Guid _cachedUserId; // بدون ? عشان هيبقى set دايمًا بعد Load
-    private bool _userIdCached = false; // flag عشان لو Load فشل
+    private bool _userIdCached = false;
+    public Guid CurrentUserId;// flag عشان لو Load فشل
     public RoomsViewModel(
         IRoomService roomService,
         ToastService toasts,
@@ -337,8 +338,12 @@ public sealed class RoomsViewModel
             UnreadCount = r.UnreadCount,
             LastMessageAt = r.LastMessageAt,
             LastMessagePreview = r.LastMessagePreview,
-            LastMessageId = r.LastMessageId
+            LastMessageId = r.LastMessageId,
+
+            LastMessageSenderId = r.LastMessageSenderId,
+            LastMessageStatus = r.LastMessageStatus
         };
+
 
         Rooms = list;
         ApplyFilter();
@@ -376,8 +381,13 @@ public sealed class RoomsViewModel
             UnreadCount = nextUnread,
             LastMessageAt = r.LastMessageAt,
             LastMessagePreview = r.LastMessagePreview,
-            LastMessageId = r.LastMessageId
+            LastMessageId = r.LastMessageId,
+
+            // ✅ أهم سطرين
+            LastMessageSenderId = r.LastMessageSenderId,
+            LastMessageStatus = r.LastMessageStatus
         };
+
 
         Rooms = list;
         ApplyFilter();
@@ -498,8 +508,12 @@ public sealed class RoomsViewModel
             UnreadCount = 0,
             LastMessageAt = r.LastMessageAt,
             LastMessagePreview = r.LastMessagePreview,
-            LastMessageId = lastMessageId ?? r.LastMessageId
+            LastMessageId = lastMessageId ?? r.LastMessageId,
+
+            LastMessageSenderId = r.LastMessageSenderId,
+            LastMessageStatus = r.LastMessageStatus
         };
+
 
         Rooms = list;
         ApplyFilter();

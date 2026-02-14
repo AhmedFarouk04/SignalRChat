@@ -84,15 +84,16 @@
             {
                 <RoomListItem @key="room.Id"
                               Room="room"
+                              CurrentUserId="VM.CurrentUserId"
                               IsOnline="@(IsBlockedPrivate(room) ? (bool?)null :
-                                                       (room.Type == "Private" && room.OtherUserId != null
-                                                           && _onlineMap.TryGetValue(room.OtherUserId.Value, out var on)
-                                                               ? on
-                                                               : (bool?)null))"
+                                                                 (room.Type == "Private" && room.OtherUserId != null
+                                                                     && _onlineMap.TryGetValue(room.OtherUserId.Value, out var on)
+                                                                         ? on
+                                                                         : (bool?)null))"
                       LastSeenText="@(IsBlockedPrivate(room) ? null : GetLastSeenText(room))"
                       IsTyping="@(IsBlockedPrivate(room) ? false :
-                                               (room.Type == "Private" && room.OtherUserId != null
-                                                   && _typingMap.Contains(room.OtherUserId.Value)))" />
+                                                         (room.Type == "Private" && room.OtherUserId != null
+                                                             && _typingMap.Contains(room.OtherUserId.Value)))" />
 
                 }
         </ul>
@@ -131,18 +132,18 @@
 
         // 3️⃣ الانضمام للرومات في الخلفية بدون انتظار (Fire and Forget)
         // وبدون إجبار الواجهة على إعادة الترتيب العنيف
-        _ = Task.Run(async () =>
-        {
-            foreach (var room in VM.Rooms)
-            {
-                try
-                {
-                    await Realtime.JoinRoomAsync(room.Id);
-                    await Task.Delay(20); // Delay صغير جداً لتخفيف الحمل
-                }
-                catch { }
-            }
-        });
+        // _ = Task.Run(async () =>
+        // {
+        //     foreach (var room in VM.Rooms)
+        //     {
+        //         try
+        //         {
+        //             await Realtime.JoinRoomAsync(room.Id);
+        //             await Task.Delay(20); 
+        //         }
+        //         catch { }
+        //     }
+        // });
 
         ApplyOnlineSnapshot();
         await InvokeAsync(StateHasChanged);

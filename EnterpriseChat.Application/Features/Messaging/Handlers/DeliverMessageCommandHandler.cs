@@ -50,7 +50,7 @@ public sealed class DeliverMessageCommandHandler : IRequestHandler<DeliverMessag
         await _uow.CommitAsync(ct);
 
         var roomMembers = await _messageRepo.GetRoomMemberIdsAsync(msg.RoomId, ct);
-        var stats = msg.GetReceiptStats();
+        var stats = await _receiptRepo.GetMessageStatsAsync(command.MessageId, ct);
 
         var tasks = new List<Task>();
 

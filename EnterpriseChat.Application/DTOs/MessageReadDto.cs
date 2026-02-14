@@ -20,4 +20,6 @@ public sealed class MessageReadDto
     // اختياري: لو عايز تعرض عدد اللي وصلوا
     public int DeliveredCount { get; init; }
     public int ReadCount { get; init; }
+    public int TotalRecipients { get; init; }
+
 }

@@ -40,7 +40,9 @@ public sealed class ChatService : IChatService
             SenderId = m.SenderId,
             Content = m.Content,
             CreatedAt = m.CreatedAt,
-
+            DeliveredCount = m.DeliveredCount,
+            ReadCount = m.ReadCount,
+            TotalRecipients = m.TotalRecipients,
             // استخدم PersonalStatus (اللي راجع من الـ backend دلوقتي)
             PersonalStatus = (ClientMessageStatus)(int)m.PersonalStatus,
 

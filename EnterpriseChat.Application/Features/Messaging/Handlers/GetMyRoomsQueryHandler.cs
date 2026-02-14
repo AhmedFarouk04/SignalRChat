@@ -64,7 +64,15 @@ public sealed class GetMyRoomsQueryHandler
 
             // status meaningful only if I'm sender of last message
             if (lastMsg != null && lastMsg.SenderId.Value == query.CurrentUserId.Value)
-                lastStatus = lastMsg.ComputedStatusForSender;
+            {
+                if (room.Type == RoomType.Group)
+                    lastStatus = ComputeGroupStatus(lastMsg.TotalRecipients, lastMsg.DeliveredCount, lastMsg.ReadCount);
+                else
+                    lastStatus = (lastMsg.ReadCount >= lastMsg.TotalRecipients) ? MessageStatus.Read
+                             : (lastMsg.DeliveredCount > 0) ? MessageStatus.Delivered
+                             : MessageStatus.Sent;
+            }
+
 
             // defaults
             string name = room.Name ?? "Chat";
@@ -170,4 +178,15 @@ public sealed class GetMyRoomsQueryHandler
 
         return result;
     }
+    private static MessageStatus ComputeGroupStatus(int total, int delivered, int read)
+    {
+        if (total <= 0) return MessageStatus.Sent;
+        if (read >= total) return MessageStatus.Read;
+
+        var half = (int)Math.Ceiling(total / 2.0);
+        if (delivered >= half) return MessageStatus.Delivered;
+
+        return MessageStatus.Sent;
+    }
+
 }

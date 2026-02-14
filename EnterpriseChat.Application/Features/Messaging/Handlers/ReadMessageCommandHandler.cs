@@ -52,7 +52,7 @@ public sealed class ReadMessageCommandHandler : IRequestHandler<ReadMessageComma
 
         // ✅ جلب كل أعضاء الغرفة
         var roomMembers = await _messageRepo.GetRoomMemberIdsAsync(msg.RoomId, ct);
-        var stats = msg.GetReceiptStats();
+        var stats = await _receiptRepo.GetMessageStatsAsync(command.MessageId, ct);
 
         // ✅ البث لكل الأعضاء (تصحيح الخطأ)
         var tasks = new List<Task>();

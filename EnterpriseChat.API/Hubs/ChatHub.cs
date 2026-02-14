@@ -49,22 +49,7 @@ public sealed class ChatHub : Hub
         await _presence.UserConnectedAsync(userId, connectionId);
 
         // ✅ لما المستلم يتصل، نعمل Deliver لكل الرسائل غير المسلمة في كل روماته
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var rooms = await _roomRepository.GetForUserAsync(userId);
-                foreach (var room in rooms)
-                {
-                    await _mediator.Send(new DeliverRoomMessagesCommand(room.Id, userId));
-                }
-                Console.WriteLine($"[Hub] Auto-delivered messages for user {userId.Value} after connect");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Hub] Auto-deliver failed: {ex.Message}");
-            }
-        });
+       
 
         await base.OnConnectedAsync();
     }
