@@ -24,8 +24,8 @@
 
 .content {
     flex: 1;
-    padding: 16px;
-    overflow-y: auto; /* ✅ أهم تغيير: auto بدل hidden – الcontent هيscroll دلوقتي */
+    /*padding: 16px;*/
+    overflow-y: auto;  
     display: flex;
     flex-direction: column;
 }

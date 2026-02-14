@@ -1,56 +1,125 @@
 ﻿@using EnterpriseChat.Client.Models
-@using Microsoft.AspNetCore.Components.Web
+@using EnterpriseChat.Client.Services.Http
+@using EnterpriseChat.Client.Services.Ui
+@using Microsoft.JSInterop
+@inject UsersApi UsersApi
+@inject GroupsApi GroupsApi
+@inject ToastService Toasts
+@inject IJSRuntime JS
 
 @if (IsOpen)
 {
     <div class="drawer-backdrop" @onclick="Close"></div>
 
-    <aside class="drawer"
-           role="dialog"
-           aria-modal="true"
-           aria-label="Members drawer"
-           tabindex="0"
-           @onkeydown="OnKeyDown">
-
+    <aside class="drawer members-drawer">
         <div class="drawer-header">
-            <div>
-                <div class="drawer-name">Members</div>
-                <div class="drawer-sub">@Members.Count members • @Members.Count(m => m.IsOnline) online</div>
+            <div class="header-content">
+                <span class="header-title">Group info</span>
+                <span class="header-subtitle">@Members.Count members • @Members.Count(m => m.IsOnline) online</span>
             </div>
-
-            <button class="icon-btn" title="Close" @onclick="Close" autofocus>✕</button>
+            <button class="close-btn" @onclick="Close">✕</button>
         </div>
 
-        <div class="drawer-list">
-            @foreach (var u in Members)
+        <div class="drawer-body">
+            @if (CanManageMembers)
             {
-                <div class="drawer-row">
-                    <div class="drawer-left">
-                        <div class="drawer-avatar">@u.DisplayName[..1].ToUpper()</div>
-
-                        <div>
-                            <div class="drawer-user">@u.DisplayName</div>
-                            <div class="drawer-badges">
-                                <span class="pill @(u.IsOnline ? "on" : "off")">
-                                    @(u.IsOnline ? "Online" : "Offline")
-                                </span>
-
-                                @if (OwnerId != Guid.Empty && u.Id == OwnerId)
-                                {
-                                    <span class="pill owner">Owner</span>
-                                }
-                            </div>
-                        </div>
+                <div class="drawer-section rename-section">
+                    <div class="section-label">Rename Group</div>
+                    <div class="rename-box">
+                        <input type="text" @bind="newGroupName" placeholder="Enter new name..." />
+                        <button class="mini-btn save-btn" @onclick="HandleRename" disabled="@isBusy">Save</button>
                     </div>
+                </div>
+            }
 
-                    @if (CanManageMembers && OwnerId != Guid.Empty && u.Id != OwnerId)
+            @if (CanManageMembers)
+            {
+                <div class="drawer-section search-section">
+                    <div class="section-label">Add Member</div>
+                    <div class="search-box">
+                        <input type="text" placeholder="Search users..."
+                               @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" />
+                        @if (isSearching)
+                        {
+                            <span class="spinner"></span>
+                        }
+                    </div>
+                    @if (searchResults.Any())
                     {
-                        <button class="mini-btn" @onclick="() => OnRemove.InvokeAsync(u.Id)">
-                            Remove
-                        </button>
+                        <div class="search-results">
+                            @foreach (var user in searchResults)
+                            {
+                                <div class="search-item">
+                                    <div class="user-info">
+                                        <div class="user-name">@user.DisplayName</div>
+                                        <div class="user-email">@user.Email</div>
+                                    </div>
+                                    <button class="add-btn" @onclick="() => HandleAdd(user.Id)" disabled="@isBusy">Add</button>
+                                </div>
+                            }
+                        </div>
                     }
                 </div>
             }
+
+            <div class="drawer-section">
+                <div class="section-label">Members List</div>
+                <div class="members-list">
+                    @foreach (var u in Members.OrderByDescending(m => m.Id == OwnerId))
+                    {
+                        <div class="member-item">
+                            <div class="member-avatar">
+                                @u.DisplayName[..1].ToUpper()
+                                @if (u.IsOnline)
+                                {
+                                    <span class="online-status"></span>
+                                }
+                            </div>
+                            <div class="member-main">
+                                <div class="member-name">@u.DisplayName @(u.Id == CurrentUserId ? "(You)" : "")</div>
+                                <div class="member-badges">
+                                    @if (u.Id == OwnerId)
+                                    {
+                                        <span class="badge owner">Owner</span>
+                                    }
+                                </div>
+                            </div>
+
+                            @* صلاحيات المالك تجاه الآخرين *@
+                            @if (CurrentUserId == OwnerId && u.Id != OwnerId)
+                            {
+                                <div class="member-actions">
+                                    <button class="action-icon-btn transfer" title="Transfer Ownership" @onclick="() => OnTransferOwner.InvokeAsync(u.Id)">👑</button>
+                                    <button class="action-icon-btn" title="Promote/Demote Admin" @onclick="() => OnToggleAdmin.InvokeAsync(u.Id)">⭐</button>
+                                    <button class="action-icon-btn danger" title="Remove Member" @onclick="() => OnRemove.InvokeAsync(u.Id)">✕</button>
+                                </div>
+                            }
+                            @* صلاحيات الأدمن تجاه غير المالك وغير الأدمن *@
+                            else if (CanManageMembers && u.Id != OwnerId && u.Id != CurrentUserId)
+                            {
+                                <div class="member-actions">
+                                    <button class="action-icon-btn danger" title="Remove Member" @onclick="() => OnRemove.InvokeAsync(u.Id)">✕</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="drawer-footer" style="display:flex; flex-direction:column; gap:10px;">
+            @* زر حذف الجروب يظهر للمالك فقط *@
+            @if (CurrentUserId == OwnerId)
+            {
+                <button class="leave-btn delete" @onclick="HandleDelete">
+                    <span class="icon">🗑️</span> Delete group
+                </button>
+            }
+
+            @* زر المغادرة *@
+            <button class="leave-btn" @onclick="HandleLeave">
+                <span class="icon">🚪</span> Leave group
+            </button>
         </div>
     </aside>
 }
@@ -59,15 +128,51 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public IReadOnlyList<UserModel> Members { get; set; } = [];
     [Parameter] public Guid OwnerId { get; set; }
+    [Parameter] public Guid CurrentUserId { get; set; }
+    [Parameter] public string GroupName { get; set; } = "";
     [Parameter] public bool CanManageMembers { get; set; }
+
     [Parameter] public EventCallback<Guid> OnRemove { get; set; }
+    [Parameter] public EventCallback<Guid> OnAdd { get; set; }
+    [Parameter] public EventCallback<string> OnRename { get; set; }
+    [Parameter] public EventCallback<Guid> OnToggleAdmin { get; set; }
+    [Parameter] public EventCallback<Guid> OnTransferOwner { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+    [Parameter] public EventCallback OnLeave { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
 
-    private Task Close() => OnClose.InvokeAsync();
+    private string searchTerm = "";
+    private string newGroupName = "";
+    private List<UserModel> searchResults = new();
+    private bool isSearching = false;
+    private bool isBusy = false;
+    private CancellationTokenSource? _cts;
 
-    private async Task OnKeyDown(KeyboardEventArgs e)
+    protected override void OnParametersSet() { if (string.IsNullOrEmpty(newGroupName)) newGroupName = GroupName; }
+
+    private async Task HandleSearch()
     {
-        if (e.Key == "Escape")
-            await Close();
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+        if (searchTerm.Length < 2) { searchResults.Clear(); return; }
+        try
+        {
+            isSearching = true;
+            await Task.Delay(300, _cts.Token);
+            var results = await UsersApi.SearchAsync(searchTerm, CurrentUserId, 5, _cts.Token);
+            var existingIds = Members.Select(m => m.Id).ToHashSet();
+            searchResults = results.Where(r => !existingIds.Contains(r.Id))
+                                   .Select(r => new UserModel { Id = r.Id, DisplayName = r.DisplayName, Email = r.Email }).ToList();
+        }
+        catch { }
+        finally { isSearching = false; StateHasChanged(); }
     }
+
+    private async Task HandleAdd(Guid userId) { isBusy = true; await OnAdd.InvokeAsync(userId); searchTerm = ""; searchResults.Clear(); isBusy = false; }
+    private async Task HandleRename() { if (string.IsNullOrWhiteSpace(newGroupName) || newGroupName == GroupName) return; isBusy = true; await OnRename.InvokeAsync(newGroupName); isBusy = false; }
+    private async Task HandleLeave() { if (await JS.InvokeAsync<bool>("confirm", "Are you sure you want to leave this group?")) await OnLeave.InvokeAsync(); }
+
+    private async Task HandleDelete() { if (await JS.InvokeAsync<bool>("confirm", "⚠️ DELETE GROUP? This will remove all messages and members forever.")) await OnDelete.InvokeAsync(); }
+
+    private Task Close() => OnClose.InvokeAsync();
 }

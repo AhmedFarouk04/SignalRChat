@@ -153,10 +153,19 @@ public sealed class GroupsController : BaseController
     [HttpPut("{roomId:guid}")]
     public async Task<IActionResult> Rename(Guid roomId, [FromBody] RenameGroupRequest request, CancellationToken ct)
     {
-        await _mediator.Send(new RenameGroupCommand(new RoomId(roomId), GetCurrentUserId(), request.Name), ct);
+        // حاول تمسك الـ lock لمدة 5 ثواني بس
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
 
-
-        return NoContent();
+        try
+        {
+            await _mediator.Send(new RenameGroupCommand(new RoomId(roomId), GetCurrentUserId(), request.Name), cts.Token);
+            return NoContent();
+        }
+        catch (OperationCanceledException)
+        {
+            return StatusCode(408, "Request timeout. Please try again.");
+        }
     }
     [HttpGet("{roomId:guid}")]
     public async Task<IActionResult> GetGroup(Guid roomId, CancellationToken ct)

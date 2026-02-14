@@ -1,11 +1,16 @@
 ﻿@using EnterpriseChat.Client.Components.Reaction
 @using EnterpriseChat.Client.Models
+@using EnterpriseChat.Client.Services.Ui
 @using EnterpriseChat.Client.ViewModels
 @using EnterpriseChat.Domain.Enums
 @using ClientMessageStatus = EnterpriseChat.Client.Models.MessageStatus
 @using Microsoft.JSInterop
+@using EnterpriseChat.Client.Services
+@using System.ComponentModel
 @inject ChatViewModel VM
+@inject MenuStateService MenuState
 @implements IAsyncDisposable
+@implements IDisposable
 @inject IJSRuntime JS
 
 @if (Message is null)
@@ -54,7 +59,7 @@ else
                     <button class="quick-react-btn"
                             type="button"
                             @onclick:stopPropagation="true"
-                            @onclick="() => OnToggleReaction.InvokeAsync(Message!.Id)">
+                            @onclick="ToggleReactions">
                         🙂
                     </button>
                 }
@@ -66,28 +71,6 @@ else
                         <button class="msg-options-btn" type="button" @onclick:stopPropagation="true" @onclick="ToggleMenu">
                             <svg viewBox="0 0 18 18" width="18" height="18"><path fill="currentColor" d="M3.3 4.6L9 10.3l5.7-5.7 1.6 1.6L9 13.5 1.7 6.2l1.6-1.6z"></path></svg>
                         </button>
-                    }
-
-                    @if (IsMenuOpen)
-                    {
-                        <div class="msg-context-menu" @onclick:stopPropagation="true">
-                            <button class="menu-item" @onclick="async () => { CloseMenu(); await OnReplyClick(); }">Reply</button>
-                            @if (IsMine && !Message.IsDeleted)
-                            {
-                                <button class="menu-item" @onclick="() => { CloseMenu(); OnEditRequested.InvokeAsync(Message); }">Edit</button>
-                            }
-                            <button class="menu-item delete" @onclick="HandleDeleteClick">Delete</button>
-
-                            @if (!Message.IsDeleted)
-                            {
-                                <button class="menu-item" @onclick="() => { CloseMenu(); VM.OpenPinModal(Message.Id); }">
-                                    @(VM.IsMessagePinned(Message.Id) ? "Unpin" : "Pin")
-                                </button>
-                                <button class="menu-item" @onclick="() => { CloseMenu(); VM.IsSelectionMode = true; VM.ToggleMessageSelection(Message.Id); }">
-                                    Forward
-                                </button>
-                            }
-                        </div>
                     }
 
                     @if (Message.ReplyInfo != null && !Message.IsDeleted)
@@ -121,32 +104,71 @@ else
                         <span class="message-time">@Message.CreatedAt.ToLocalTime().ToString("h:mm tt")</span>
                         @if (IsMine)
                         {
-                            <span class="message-status-icon @GetStatusClass()">
-                                @switch (Message.PersonalStatus)
+                            <span class="message-status-icon @GetStatusClass()" title="@GetStatusTooltip()">
+                                @if (VM.Room?.Type == "Group" && Message.TotalRecipients > 1)
                                 {
-                                    case ClientMessageStatus.Pending:
-                                        <span class="st">⌛</span>
-                                        break;
-                                    case ClientMessageStatus.Sent:
-                                        <span class="st">✓</span>
-                                        break;
-                                    case ClientMessageStatus.Delivered:
-                                        <span class="st">✓✓</span>
-                                        break;
-                                    case ClientMessageStatus.Read:
-                                        <span class="st" style="color: #38bdf8;">✓✓</span>
-                                        break;
-                                    case ClientMessageStatus.Failed:
-                                        <span class="st">!</span>
-                                        break;
-                                    default:
-                                        <span class="st">?</span>
-                                        break;
+                                    <!-- في الجروب: عرض الأرقام -->
+                                    @if (Message.ReadCount > 0)
+                                    {
+                                        <span class="read-count">@Message.ReadCount</span>
+                                        <span class="status-icon read">✓✓</span>
+                                    }
+                                    else if (Message.DeliveredCount > 0)
+                                    {
+                                        <span class="delivered-count">@Message.DeliveredCount</span>
+                                        <span class="status-icon delivered">✓✓</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-icon sent">✓</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <!-- Private chat -->
+                                    @if (Message.PersonalStatus == ClientMessageStatus.Read)
+                                    {
+                                        <span class="status-icon read">✓✓</span>
+                                    }
+                                    else if (Message.PersonalStatus == ClientMessageStatus.Delivered)
+                                    {
+                                        <span class="status-icon delivered">✓✓</span>
+                                    }
+                                    else if (Message.PersonalStatus == ClientMessageStatus.Sent)
+                                    {
+                                        <span class="status-icon sent">✓</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-icon pending">⌛</span>
+                                    }
                                 }
                             </span>
                         }
                     </div>
                 </div>
+
+                @if (IsMenuOpen)
+                {
+                    <div class="msg-context-menu" @onclick:stopPropagation="true">
+                        <button class="menu-item" @onclick="async () => { CloseMenu(); await OnReplyClick(); }">Reply</button>
+                        @if (IsMine && !Message.IsDeleted)
+                        {
+                            <button class="menu-item" @onclick="() => { CloseMenu(); OnEditRequested.InvokeAsync(Message); }">Edit</button>
+                        }
+                        <button class="menu-item delete" @onclick="HandleDeleteClick">Delete</button>
+
+                        @if (!Message.IsDeleted)
+                        {
+                            <button class="menu-item" @onclick="() => { CloseMenu(); VM.OpenPinModal(Message.Id); }">
+                                @(VM.IsMessagePinned(Message.Id) ? "Unpin" : "Pin")
+                            </button>
+                            <button class="menu-item" @onclick="() => { CloseMenu(); VM.IsSelectionMode = true; VM.ToggleMessageSelection(Message.Id); }">
+                                Forward
+                            </button>
+                        }
+                    </div>
+                }
 
                 @if (IsReactionOpen)
                 {
@@ -192,12 +214,44 @@ else
     private DotNetObjectReference<MessageBubble>? _objRef;
     private IJSObjectReference? _chatModule;
     private string _componentId = Guid.NewGuid().ToString("N");
-    private bool IsMenuOpen;
+
+    private bool IsMenuOpen => MenuState.OpenMenuMessageId == Message?.Id;
     private bool IsReactionOpen => OpenReactionMessageId == Message?.Id;
     private bool IsMine => Message?.SenderId == CurrentUserId;
 
-    private void ToggleMenu() => IsMenuOpen = !IsMenuOpen;
-    private void CloseMenu() => IsMenuOpen = false;
+    protected override void OnInitialized()
+    {
+        // الاشتراك في حدث تغيير الحالة العالمية للمنيو
+        MenuState.PropertyChanged += OnMenuStateChanged;
+    }
+
+    private void OnMenuStateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // تحديث الواجهة فوراً عند تغيير أي منيو في التطبيق
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleMenu()
+    {
+        if (IsReactionOpen)
+        {
+            await OnToggleReaction.InvokeAsync(Guid.Empty);
+        }
+
+        // تحديث الحالة في الخدمة المشتركة
+        MenuState.OpenMenuMessageId = IsMenuOpen ? null : Message?.Id;
+    }
+
+    private void CloseMenu() => MenuState.CloseMenu();
+
+    private async Task ToggleReactions()
+    {
+        if (MenuState.OpenMenuMessageId != null)
+        {
+            MenuState.CloseMenu();
+        }
+        await OnToggleReaction.InvokeAsync(Message!.Id);
+    }
 
     private async Task HandleDeleteClick()
     {
@@ -205,15 +259,17 @@ else
         if (IsMine) await OnDeleteRequested.InvokeAsync(Message);
         else await VM.DeleteMessageAsync(Message!.Id, false);
     }
-    private string GetStatusClass()
-    {
-        return Message?.PersonalStatus.ToString().ToLower() ?? "sent";
-    }
+
+    private string GetStatusClass() => Message?.PersonalStatus.ToString().ToLower() ?? "sent";
+
     private async Task HandleReaction(ReactionPayload payload)
     {
         if (Message?.Reactions?.CurrentUserReactionType == payload.Type)
             await OnReaction.InvokeAsync(new ReactionPayload { MessageId = payload.MessageId, Type = payload.Type });
-        else await OnReaction.InvokeAsync(payload);
+        else
+            await OnReaction.InvokeAsync(payload);
+
+        await OnToggleReaction.InvokeAsync(Guid.Empty);
     }
 
     private Task OnReplyClick() => OnReplyRequested.InvokeAsync(Message!.Id);
@@ -222,7 +278,7 @@ else
     private Task OnReplyPreviewClick() => (Message?.ReplyInfo != null && !Message.ReplyInfo.IsDeleted) ? OnScrollToMessage.InvokeAsync(Message.ReplyInfo.MessageId) : Task.CompletedTask;
 
     private string GroupPosClass => GroupPosition switch { "start" => "g-start", "mid" => "g-mid", "end" => "g-end", _ => "g-single" };
-    private string StatusClass => Message?.PersonalStatus.ToString().ToLower() ?? "sent";
+
     private string GetSystemMessageType()
     {
         var lower = (Message!.Content ?? "").ToLower();
@@ -233,7 +289,7 @@ else
         if (lower.Contains("pinned")) return "pin";
         return "";
     }
-    private string PersonalStatusClass => Message?.PersonalStatus.ToString().ToLower() ?? "sent";
+
     private string GetSystemMessageText() => Message!.Content ?? "";
 
     private string GetReactionEmoji(ReactionType type) => type switch
@@ -251,6 +307,41 @@ else
         _ => "❓"
     };
 
+    private string GetStatusTooltip()
+    {
+        if (Message == null) return "";
+
+        if (VM.Room?.Type != "Group" || Message.TotalRecipients <= 1)
+            return StatusTooltip(Message.PersonalStatus);
+
+        if (Message.ReadCount > 0)
+            return $"{Message.ReadCount} read";
+
+        if (Message.DeliveredCount > 0)
+            return $"{Message.DeliveredCount} delivered";
+
+        return StatusTooltip(Message.PersonalStatus);
+    }
+
+    private string StatusIcon(ClientMessageStatus status) => status switch
+    {
+        ClientMessageStatus.Pending => "⌛",
+        ClientMessageStatus.Sent => "✓",
+        ClientMessageStatus.Delivered => "✓✓",
+        ClientMessageStatus.Read => "✓✓",
+        ClientMessageStatus.Failed => "!",
+        _ => "?"
+    };
+
+    private string StatusTooltip(ClientMessageStatus status) => status switch
+    {
+        ClientMessageStatus.Pending => "Sending…",
+        ClientMessageStatus.Sent => "Sent",
+        ClientMessageStatus.Delivered => "Delivered",
+        ClientMessageStatus.Read => "Read",
+        ClientMessageStatus.Failed => "Failed to send",
+        _ => "Unknown"
+    };
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -268,8 +359,15 @@ else
         }
     }
 
+    public void Dispose()
+    {
+        // إلغاء الاشتراك لمنع تسريب الذاكرة (Memory Leaks)
+        MenuState.PropertyChanged -= OnMenuStateChanged;
+    }
+
     public async ValueTask DisposeAsync()
     {
+        Dispose();
         if (_chatModule != null)
         {
             try { await _chatModule.InvokeVoidAsync("unregisterClickOutside", _componentId); } catch { }
@@ -281,7 +379,7 @@ else
     [JSInvokable]
     public async Task CloseAllPopups()
     {
-        IsMenuOpen = false;
+        MenuState.CloseMenu();
         if (IsReactionOpen)
         {
             await OnToggleReaction.InvokeAsync(Guid.Empty);

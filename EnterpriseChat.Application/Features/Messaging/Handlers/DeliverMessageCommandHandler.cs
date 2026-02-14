@@ -2,15 +2,13 @@
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
+using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
 
-namespace EnterpriseChat.Application.Features.Messaging.Handlers;
-
-public sealed class DeliverMessageCommandHandler
-    : IRequestHandler<DeliverMessageCommand, Unit>
+public sealed class DeliverMessageCommandHandler : IRequestHandler<DeliverMessageCommand, Unit>
 {
     private readonly IMessageReceiptRepository _receiptRepo;
-    private readonly IMessageRepository _messageRepo;
+    private readonly IMessageRepository _messageRepo;  // ✅ صحح الاسم
     private readonly IRoomAuthorizationService _auth;
     private readonly IUnitOfWork _uow;
     private readonly IMessageBroadcaster _broadcaster;
@@ -18,14 +16,14 @@ public sealed class DeliverMessageCommandHandler
 
     public DeliverMessageCommandHandler(
         IMessageReceiptRepository receiptRepo,
-        IMessageRepository messageRepo,
+        IMessageRepository messageRepo,  // ✅ تأكد من الاسم
         IRoomAuthorizationService auth,
         IUnitOfWork uow,
         IMessageBroadcaster broadcaster,
         IChatRoomRepository roomRepo)
     {
         _receiptRepo = receiptRepo;
-        _messageRepo = messageRepo;
+        _messageRepo = messageRepo;  // ✅ صحح التخصيص
         _auth = auth;
         _uow = uow;
         _broadcaster = broadcaster;
@@ -34,38 +32,48 @@ public sealed class DeliverMessageCommandHandler
 
     public async Task<Unit> Handle(DeliverMessageCommand command, CancellationToken ct)
     {
-        var info = await _messageRepo.GetRoomAndSenderAsync(command.MessageId, ct);
-        if (info is null) return Unit.Value;
+        // ✅ استخدم _messageRepo مش _messages
+        var msg = await _messageRepo.GetByIdWithReceiptsAsync(command.MessageId, ct);
+        if (msg is null) return Unit.Value;
 
-        await _auth.EnsureUserIsMemberAsync(info.Value.RoomId, command.UserId, ct);
+        await _auth.EnsureUserIsMemberAsync(msg.RoomId, command.UserId, ct);
 
-        var affected = await _receiptRepo.TryMarkDeliveredAsync(command.MessageId, command.UserId, ct);
-        if (affected == 0) return Unit.Value;
+        // لو أنا الـ sender، متعملش Deliver
+        if (msg.SenderId == command.UserId) return Unit.Value;
 
+        var receipt = await _receiptRepo.GetAsync(command.MessageId, command.UserId, ct);
+        if (receipt is null) return Unit.Value;
+
+        if (receipt.Status >= MessageStatus.Delivered) return Unit.Value;
+
+        receipt.MarkDelivered();
         await _uow.CommitAsync(ct);
 
-        // ✅ recipients الحقيقيين = اللي ليهم receipts على الرسالة
-        var receipts = await _receiptRepo.GetReceiptsForMessageAsync(command.MessageId, ct);
+        var roomMembers = await _messageRepo.GetRoomMemberIdsAsync(msg.RoomId, ct);
+        var stats = msg.GetReceiptStats();
 
-        var notifyUsers = receipts
-            .Select(r => r.UserId)
-            .Append(info.Value.SenderId)
-            .DistinctBy(u => u.Value)
-            .ToList();
+        var tasks = new List<Task>();
 
-        // Sender (للـ legacy)
-        await _broadcaster.MessageDeliveredAsync(command.MessageId, info.Value.SenderId);
+        foreach (var memberId in roomMembers)
+        {
+            tasks.Add(_broadcaster.MessageStatusUpdatedAsync(
+                command.MessageId,
+                command.UserId,
+                MessageStatus.Delivered,
+                new List<UserId> { memberId }));  // ✅ حولها لـ List
 
-        // ✅ ابعت بس للي يخصهم الأمر
-        await _broadcaster.MessageDeliveredToAllAsync(command.MessageId, info.Value.SenderId, notifyUsers);
+            if (memberId == msg.SenderId)
+            {
+                tasks.Add(_broadcaster.MessageReceiptStatsUpdatedAsync(
+                    command.MessageId.Value,
+                    memberId.Value,
+                    stats.TotalRecipients,
+                    stats.DeliveredCount,
+                    stats.ReadCount));
+            }
+        }
 
-        await _broadcaster.MessageStatusUpdatedAsync(
-            command.MessageId,
-            command.UserId,
-            MessageStatus.Delivered,
-            notifyUsers);
-
+        await Task.WhenAll(tasks);
         return Unit.Value;
     }
-
 }

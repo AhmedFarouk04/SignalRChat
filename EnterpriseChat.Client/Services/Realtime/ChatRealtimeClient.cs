@@ -3,6 +3,7 @@ using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Ui;
 using Microsoft.AspNetCore.SignalR.Client;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 using static System.Net.WebRequestMethods;
 
 namespace EnterpriseChat.Client.Services.Realtime;
@@ -56,6 +57,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
     public event Action<Guid>? MessageDeleted;
     public event Action<Guid, bool>? UserBlockedByMeChanged;
     public event Action<Guid, bool>? UserBlockedMeChanged;
+    public event Action<Guid>? OnDemandOnlineCheckRequested;
+    public event Action<Guid, int, int, int>? MessageReceiptStatsUpdated;
     public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http, RoomFlagsStore flags)
     {
         _tokenStore = tokenStore;
@@ -207,25 +210,15 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
 
         await _connection!.InvokeAsync("JoinRoom", roomId.ToString());
     }
-    private async Task StartPingLoop()
+
+    public async Task GroupRenamedAsync(Guid roomId, string newName)
     {
-        while (_connection?.State == HubConnectionState.Connected)
+        if (_connection?.State == HubConnectionState.Connected)
         {
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(30));
-                if (_connection?.State == HubConnectionState.Connected)
-                {
-                    await _connection.InvokeAsync("Ping");
-                    Console.WriteLine("[SignalR] Ping sent");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[SignalR] Ping failed: {ex.Message}");
-            }
+            await _connection.InvokeAsync("GroupRenamed", roomId, newName);
         }
     }
+   
     public async Task DisconnectAsync()
     {
         if (_connection == null)
@@ -244,7 +237,14 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
         }
     }
 
-   
+    public async Task<List<Guid>> GetOnlineUsersAsync()
+    {
+        if (_connection?.State == HubConnectionState.Connected)
+        {
+            return await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers");
+        }
+        return new List<Guid>();
+    }
     public async Task EnsureConnectedAsync()
     {
         if (_connection?.State == HubConnectionState.Connected)
@@ -358,6 +358,45 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
             _flags.SetBlockedByMe(uid, blocked);
             UserBlockedByMeChanged?.Invoke(uid, blocked);
         });
+        _connection!.On<Guid>("CheckUserOnline", async userId =>
+        {
+            Console.WriteLine($"[SignalR] CheckUserOnline requested for user {userId}");
+
+            try
+            {
+                // استدعاء الـ method الجديد اللي عملته في الـ Hub
+                bool isOnline = await _connection.InvokeAsync<bool>("GetUserOnlineStatus", userId);
+
+                // حدث الـ state محليًا بنفس الطريقة
+                var set = State.OnlineUsers.ToHashSet();
+
+                if (isOnline)
+                {
+                    if (!set.Contains(userId))
+                    {
+                        set.Add(userId);
+                        State.OnlineUsers = set.ToList();
+                        UserOnline?.Invoke(userId);
+                        Console.WriteLine($"[SignalR] User {userId} is now ONLINE (from CheckUserOnline)");
+                    }
+                }
+                else
+                {
+                    if (set.Contains(userId))
+                    {
+                        set.Remove(userId);
+                        State.OnlineUsers = set.ToList();
+                        UserOffline?.Invoke(userId);
+                        Console.WriteLine($"[SignalR] User {userId} is now OFFLINE (from CheckUserOnline)");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CheckUserOnline] Failed to get status for {userId}: {ex.Message}");
+                // اختياري: لو فشل الطلب، ممكن تعمل fallback بسيط أو تسيبه يفضل زي ما هو
+            }
+        });
 
         _connection.On<Guid, bool>("UserBlockedMeChanged", (uid, blocked) =>
         {
@@ -370,6 +409,18 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient
             _flags.SetMuted(rid, muted);
             RoomMuteChanged?.Invoke(rid, muted);
         });
+
+        _connection.On<Guid, int, int, int>(
+    "MessageReceiptStatsUpdated",
+    (messageId, totalRecipients, deliveredCount, readCount) =>
+    {
+        // بنمرر الحدث للـ ViewModel أو أي مكان مسجل فيه
+        MessageReceiptStatsUpdated?.Invoke(
+            messageId,
+            totalRecipients,
+            deliveredCount,
+            readCount);
+    });
 
         _connection.On<Guid, bool>("UserBlockedByMeChanged", (uid, blocked) =>
         {

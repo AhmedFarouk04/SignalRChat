@@ -37,6 +37,23 @@ public sealed class MessageRepository : IMessageRepository
                         && !m.IsDeleted)
             .CountAsync(ct);
     }
+    public async Task<IReadOnlyList<Message>> GetUndeliveredForUserAsync(
+    RoomId roomId,
+    UserId userId,
+    CancellationToken ct = default)
+    {
+        // نجيب كل الرسائل اللي:
+        // 1. في الروم ده
+        // 2. مش من المستخدم نفسه
+        // 3. الـ receipt بتاعته لسه < Delivered
+        return await _context.Messages
+            .Include(m => m.Receipts)
+            .Where(m => m.RoomId == roomId
+                && m.SenderId != userId
+                && m.Receipts.Any(r => r.UserId == userId && r.Status < MessageStatus.Delivered))
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync(ct);
+    }
     public async Task AddAsync(Message message, CancellationToken cancellationToken = default)
     {
         await _context.Messages.AddAsync(message, cancellationToken);
@@ -302,9 +319,17 @@ WHERE r.rn = 1
     }
 
     // في MessageRepository.cs
-    public async Task<IReadOnlyList<UserId>> GetRoomMemberIdsAsync(
-        RoomId roomId,
-        CancellationToken ct = default)
+
+   
+
+    public async Task<Message?> GetByIdWithReceiptsAsync(MessageId messageId, CancellationToken ct = default)
+    {
+        return await _context.Messages
+            .Include(m => m.Receipts)
+            .FirstOrDefaultAsync(m => m.Id == messageId, ct);
+    }
+
+    public async Task<IReadOnlyList<UserId>> GetRoomMemberIdsAsync(RoomId roomId, CancellationToken ct = default)
     {
         return await _context.ChatRooms
             .Where(r => r.Id == roomId)
@@ -312,9 +337,6 @@ WHERE r.rn = 1
             .Select(m => m.UserId)
             .ToListAsync(ct);
     }
-
-
-
 }
 
 // ✅ DTO بسيط للـ unread counts (record عشان يكون lightweight)

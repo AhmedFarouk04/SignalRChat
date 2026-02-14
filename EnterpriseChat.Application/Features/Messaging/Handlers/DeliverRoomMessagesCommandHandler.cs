@@ -5,63 +5,49 @@ using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
 
-namespace EnterpriseChat.Application.Features.Messaging.Handlers;
-
-public sealed class DeliverRoomMessagesCommandHandler
-    : IRequestHandler<DeliverRoomMessagesCommand, Unit>
+public sealed class DeliverRoomMessagesCommandHandler : IRequestHandler<DeliverRoomMessagesCommand, Unit>
 {
     private readonly IMessageRepository _messageRepo;
+    private readonly IMessageReceiptRepository _receiptRepo;
     private readonly IUnitOfWork _uow;
     private readonly IRoomAuthorizationService _auth;
-    private readonly IMessageBroadcaster? _broadcaster;
+    private readonly IMessageBroadcaster _broadcaster;
 
     public DeliverRoomMessagesCommandHandler(
         IMessageRepository messageRepo,
-        IRoomAuthorizationService authorizationService,
+        IMessageReceiptRepository receiptRepo,
+        IRoomAuthorizationService auth,
         IUnitOfWork uow,
-        IMessageBroadcaster? broadcaster = null)
+        IMessageBroadcaster broadcaster)
     {
         _messageRepo = messageRepo;
+        _receiptRepo = receiptRepo;
+        _auth = auth;
         _uow = uow;
-        _auth = authorizationService;
         _broadcaster = broadcaster;
     }
 
-    public async Task<Unit> Handle(DeliverRoomMessagesCommand request, CancellationToken ct)
+    public async Task<Unit> Handle(DeliverRoomMessagesCommand command, CancellationToken ct)
     {
-        await _auth.EnsureUserIsMemberAsync(request.RoomId, request.UserId, ct);
+        await _auth.EnsureUserIsMemberAsync(command.RoomId, command.UserId, ct);
 
-        Console.WriteLine($"[Deliver] Starting for user {request.UserId.Value} in room {request.RoomId.Value}");
+        Console.WriteLine($"[DeliverRoom] Starting for user {command.UserId.Value} in room {command.RoomId.Value}");
 
-        var messages = await _messageRepo.GetByRoomForUpdateAsync(request.RoomId, 0, 200, ct);
+        // ✅ نجيب كل الرسائل اللي لسه متوصلتش للمستخدم ده
+        var messages = await _messageRepo.GetUndeliveredForUserAsync(command.RoomId, command.UserId, ct);
 
-        Console.WriteLine($"[Deliver] Found {messages.Count} messages to process");
+        Console.WriteLine($"[DeliverRoom] Found {messages.Count} undelivered messages");
+
+        if (!messages.Any())
+            return Unit.Value;
 
         var deliveredSenders = new Dictionary<Guid, List<MessageId>>();
-
-        int deliveredCount = 0;
+        var deliveredCount = 0;
 
         foreach (var msg in messages)
         {
-            if (msg.SenderId == request.UserId) continue;
-
-            var receipt = msg.Receipts.FirstOrDefault(r => r.UserId == request.UserId);
-            if (receipt == null)
-            {
-                Console.WriteLine($"[Deliver] NO RECEIPT for msg {msg.Id} from user {request.UserId.Value}");
-                continue;
-            }
-
-            if (receipt.Status >= MessageStatus.Delivered)
-            {
-                Console.WriteLine($"[Deliver] Already delivered: msg {msg.Id} status {receipt.Status}");
-                continue;
-            }
-
-            msg.MarkDelivered(request.UserId);
+            msg.MarkDelivered(command.UserId);
             deliveredCount++;
-
-            Console.WriteLine($"[Deliver] Marked delivered: msg {msg.Id} for user {request.UserId.Value}");
 
             if (!deliveredSenders.TryGetValue(msg.SenderId.Value, out var list))
             {
@@ -71,19 +57,45 @@ public sealed class DeliverRoomMessagesCommandHandler
             list.Add(msg.Id);
         }
 
-        Console.WriteLine($"[Deliver] Total newly delivered: {deliveredCount}");
-
         await _uow.CommitAsync(ct);
 
+        Console.WriteLine($"[DeliverRoom] Marked {deliveredCount} messages as DELIVERED");
+
+        // ✅ البث للـ Senders
         if (_broadcaster is not null && deliveredSenders.Any())
         {
-            Console.WriteLine($"[Deliver] Broadcasting {deliveredSenders.Sum(kv => kv.Value.Count)} deliveries");
+            var roomMembers = await _messageRepo.GetRoomMemberIdsAsync(command.RoomId, ct);
+
             foreach (var kv in deliveredSenders)
             {
                 var senderId = new UserId(kv.Key);
+
+                // لكل رسالة، نبث التحديث
                 foreach (var msgId in kv.Value)
                 {
-                    await _broadcaster.MessageDeliveredAsync(msgId, senderId);
+                    // نجيب إحصائيات الرسالة بعد التحديث
+                    var stats = await _receiptRepo.GetMessageStatsAsync(msgId, ct);
+
+                    // نبث لكل أعضاء الغرفة
+                    foreach (var memberId in roomMembers)
+                    {
+                        await _broadcaster.MessageStatusUpdatedAsync(
+                            msgId,
+                            command.UserId,
+                            MessageStatus.Delivered,
+                            new[] { memberId });
+
+                        // لو العضو ده هو الـ sender، ابعتله الإحصائيات
+                        if (memberId == senderId)
+                        {
+                            await _broadcaster.MessageReceiptStatsUpdatedAsync(
+                                msgId.Value,
+                                senderId.Value,
+                                stats.TotalRecipients,
+                                stats.DeliveredCount,
+                                stats.ReadCount);
+                        }
+                    }
                 }
             }
         }

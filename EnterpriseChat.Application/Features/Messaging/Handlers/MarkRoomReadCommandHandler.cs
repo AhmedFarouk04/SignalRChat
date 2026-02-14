@@ -34,7 +34,6 @@ public sealed class MarkRoomReadCommandHandler
     public async Task<Unit> Handle(MarkRoomReadCommand command, CancellationToken ct)
     {
         Console.WriteLine($"[MarkRoomRead] Room={command.RoomId.Value}, User={command.UserId.Value}, LastMsg={command.LastMessageId.Value}");
-
         await _auth.EnsureUserIsMemberAsync(command.RoomId, command.UserId, ct);
 
         var lastCreatedAt = await _messageRepo.GetCreatedAtAsync(command.LastMessageId, ct);
@@ -44,8 +43,7 @@ public sealed class MarkRoomReadCommandHandler
             return Unit.Value;
         }
 
-        // ✅ (A) هات الرسائل اللي كانت Unread فعلاً عند القارئ (قبل التحديث)
-        // دي اللي لها Receipt للقارئ وكانت < Read
+        // جيب الرسائل اللي كانت unread فعلاً
         var unreadBefore = await _messageRepo.GetUnreadUpToAsync(
             command.RoomId,
             lastCreatedAt.Value,
@@ -53,10 +51,10 @@ public sealed class MarkRoomReadCommandHandler
             take: 5000,
             ct: ct);
 
-        // ✅ 1) Bulk mark read في الـ DB
+        // Bulk mark read
         await _messageRepo.BulkMarkReadUpToAsync(command.RoomId, lastCreatedAt.Value, command.UserId, ct);
 
-        // ✅ 2) تحديث LastReadMessageId
+        // تحديث LastRead
         await _roomRepository.UpdateMemberLastReadAsync(
             command.RoomId,
             command.UserId,
@@ -67,28 +65,26 @@ public sealed class MarkRoomReadCommandHandler
 
         Console.WriteLine($"[MarkRoomRead] Marked read count={unreadBefore.Count}");
 
-        // ✅ 3) ابعت MessageRead فقط للـ senders بتوع الرسائل اللي كانت Unread فعلاً
-        // (مش كل رسائل الروم)
-        if (_broadcaster is not null && unreadBefore.Count > 0)
-        {
-            var tasks = unreadBefore
-                .Where(x => x.SenderId != command.UserId) // احتياط
-                .Select(x => _broadcaster.MessageReadAsync(x.Id, x.SenderId))
-                .ToList();
-
-            await Task.WhenAll(tasks);
-        }
-
-        // ✅ 4) RoomUpdated (اختياري)
-        // ملحوظة: delta=-1 دي غالباً غلط في حالة MarkRoomRead لأنها ممكن تكون قرأت أكتر من رسالة.
-        // لو عايزها صح: استخدم -unreadBefore.Count
         if (_broadcaster is not null)
         {
+            // جيب كل أعضاء الروم (بما فيهم الـ sender)
             var room = await _roomRepository.GetByIdWithMembersAsync(command.RoomId, ct);
             if (room != null)
             {
-                var members = room.Members.Select(m => m.UserId).ToList();
+                var allMembers = room.Members.Select(m => m.UserId).ToList();
 
+                // 1. ابعت MessageReadToAll لكل الرسائل اللي تأثرت
+                // (ده اللي هيخلي الـ sender يحدث الـ blue ticks)
+                foreach (var msg in unreadBefore)
+                {
+                    // ابعت لكل الأعضاء (بما فيهم الـ sender)
+                    await _broadcaster.MessageReadToAllAsync(
+                        msg.Id,
+                        msg.SenderId,           // اللي أرسل الرسالة
+                        allMembers);            // كل الأعضاء (بما فيهم الـ sender)
+                }
+
+                // 2. RoomUpdated (لتحديث الـ unread count في الـ sidebar)
                 var update = new RoomUpdatedDto
                 {
                     RoomId = command.RoomId.Value,
@@ -96,13 +92,13 @@ public sealed class MarkRoomReadCommandHandler
                     SenderId = command.UserId.Value,
                     Preview = "",
                     CreatedAt = DateTime.UtcNow,
-                    UnreadDelta = -Math.Max(1, unreadBefore.Count), // ✅ الأفضل -unreadBefore.Count
+                    UnreadDelta = -unreadBefore.Count, // ← الأفضل (مش -1)
                     RoomName = room.Name,
                     RoomType = room.Type.ToString()
                 };
+                await _broadcaster.RoomUpdatedAsync(update, allMembers);
 
-                await _broadcaster.RoomUpdatedAsync(update, members);
-                Console.WriteLine($"[MarkRoomRead] RoomUpdated delta={update.UnreadDelta} sent to {members.Count}");
+                Console.WriteLine($"[MarkRoomRead] Broadcasted MessageReadToAll for {unreadBefore.Count} messages + RoomUpdated to {allMembers.Count} members");
             }
         }
 

@@ -1,5 +1,6 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Client.Models;
+using System.Threading.Tasks;
 
 namespace EnterpriseChat.Client.Services.Realtime;
 
@@ -12,7 +13,7 @@ public interface IChatRealtimeClient
     event Action<MessageModel>? MessageReceived;
 
     event Action<RoomUpdatedModel>? RoomUpdated;
-
+    event Action<Guid>? OnDemandOnlineCheckRequested;
     event Action<Guid>? UserOnline;
     event Action<Guid>? UserOffline;
 
@@ -45,6 +46,8 @@ public interface IChatRealtimeClient
     event Action<Guid, Guid> MessageReadToAll; // messageId, senderId
     event Action<Guid, Guid, int, bool> MessageReactionUpdated; // messageId, userId, reactionType, isNewReaction
     event Action<Guid, Guid?>? MessagePinned; // (roomId, messageId)
+
+    event Action<Guid, int, int, int>? MessageReceiptStatsUpdated;
     Task PinMessageAsync(Guid roomId, Guid? messageId);
     Task SendMessageWithReplyAsync(Guid roomId, MessageModel message);
 
@@ -56,9 +59,9 @@ public interface IChatRealtimeClient
 
     Task MarkReadAsync(Guid messageId);
     Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId);
-
+    Task GroupRenamedAsync(Guid roomId, string newName);
     Task NotifyTypingAsync(Guid roomId);
-
+    Task<List<Guid>> GetOnlineUsersAsync(); // ✅ أضف هذا السطر أيضاً
 
 
 }

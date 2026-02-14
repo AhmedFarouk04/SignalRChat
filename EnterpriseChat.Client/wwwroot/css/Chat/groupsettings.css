@@ -1,0 +1,408 @@
+﻿/* استخدمنا المتغيرات بتاعتك هنا عشان نضمن توحيد الألوان */
+
+/* Container & Backdrop */
+.drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6); /* غمقنا الخلفية شوية للتركيز */
+    z-index: 1000;
+    backdrop-filter: blur(2px); /* إضافة لطيفة (اختياري) */
+}
+
+.members-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 350px;
+    height: 100%;
+    background: var(--bg-sidebar); /* اللون الأساسي للبانل #020617 */
+    color: var(--text-primary);
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+    border-left: 1px solid var(--border-subtle);
+    animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); /* انيميشن أنعم */
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+/* Header */
+.drawer-header {
+    background: var(--bg-panel); /* نفس الخلفية او افتح سنة بسيطة */
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.header-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.header-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: block;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    padding: 5px;
+    border-radius: var(--radius-sm);
+}
+
+    .close-btn:hover {
+        color: var(--text-primary);
+        background: var(--bg-message);
+    }
+
+/* Body & Sections */
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+}
+
+    /* Scrollbar styling for Webkit */
+    .drawer-body::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .drawer-body::-webkit-scrollbar-thumb {
+        background-color: var(--border-subtle);
+        border-radius: var(--radius-md);
+    }
+
+.drawer-section {
+    padding: 20px;
+    border-bottom: 8px solid var(--bg-app); /* الفاصل الكبير بلون خلفية التطبيق */
+}
+
+.section-label {
+    color: var(--accent-main); /* تحويل الأخضر للون السيان بتاعك */
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    margin-bottom: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* Rename & Search Boxes */
+.rename-box, .search-box {
+    display: flex;
+    gap: 10px;
+}
+
+    .rename-box input, .search-box input {
+        flex: 1;
+        background: var(--bg-message); /* #1e293b عشان يبان جوه الخلفية الغامقة */
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        color: var(--text-primary);
+        outline: none;
+        transition: var(--transition-fast);
+    }
+
+        .rename-box input:focus, .search-box input:focus {
+            border-color: var(--accent-main);
+        }
+
+.save-btn {
+    background: var(--accent-main);
+    color: #000; /* الكتابة سوداء عشان السيان فاتح */
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+    .save-btn:hover {
+        background: var(--accent-hover);
+    }
+
+/* Search Results */
+.search-results {
+    background: var(--bg-message);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    margin-top: 10px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.search-item {
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+    .search-item:last-child {
+        border-bottom: none;
+    }
+
+.user-name {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.user-email {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.add-btn {
+    background: transparent;
+    border: 1px solid var(--accent-main);
+    color: var(--accent-main);
+    border-radius: var(--radius-sm);
+    padding: 4px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+    .add-btn:hover {
+        background: rgba(56, 189, 248, 0.1); /* لون السيان بس شفاف */
+    }
+
+/* Member List Item */
+.member-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 10px;
+    border-radius: var(--radius-md);
+    transition: var(--transition-fast);
+    cursor: default;
+}
+
+    .member-item:hover {
+        background: var(--bg-message);
+    }
+
+.member-avatar {
+    width: 42px;
+    height: 42px;
+    background: var(--bg-message);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    position: relative;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+/* Online Status - ممكن نسيبه أخضر لإنه ستاندرد، أو نخليه Accent */
+.online-status {
+    position: absolute;
+    bottom: 0px;
+    right: 0px;
+    width: 12px;
+    height: 12px;
+    background: #22c55e; /* أخضر ساطع للحالة */
+    border: 2px solid var(--bg-sidebar); /* عشان يفصل عن الأفاتار */
+    border-radius: 50%;
+}
+
+.member-main {
+    flex: 1;
+}
+
+.member-name {
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+/* Badge Styling Updated */
+.badge.owner {
+    font-size: 0.7rem;
+    color: var(--accent-main);
+    border: 1px solid var(--accent-main);
+    background: rgba(56, 189, 248, 0.1); /* خلفية شفافة من نفس اللون */
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    margin-top: 4px;
+    display: inline-block;
+}
+
+.action-btn-remove {
+    background: none;
+    border: none;
+    color: #ef4444; /* أحمر للحذف */
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition-fast);
+    opacity: 0.7;
+}
+
+    .action-btn-remove:hover {
+        background: rgba(239, 68, 68, 0.1);
+        opacity: 1;
+    }
+
+/* Footer */
+.drawer-footer {
+    padding: 20px;
+    background: var(--bg-sidebar);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.leave-btn {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid #ef4444;
+    color: #ef4444;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-weight: 500;
+    transition: var(--transition-fast);
+}
+
+    .leave-btn:hover {
+        background: rgba(239, 68, 68, 0.1);
+    }
+/* استخدمنا المتغيرات بتاعتك هنا */
+.members-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 350px;
+    height: 100%;
+    background: var(--bg-sidebar);
+    color: var(--text-primary);
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+    border-left: 1px solid var(--border-subtle);
+}
+
+.drawer-header {
+    background: var(--bg-panel);
+    padding: 20px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.drawer-section {
+    padding: 20px;
+    border-bottom: 8px solid var(--bg-app);
+}
+
+.section-label {
+    color: var(--accent-main);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 15px;
+}
+
+.rename-box input, .search-box input {
+    background: var(--bg-message);
+    border: 1px solid var(--border-subtle);
+    color: white;
+    padding: 10px;
+    border-radius: var(--radius-md);
+    flex: 1;
+}
+
+.save-btn {
+    background: var(--accent-main);
+    color: #000;
+    font-weight: 600;
+    padding: 0 15px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 10px;
+    border-radius: var(--radius-md);
+}
+
+    .member-item:hover {
+        background: var(--bg-message);
+    }
+
+.badge.owner {
+    color: var(--accent-main);
+    border: 1px solid var(--accent-main);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+}
+
+.member-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-icon-btn {
+    background: var(--bg-app);
+    border: 1px solid var(--border-subtle);
+    color: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+}
+
+    .action-icon-btn.danger {
+        color: #ef4444;
+    }
+
+.leave-btn {
+    border: 1px solid #ef4444;
+    color: #ef4444;
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: transparent;
+    cursor: pointer;
+}
+.action-icon-btn.transfer:hover {
+    border-color: #facc15; /* لون ذهبي للملكية */
+    color: #facc15;
+}
+
+.leave-btn.delete {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}

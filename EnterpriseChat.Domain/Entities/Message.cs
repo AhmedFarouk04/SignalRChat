@@ -1,4 +1,5 @@
-﻿using EnterpriseChat.Domain.Enums;
+﻿using EnterpriseChat.Domain.Common;
+using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Events;
 using EnterpriseChat.Domain.ValueObjects;
 
@@ -146,5 +147,22 @@ public class Message
             // reaction جديد
             _reactions.Add(new Reaction(Id, userId, reactionType));
         }
+    }
+
+    // في ملف Message.cs أضف هذه الميثود
+    public MessageReceiptStats GetReceiptStats()
+    {
+        var receipts = _receipts.ToList();
+        var total = receipts.Count;
+        var delivered = receipts.Count(r => r.Status >= MessageStatus.Delivered);
+        var read = receipts.Count(r => r.Status >= MessageStatus.Read);
+
+        return new MessageReceiptStats(
+            totalRecipients: total,
+            deliveredCount: delivered,
+            readCount: read,
+            deliveredUsers: receipts.Where(r => r.Status >= MessageStatus.Delivered).Select(r => r.UserId).ToList(),
+            readUsers: receipts.Where(r => r.Status >= MessageStatus.Read).Select(r => r.UserId).ToList()
+        );
     }
 }

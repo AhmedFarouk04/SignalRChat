@@ -4,6 +4,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    margin: 0;
 }
 
 .chat-body {
@@ -197,6 +198,7 @@
     position: relative;
     z-index: 1001; /* أعلى من الرسائل */
     background: var(--bg-panel);
+    flex-shrink: 0;
 }
 
 .pinned-msg-bar {

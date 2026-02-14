@@ -118,53 +118,35 @@
         VM.Changed += OnVmChanged;
         SubscribeRealtime();
 
-        // 1️⃣ الأول: ابدأ الاتصال
-        Console.WriteLine("[RoomsPage] Starting SignalR connection...");
+        // 1️⃣ ابدأ الاتصال وتحميل البيانات بالتوازي
         var connectTask = Realtime.ConnectAsync();
-
-        // 2️⃣ ابدأ تحميل الرومات بالتوازي
-        Console.WriteLine("[RoomsPage] Loading rooms...");
         var loadTask = VM.LoadAsync();
 
-        // 3️⃣ استنى الاتصال يكتمل
-        await connectTask;
-        Console.WriteLine("[RoomsPage] SignalR Connected ✅");
+        await Task.WhenAll(connectTask, loadTask);
+        Console.WriteLine("[RoomsPage] Core data loaded ✅");
 
-        // 4️⃣ استنى الرومات تتحمل
-        await loadTask;
-        Console.WriteLine($"[RoomsPage] Loaded {VM.Rooms.Count()} rooms");
-
-        // 5️⃣ اتأكد إن الاتصال لسه شغال
-        if (!Realtime.State.IsConnected)
-        {
-            Console.WriteLine("[RoomsPage] ⚠️ SignalR disconnected, retrying...");
-            await Realtime.ConnectAsync();
-        }
-
-        // 6️⃣ انضم للرومات واحدة واحدة مع delay صغير
-        var joinTasks = new List<Task>();
-        foreach (var room in VM.Rooms)
-        {
-            try
-            {
-                await Realtime.JoinRoomAsync(room.Id);
-                await Task.Delay(50); // منع الـ race condition
-                Console.WriteLine($"[RoomsPage] Joined room {room.Id}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[RoomsPage] Failed to join room {room.Id}: {ex.Message}");
-            }
-        }
-
-        Console.WriteLine("[RoomsPage] All rooms joined ✅");
-
-        // 7️⃣ أخيراً، حدث الـ UI
+        // 2️⃣ ✅ الحل الذكي: بدلاً من الانضمام لكل الرومات هنا وإحداث فوضى
+        // نكتفي بحدث RefreshRoomStatusesAsync الذي يجلب الحالة النهائية
         await VM.RefreshRoomStatusesAsync();
+
+        // 3️⃣ الانضمام للرومات في الخلفية بدون انتظار (Fire and Forget)
+        // وبدون إجبار الواجهة على إعادة الترتيب العنيف
+        _ = Task.Run(async () =>
+        {
+            foreach (var room in VM.Rooms)
+            {
+                try
+                {
+                    await Realtime.JoinRoomAsync(room.Id);
+                    await Task.Delay(20); // Delay صغير جداً لتخفيف الحمل
+                }
+                catch { }
+            }
+        });
+
         ApplyOnlineSnapshot();
         await InvokeAsync(StateHasChanged);
     }
-
     private void SubscribeRealtime()
     {
         if (_realtimeSubscribed) return;
@@ -297,11 +279,19 @@
         }, ct);
     }
 
-    private void OnVmChanged()
+    private bool _isRendering;
+    private async void OnVmChanged()
     {
-        // لو rooms اتغيرت (RoomUpdated) اعمل snapshot للظاهرين
-        ApplyOnlineSnapshot();
-        _ = InvokeAsync(StateHasChanged);
+        if (_isRendering) return;
+        _isRendering = true;
+
+        await InvokeAsync(async () =>
+        {
+            ApplyOnlineSnapshot();
+            StateHasChanged();
+            await Task.Delay(50); // منع الـ Flicker
+            _isRendering = false;
+        });
     }
 
    

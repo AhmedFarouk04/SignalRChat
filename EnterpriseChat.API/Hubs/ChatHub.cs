@@ -45,24 +45,54 @@ public sealed class ChatHub : Hub
     {
         var userId = GetUserId();
         var connectionId = Context.ConnectionId;
-        var wasOnline = await _presence.IsOnlineAsync(userId);
 
         await _presence.UserConnectedAsync(userId, connectionId);
 
-        if (!wasOnline)
+        // ✅ لما المستلم يتصل، نعمل Deliver لكل الرسائل غير المسلمة في كل روماته
+        _ = Task.Run(async () =>
         {
-            // أنت تشوف نفسك Online دائمًا
-            await Clients.Caller.SendAsync("UserOnline", userId.Value);
-
-            // ابعت للناس اللي مسموح لهم يشوفوك (مش محظورين)
-            var visibleTo = await GetVisibleOnlineUsersForMe(userId);
-            foreach (var target in visibleTo)
+            try
             {
-                await Clients.User(target.Value.ToString()).SendAsync("UserOnline", userId.Value);
+                var rooms = await _roomRepository.GetForUserAsync(userId);
+                foreach (var room in rooms)
+                {
+                    await _mediator.Send(new DeliverRoomMessagesCommand(room.Id, userId));
+                }
+                Console.WriteLine($"[Hub] Auto-delivered messages for user {userId.Value} after connect");
             }
-        }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Hub] Auto-deliver failed: {ex.Message}");
+            }
+        });
 
         await base.OnConnectedAsync();
+    }
+    public async Task HandleBlockUpdate(Guid blockerId, Guid blockedId, bool isBlocked)
+    {
+        if (isBlocked)
+        {
+            // لو حصل بلوك: اقطع رؤية الأونلاين فوراً بين الطرفين
+            await Clients.User(blockerId.ToString()).SendAsync("UserOffline", blockedId);
+            await Clients.User(blockedId.ToString()).SendAsync("UserOffline", blockerId);
+        }
+        else
+        {
+            // لو اتفك البلوك: اطلب من الـ Clients إعادة التحقق من الحالة
+            await Clients.User(blockerId.ToString()).SendAsync("CheckUserOnline", blockedId);
+            await Clients.User(blockedId.ToString()).SendAsync("CheckUserOnline", blockerId);
+        }
+    }
+
+    public async Task<bool> GetUserOnlineStatus(Guid userId)
+    {
+        var me = GetUserId();
+        var target = new UserId(userId);
+        var isBlocked = await _blockRepository.IsBlockedAsync(me, target) ||
+                        await _blockRepository.IsBlockedAsync(target, me);
+        if (isBlocked) return false;
+
+        return await _presence.IsOnlineAsync(target);
     }
     public async Task PinMessage(Guid roomId, Guid? messageId)
     {
@@ -72,46 +102,20 @@ public sealed class ChatHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var userId = GetUserId();
-        var connectionId = Context.ConnectionId;
-
-        await _presence.UserDisconnectedAsync(userId, connectionId);
-
-        // ✅ تحقق هل المستخدم لسه Online (عنده connection تاني)
         var stillOnline = await _presence.IsOnlineAsync(userId);
 
-        // ✅ شيل join cache
-        var prefix = $"{Context.ConnectionId}:";
-        foreach (var key in _joinedRooms.Keys.Where(k => k.StartsWith(prefix)))
-            _joinedRooms.TryRemove(key, out _);
-
-        // ✅ لو لسه Online: متشيلوش من الرومات ومتبعثش UserOffline
-        if (stillOnline)
+        if (!stillOnline)
         {
-            await base.OnDisconnectedAsync(exception);
-            return;
+            // إبلاغ الناس المرئيين فقط بأنك أصبحت أوفلاين
+            var visibleUsers = await GetVisibleOnlineUsersForMe(userId);
+            foreach (var target in visibleUsers)
+            {
+                await Clients.User(target.Value.ToString()).SendAsync("UserOffline", userId.Value);
+            }
         }
 
-        // ✅ هنا فقط: المستخدم Offline فعلاً
-        var affectedRooms = await _roomPresence.RemoveUserFromAllRoomsAsync(userId);
-
-        foreach (var rid in affectedRooms)
-        {
-            var count = await _roomPresence.GetOnlineCountAsync(rid);
-            await Clients.Group(rid.Value.ToString())
-                .SendAsync("RoomPresenceUpdated", rid.Value, count);
-        }
-
-if (!stillOnline)
-{
-    var visibleTo = await GetVisibleOnlineUsersForMe(userId);
-    foreach (var target in visibleTo)
-    {
-        await Clients.User(target.Value.ToString()).SendAsync("UserOffline", userId.Value);
-    }
-}
         await base.OnDisconnectedAsync(exception);
     }
-
     // حط هذا السطر في أي مكان داخل الكلاس
     public async Task MemberRemoved(Guid roomId, Guid userId, string removerName)
     {
@@ -120,46 +124,20 @@ if (!stillOnline)
     }
     public async Task JoinRoom(string roomId)
     {
-        var user = GetUserId();
+        var userId = GetUserId();
         var rid = new RoomId(Guid.Parse(roomId));
-        Console.WriteLine($"[JoinRoom] User {user.Value} joining room {roomId}"); // ✅
 
-        var room = await _roomRepository.GetByIdWithMembersAsync(rid, Context.ConnectionAborted); if (room is null)
-            throw new HubException("Room not found.");
-
-        // التحقق من العضوية أو الدعوة الحديثة
-        var isOwner = room.OwnerId?.Value == user.Value;
-        var isMember = room.IsMember(user);
-
-        // إذا لم يكن عضو حالياً، ابحث إذا تمت دعوته خلال الـ 5 دقائق الماضية
-        if (!isOwner && !isMember)
-        {
-            // التحقق من الإضافة الحديثة (ضمن 5 دقائق)
-            var recentlyAdded = room.Members
-                .Any(m => m.UserId == user &&
-                         m.JoinedAt > DateTime.UtcNow.AddMinutes(-5));
-
-            if (!recentlyAdded)
-                throw new HubException("Access denied.");
-        }
-
-        var joinKey = $"{Context.ConnectionId}:{roomId}";
-        if (!_joinedRooms.TryAdd(joinKey, 0))
-            return;
+        // التحقق من أن المستخدم ليس محظوراً من الغرفة أو من المالك
+        var room = await _roomRepository.GetByIdAsync(rid);
+        if (room == null) throw new HubException("Room not found");
 
         await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
-        Console.WriteLine($"[JoinRoom] Added {Context.ConnectionId} to group {roomId}"); // ✅
+        await _roomPresence.JoinRoomAsync(rid, userId);
 
-        await _roomPresence.JoinRoomAsync(rid, user);
-
+        // إبلاغ الآخرين في الغرفة
         var count = await _roomPresence.GetOnlineCountAsync(rid);
-        await Clients.OthersInGroup(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
-        await Clients.Caller.SendAsync("RoomPresenceUpdated", rid.Value, count);
-        await _mediator.Send(new DeliverRoomMessagesCommand(rid, user));
-
-       
+        await Clients.Group(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
     }
-
     public async Task Ping()
     {
         await Clients.Caller.SendAsync("Pong");
@@ -237,17 +215,14 @@ if (!stillOnline)
     {
         var me = GetUserId();
         var allOnline = await _presence.GetOnlineUsersAsync();
-
         var visible = new List<Guid>();
 
         foreach (var u in allOnline)
         {
-            if (u == me) continue;
-
-            var blocked = await _blockRepository.IsBlockedAsync(me, u, Context.ConnectionAborted);
+            // الفلتر السحري: لو فيه بلوك مش هيشوفوا بعض في قائمة الـ Online
+            var blocked = await _blockRepository.IsBlockedAsync(me, u);
             if (!blocked) visible.Add(u.Value);
         }
-
         return visible;
     }
 

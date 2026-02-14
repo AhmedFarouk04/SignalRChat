@@ -10,6 +10,7 @@ using EnterpriseChat.Client.Services.Realtime;
 using EnterpriseChat.Client.Services.Rooms;
 using EnterpriseChat.Client.Services.Ui;
 using EnterpriseChat.Client.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 using EnterpriseChat.Domain.Interfaces;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -37,8 +38,11 @@ builder.Services.AddScoped(sp =>
     return client;
 });
 
-builder.Services.AddScoped<IApiClient, ApiClient>();
-
+builder.Services.AddHttpClient<IApiClient, ApiClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7188/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddScoped<IChatRealtimeClient, ChatRealtimeClient>();
 builder.Services.AddScoped<IScrollService, ScrollService>();
 builder.Services.AddScoped<IChatService, ChatService>();
@@ -59,6 +63,7 @@ builder.Services.AddSingleton<RoomFlagsStore>();
 builder.Services.AddScoped<NotificationSoundService>();
 builder.Services.AddScoped<EnterpriseChat.Client.Models.ReplyContext>();
 builder.Services.AddScoped<ReactionsApi>();
+builder.Services.AddScoped<MenuStateService>();
 
 builder.Logging.SetMinimumLevel(LogLevel.Debug);
 builder.Logging.AddFilter("Microsoft.AspNetCore.Components.WebAssembly.Rendering", LogLevel.Debug);

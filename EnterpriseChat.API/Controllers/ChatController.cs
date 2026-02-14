@@ -105,13 +105,14 @@ public sealed class ChatController : BaseController
     public async Task<IActionResult> BlockUser(Guid userId, CancellationToken ct)
     {
         var me = GetCurrentUserId();
-
         await _mediator.Send(new BlockUserCommand(me, new UserId(userId)), ct);
 
-        await _hub.Clients.User(me.Value.ToString())
-  .SendAsync("UserBlockedByMeChanged", userId, true, ct);
-        await _hub.Clients.User(userId.ToString())
-  .SendAsync("UserBlockedMeChanged", me.Value, true, ct);
+        // ✅ تحديث فوري: إخفاء حالة الأونلاين عند الطرفين فوراً
+        await _hub.Clients.User(me.Value.ToString()).SendAsync("UserOffline", userId);
+        await _hub.Clients.User(userId.ToString()).SendAsync("UserOffline", me.Value);
+
+        await _hub.Clients.User(me.Value.ToString()).SendAsync("UserBlockedByMeChanged", userId, true);
+        await _hub.Clients.User(userId.ToString()).SendAsync("UserBlockedMeChanged", me.Value, true);
 
         return NoContent();
     }
@@ -218,14 +219,23 @@ public sealed class ChatController : BaseController
 
         var me = GetCurrentUserId();
 
+        // تنفيذ الأمر في الداتابيز
         await _mediator.Send(new UnblockUserCommand(me, new UserId(userId)), ct);
 
-        await _hub.Clients.User(me.Value.ToString())
-  .SendAsync("UserBlockedByMeChanged", userId, false, ct);
+        // ✅ التحديث اللحظي عبر SignalR
+        // نستخدم Try/Catch هنا عشان لو الـ Hub فيه مشكلة ميعطلش العملية الأساسية
+        try
+        {
+            await _hub.Clients.User(me.Value.ToString()).SendAsync("CheckUserOnline", userId);
+            await _hub.Clients.User(userId.ToString()).SendAsync("CheckUserOnline", me.Value);
 
-        await _hub.Clients.User(userId.ToString())
-          .SendAsync("UserBlockedMeChanged", me.Value, false, ct);
-
+            await _hub.Clients.User(me.Value.ToString()).SendAsync("UserBlockedByMeChanged", userId, false);
+            await _hub.Clients.User(userId.ToString()).SendAsync("UserBlockedMeChanged", me.Value, false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR Notification Failed: {ex.Message}");
+        }
 
         return NoContent();
     }

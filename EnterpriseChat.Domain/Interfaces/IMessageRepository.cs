@@ -11,7 +11,10 @@ public interface IMessageRepository
     Task<IReadOnlyList<Message>> GetByRoomAsync(RoomId roomId, int skip, int take, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Message>> GetByRoomForUpdateAsync(RoomId roomId, int skip, int take, CancellationToken cancellationToken = default);
-
+    Task<IReadOnlyList<Message>> GetUndeliveredForUserAsync(
+    RoomId roomId,
+    UserId userId,
+    CancellationToken ct = default);
     Task<DateTime?> GetCreatedAtAsync(MessageId messageId, CancellationToken ct = default);
     Task<int> GetUnreadCountAsync(RoomId roomId, DateTime lastReadAt, UserId userId, CancellationToken ct = default);
 
@@ -21,7 +24,8 @@ public interface IMessageRepository
 
     Task<int> BulkMarkReadUpToAsync(
         RoomId roomId, DateTime lastCreatedAt, UserId readerId, CancellationToken ct = default);
-
+    Task<Message?> GetByIdWithReceiptsAsync(MessageId messageId, CancellationToken ct = default);
+    Task<IReadOnlyList<UserId>> GetRoomMemberIdsAsync(RoomId roomId, CancellationToken ct = default);
     Task<(RoomId RoomId, UserId SenderId)?> GetRoomAndSenderAsync(MessageId id, CancellationToken ct = default);
 
     Task<int> GetUnreadCountAsync(RoomId roomId, UserId userId, CancellationToken ct);
@@ -37,14 +41,11 @@ public interface IMessageRepository
     CancellationToken ct);
 
 
-    Task<IReadOnlyList<UserId>> GetRoomMemberIdsAsync(
-    RoomId roomId,
-    CancellationToken ct = default);
+  
 
     Task<IEnumerable<(Guid MessageId, Guid SenderId)>> GetMessageIdsAndSendersUpToAsync(
     RoomId roomId,
     DateTime upTo,
     CancellationToken ct = default);
-
 
 }

@@ -41,8 +41,7 @@ public sealed class MessageReceiptRepository
     public async Task<int> TryMarkDeliveredAsync(MessageId messageId, UserId userId, CancellationToken ct = default)
     {
         return await _context.MessageReceipts
-            .Where(r => r.MessageId == messageId && r.UserId == userId && r.Status < MessageStatus.Delivered)
-            .ExecuteUpdateAsync(setters => setters
+          .Where(r => r.MessageId == messageId && r.UserId == userId && r.Status < MessageStatus.Delivered && r.Status != MessageStatus.Failed).ExecuteUpdateAsync(setters => setters
                 .SetProperty(r => r.Status, MessageStatus.Delivered)
                 .SetProperty(r => r.UpdatedAt, DateTime.UtcNow),
             ct);

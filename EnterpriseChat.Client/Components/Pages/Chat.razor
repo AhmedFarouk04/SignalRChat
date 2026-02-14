@@ -10,6 +10,8 @@
 @using EnterpriseChat.Client.Services.Http
 @using EnterpriseChat.Client.Services.Attachments
 @using Microsoft.AspNetCore.Components.Forms
+@inject GroupsApi GroupsApi
+@inject UsersApi UsersApi
 @inject ChatViewModel VM
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -20,7 +22,6 @@
 @inject IChatRealtimeClient Realtime
 
 <div class="chat-page">
-    <!-- Toast Notification -->
     @if (_showToast)
     {
         <div class="custom-toast">
@@ -28,7 +29,6 @@
         </div>
     }
 
-    <!-- Top Bar Component -->
     <TopBar Room="@VM.Room"
             VM="@VM"
             OnScrollToMessage="ScrollToMessage"
@@ -42,7 +42,6 @@
             OnUnblock="UnblockOtherUser"
             OnMembers="OpenMembers" />
 
-    <!-- Error & Status Messages -->
     @if (VM.UiError != null)
     {
         <div class="chat-error">@VM.UiError</div>
@@ -61,19 +60,11 @@
     else
     {
         <div class="chat-body">
-            <!-- Group Presence Bar -->
-            @if (VM.Room.Type == "Group")
-            {
-                <PresenceBar OnlineUsers="@VM.OnlineUsers" />
-            }
-
-            <!-- Connection Status -->
             @if (VM.IsDisconnected)
             {
                 <div class="connection-banner">Reconnecting…</div>
             }
 
-            <!-- Main Chat Messages -->
             <div class="chat-messages" id="chat-messages">
                 <MessageList Messages="@OrderedMessages"
                              CurrentUserId="@VM.CurrentUserId"
@@ -92,10 +83,8 @@
 
                 <div id="messages-end"></div>
 
-                <!-- Typing Indicator -->
                 <TypingIndicator TypingUsers="@VM.TypingUsers" />
 
-                <!-- Reaction Details Modal -->
                 @if (_reactionModalOpen && _reactionDetails != null)
                 {
                     <ReactionDetailsModal Data="_reactionDetails"
@@ -104,7 +93,6 @@
                 }
             </div>
 
-            <!-- Attachments Drawer -->
             @if (_attachmentsOpen)
             {
                 <div class="drawer-backdrop" @onclick="CloseAttachments"></div>
@@ -122,7 +110,6 @@
                 </aside>
             }
 
-            <!-- Chat Input Area -->
             <div class="chat-input" @onclick="CloseAttachMenuIfOpen">
                 @if (VM.IsOtherDeleted)
                 {
@@ -134,9 +121,7 @@
                 }
                 else
                 {
-                    <!-- الـ input يظهر دايماً في كل الحالات التانية (حتى لو هو عملك بلوك) -->
                     <div class="composer">
-                        <!-- Reply Context -->
                         @if (ReplyCtx.MessageId != Guid.Empty)
                         {
                             <div class="reply-context">
@@ -147,38 +132,23 @@
                                 <div class="reply-preview-text">@ReplyCtx.ContentPreview</div>
                             </div>
                         }
-                        <!-- Message Composer -->
                         <div class="composer-box">
-                            <!-- Attachment Button & Menu -->
                             <button type="button" class="attach-btn" @onclick="ToggleAttachMenu" @onclick:stopPropagation="true" title="Attach">
                                 📎
                             </button>
                             @if (_attachMenuOpen)
                             {
                                 <div class="attach-popup" @onclick:stopPropagation="true">
-                                    <button class="popup-item" @onclick="TriggerFileUpload">
-                                        📄 Upload file
-                                    </button>
-                                    <button class="popup-item" @onclick="OpenAttachmentsDrawer">
-                                        🗂️ View attachments
-                                    </button>
+                                    <button class="popup-item" @onclick="TriggerFileUpload">📄 Upload file</button>
+                                    <button class="popup-item" @onclick="OpenAttachmentsDrawer">🗂️ View attachments</button>
                                 </div>
                             }
-                            <!-- Hidden File Input -->
                             <InputFile OnChange="OnFileSelected" multiple id="attach-file-input" style="display:none;" />
-                            <!-- Text Input -->
-                            <textarea class="composer-input"
-                                      @ref="inputRef"
+                            <textarea class="composer-input" @ref="inputRef"
                                       placeholder="@(ReplyCtx.MessageId != Guid.Empty ? "Type your reply…" : "Message…")"
-                                      @bind="currentMessage"
-                                      @bind:event="oninput"
-                                      @onkeydown="OnKeyDown">
-                        </textarea>
-                            <!-- Send Button -->
-                            <button class="composer-send"
-                                    type="button"
-                                    disabled="@string.IsNullOrWhiteSpace(currentMessage.Trim())"
-                                    @onclick="SendMessage">
+                                      @bind="currentMessage" @bind:event="oninput" @onkeydown="OnKeyDown"></textarea>
+                            <button class="composer-send" type="button"
+                                    disabled="@string.IsNullOrWhiteSpace(currentMessage.Trim())" @onclick="SendMessage">
                                 Send
                             </button>
                         </div>
@@ -186,18 +156,24 @@
                 }
             </div>
 
-            <!-- Members Drawer (Groups Only) -->
             @if (_membersOpen && VM.Room?.Type == "Group")
             {
                 <MembersDrawer IsOpen="_membersOpen"
                                Members="@VM.GetAllMembersForDrawer()"
                                OwnerId="@(VM.GroupMembers?.OwnerId ?? Guid.Empty)"
+                               CurrentUserId="@VM.CurrentUserId"
+                               GroupName="@VM.Room.Name"
                                CanManageMembers="@(VM.GroupMembers?.OwnerId == VM.CurrentUserId)"
                                OnRemove="RemoveMember"
+                               OnAdd="HandleAddMemberFromDrawer"
+                               OnRename="HandleRenameFromDrawer"
+                               OnToggleAdmin="HandleToggleAdmin"
+                               OnTransferOwner="HandleTransferOwner"
+                               OnDelete="HandleDeleteGroup"
+                               OnLeave="HandleLeaveFromDrawer"
                                OnClose="CloseMembers" />
             }
 
-            <!-- Forward Action Bar (When in Selection Mode) -->
             @if (VM.IsSelectionMode)
             {
                 <div class="forward-action-bar">
@@ -205,10 +181,8 @@
                         <button class="icon-btn close-btn" @onclick="() => VM.IsSelectionMode = false">✕</button>
                         <span>@VM.SelectedMessageIds.Count Selected</span>
                     </div>
-
                     <button class="forward-submit-btn @(VM.SelectedMessageIds.Any() ? "active" : "")"
-                            disabled="@(!VM.SelectedMessageIds.Any())"
-                            @onclick="() => VM.IsForwardModalOpen = true">
+                            disabled="@(!VM.SelectedMessageIds.Any())" @onclick="() => VM.IsForwardModalOpen = true">
                         Forward ➔
                     </button>
                 </div>
@@ -216,145 +190,269 @@
         </div>
     }
 
-    <!-- Pin Duration Modal -->
-    <PinDurationModal IsOpen="VM.IsPinModalOpen"
-                      OnCancel="() => VM.IsPinModalOpen = false"
-                      OnConfirm="VM.ConfirmPinAsync" />
-
-    <!-- Forward Modal -->
-    <ForwardModal IsOpen="VM.IsForwardModalOpen"
-                  OnClose="() => VM.IsForwardModalOpen = false" />
+    <PinDurationModal IsOpen="VM.IsPinModalOpen" OnCancel="() => VM.IsPinModalOpen = false" OnConfirm="VM.ConfirmPinAsync" />
+    <ForwardModal IsOpen="VM.IsForwardModalOpen" OnClose="() => VM.IsForwardModalOpen = false" />
 </div>
 
 @code {
-    // Parameters
     [Parameter] public Guid RoomId { get; set; }
 
-    // UI State Variables
     private bool _membersOpen;
     private bool _attachmentsOpen;
     private bool _attachMenuOpen;
     private bool _renderQueued;
     private string currentMessage = string.Empty;
     private ElementReference inputRef;
-
     private string _toastMessage = string.Empty;
     private bool _showToast = false;
-
-    // JavaScript Interop
     private DotNetObjectReference<ChatPageInterop>? _objRef;
     private bool _escapeRegistered;
     private IJSObjectReference? _chatModule;
-
-    // Read Tracking
     private CancellationTokenSource? _readCts;
     private Guid _lastSentReadId = Guid.Empty;
-
-    // Reaction Management
     private MessageReactionsDetailsDto? _reactionDetails;
     private bool _reactionModalOpen;
     private Guid _reactionMessageId;
     private Guid? OpenReactionMessageId;
-
-    // Message Editing
     private MessageModel? _editingMessage;
-
-    #region Component Lifecycle
 
     protected override async Task OnInitializedAsync()
     {
-        Console.WriteLine($"[Room.razor] OnInitializedAsync - Subscribing to events");
         VM.Changed += OnVmChanged;
         VM.MessageReceived += OnMessageReceivedAsync;
 
+        // ✅ 1. Real-time: Rename Listener
+        Realtime.GroupRenamed += HandleGroupRenamedRealtime;
+
+        // ✅ 2. Real-time: Membership Listener
+        Realtime.MemberAdded += (rid, uid, name) => InvokeAsync(async () => { if (rid == RoomId) { await VM.RefreshRoomStateAsync(rid); StateHasChanged(); } });
+        Realtime.MemberRemoved += (rid, uid, name) => InvokeAsync(async () => { if (rid == RoomId) { await VM.RefreshRoomStateAsync(rid); StateHasChanged(); } });
+
         await VM.InitializeAsync(RoomId);
-        Console.WriteLine($"[Room.razor] VM.InitializeAsync completed");
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private async void HandleGroupRenamedRealtime(Guid rid, string name)
     {
-        if (firstRender && !_escapeRegistered)
+        if (rid == RoomId)
         {
-            _objRef = DotNetObjectReference.Create(new ChatPageInterop(this));
-            _chatModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/chatPage.js");
-
-            await _chatModule.InvokeVoidAsync("registerEscape", _objRef);
-            await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
-            _escapeRegistered = true;
+            await InvokeAsync(async () =>
+            {
+                await VM.RefreshRoomStateAsync(rid);
+                await RoomsVM.RefreshRoomStatusesAsync(); // تحديث الـ Sidebar
+                StateHasChanged();
+            });
         }
     }
 
-    public void Dispose()
+    #region Group Actions (Optimized for No Deadlock)
+
+    private async Task HandleRenameFromDrawer(string newName)
     {
-        // Unsubscribe from events
-        VM.Changed -= OnVmChanged;
-        VM.MessageReceived -= OnMessageReceivedAsync;
-
-        // Cancel read tracking
-        _readCts?.Cancel();
-        _readCts?.Dispose();
-
-        // Dispose VM resources
-        _ = Task.Run(async () =>
+        if (string.IsNullOrWhiteSpace(newName) || newName == VM.Room?.Name) return;
+        try
         {
-            try { await VM.DisposeAsync(); } catch { }
-        });
+            _membersOpen = false; // UX: إغلاق فوري
+            ShowToast("Updating...");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await GroupsApi.UpdateGroupAsync(RoomId, newName, cts.Token);
 
-        // Cleanup JS interop
-        _ = Task.Run(async () =>
+            // ✅ تبليغ الـ Hub عشان التحديث يوصل لكل الناس فوراً
+            await Realtime.GroupRenamedAsync(RoomId, newName);
+            ShowToast("Group renamed!");
+        }
+        catch (Exception ex) { ShowToast($"Error: {ex.Message}"); }
+    }
+
+    private async Task HandleAddMemberFromDrawer(Guid userId)
+    {
+        try
         {
-            try
-            {
-                if (_chatModule != null)
-                {
-                    await _chatModule.InvokeVoidAsync("unregisterEscape");
-                    await _chatModule.DisposeAsync();
-                }
-            }
-            catch { }
-        });
+            await GroupsApi.AddMemberAsync(RoomId, userId);
+            ShowToast("Adding member...");
+            _membersOpen = false;
+            await VM.RefreshRoomStateAsync(RoomId);
+        }
+        catch (Exception ex) { ShowToast($"Error: {ex.Message}"); }
+    }
 
-        _objRef?.Dispose();
+    private async Task HandleToggleAdmin(Guid userId)
+    {
+        try
+        {
+            await GroupsApi.PromoteAdminAsync(RoomId, userId);
+            ShowToast("Permissions updated!");
+            await VM.RefreshRoomStateAsync(RoomId);
+        }
+        catch (Exception ex) { ShowToast(ex.Message); }
+    }
+
+    private async Task HandleTransferOwner(Guid userId)
+    {
+        try
+        {
+            await GroupsApi.TransferOwnerAsync(RoomId, userId);
+            ShowToast("Ownership transferred!");
+            _membersOpen = false;
+            await VM.RefreshRoomStateAsync(RoomId);
+        }
+        catch (Exception ex) { ShowToast(ex.Message); }
+    }
+
+    private async Task HandleDeleteGroup()
+    {
+        try
+        {
+            await GroupsApi.DeleteGroupAsync(RoomId);
+            Nav.NavigateTo("/rooms");
+        }
+        catch (Exception ex) { ShowToast(ex.Message); }
+    }
+
+    private async Task HandleLeaveFromDrawer()
+    {
+        try
+        {
+            await GroupsApi.LeaveGroupAsync(RoomId);
+            Nav.NavigateTo("/rooms");
+        }
+        catch (Exception ex) { ShowToast(ex.Message); }
     }
 
     #endregion
 
-    #region Attachment Management
+    #region Helper Methods & Lifecycle
 
-    private void OpenAttachmentsDrawer()
+    private async Task SendMessage()
     {
-        _attachMenuOpen = false;
-        _attachmentsOpen = true;
+        if (string.IsNullOrWhiteSpace(currentMessage)) return;
+        await HandleSendMessage(currentMessage.Trim());
+        currentMessage = string.Empty;
+        await ScrollToBottom();
     }
 
-    private void CloseAttachments() => _attachmentsOpen = false;
+    private async Task OnKeyDown(KeyboardEventArgs e) { if (e.Key == "Enter" && !e.ShiftKey) { await SendMessage(); return; } await NotifyTyping(); }
 
-    private void ToggleAttachMenu()
+    private async Task HandleSendMessage(string text)
     {
-        _attachMenuOpen = !_attachMenuOpen;
-    }
-
-    private void CloseAttachMenuIfOpen()
-    {
-        if (_attachMenuOpen)
+        Guid? replyTo = ReplyCtx.MessageId != Guid.Empty ? ReplyCtx.MessageId : null;
+        ReplyInfoModel? replySnapshot = null;
+        if (replyTo.HasValue)
         {
-            _attachMenuOpen = false;
-            StateHasChanged();
+            replySnapshot = new ReplyInfoModel { MessageId = ReplyCtx.MessageId, SenderName = ReplyCtx.SenderName, ContentPreview = ReplyCtx.ContentPreview, CreatedAt = ReplyCtx.CreatedAt, IsDeleted = false };
+            var originalMessage = VM.Messages.FirstOrDefault(m => m.Id == ReplyCtx.MessageId);
+            if (originalMessage != null) replySnapshot.SenderId = originalMessage.SenderId;
         }
+        if (replyTo.HasValue) await VM.SendMessageWithReplyAsync(RoomId, text, replyTo, replySnapshot);
+        else await VM.SendAsync(RoomId, text);
+        await ScrollToBottom();
+        ReplyCtx.Clear();
     }
 
-    private void TriggerFileUpload()
+    private async Task RetrySend(MessageModel msg) => await VM.SendAsync(RoomId, msg.Content);
+    private Task NotifyTyping() => VM.NotifyTypingAsync(RoomId);
+    private Task HandleReplyRequest(Guid messageId)
     {
-        _attachMenuOpen = false;
-        _ = JS.InvokeVoidAsync("eval", "document.getElementById('attach-file-input').click()");
+        var message = VM.Messages.FirstOrDefault(m => m.Id == messageId);
+        if (message == null) return Task.CompletedTask;
+        ReplyCtx.MessageId = message.Id;
+        ReplyCtx.SenderName = message.SenderId == VM.CurrentUserId ? "You" : VM.GetSenderName(message.SenderId);
+        ReplyCtx.ContentPreview = message.Content.Length > 60 ? message.Content[..60] + "…" : message.Content;
+        ReplyCtx.CreatedAt = message.CreatedAt;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
+    private void StartEdit(MessageModel msg) { _editingMessage = msg; currentMessage = msg.Content; _ = JS.InvokeVoidAsync("eval", "document.querySelector('.composer-input').focus()"); }
+    private async Task HandleDeleteRequested(MessageModel msg)
+    {
+        if (msg.SenderId == VM.CurrentUserId)
+        {
+            if (await JS.InvokeAsync<bool>("confirm", "Delete for everyone?")) await VM.DeleteMessageAsync(msg.Id, true);
+        }
+        else await VM.DeleteMessageAsync(msg.Id, false);
+    }
+
+    private Task ToggleReaction(Guid messageId) { OpenReactionMessageId = OpenReactionMessageId == messageId ? null : messageId; return Task.CompletedTask; }
+    private async Task OpenReactionDetails(Guid messageId) { _reactionMessageId = messageId; _reactionModalOpen = true; _reactionDetails = await VM.GetMessageReactionsDetailsAsync(messageId); StateHasChanged(); }
+    private async Task RemoveMyReaction(Guid userId)
+    {
+        if (_reactionMessageId == Guid.Empty) return;
+        var message = VM.Messages.FirstOrDefault(m => m.Id == _reactionMessageId);
+        if (message?.Reactions?.CurrentUserReactionType == null) return;
+        await VM.AddReactionAsync(_reactionMessageId, message.Reactions.CurrentUserReactionType.Value);
+        _reactionModalOpen = false;
+    }
+    private void CloseReactionDetails() { _reactionModalOpen = false; _reactionDetails = null; _reactionMessageId = Guid.Empty; }
+    private async Task OnReaction(ReactionPayload payload) => await VM.AddReactionAsync(payload.MessageId, payload.Type);
+
+    private async Task OnMessageReceivedAsync(MessageModel message)
+    {
+        var existingMessage = VM.Messages.FirstOrDefault(m => m.Id == message.Id);
+        if (existingMessage != null) { existingMessage.ReplyInfo = message.ReplyInfo; existingMessage.Status = message.Status; return; }
+        if (message.ReplyToMessageId.HasValue && message.ReplyInfo == null)
+        {
+            var originalMessage = VM.Messages.FirstOrDefault(m => m.Id == message.ReplyToMessageId.Value);
+            if (originalMessage != null) message.ReplyInfo = new ReplyInfoModel { MessageId = originalMessage.Id, SenderId = originalMessage.SenderId, SenderName = VM.GetSenderName(originalMessage.SenderId), ContentPreview = originalMessage.Content.Length > 60 ? originalMessage.Content[..60] + "…" : originalMessage.Content, CreatedAt = originalMessage.CreatedAt, IsDeleted = originalMessage.IsDeleted };
+        }
+        await InvokeAsync(StateHasChanged);
+        await ScrollToBottom();
+    }
+
+    private Task HandleReachedBottom(Guid lastMessageId)
+    {
+        if (lastMessageId == Guid.Empty || lastMessageId == _lastSentReadId) return Task.CompletedTask;
+        _readCts?.Cancel(); _readCts?.Dispose(); _readCts = new CancellationTokenSource();
+        var ct = _readCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(400, ct); if (ct.IsCancellationRequested) return;
+                _lastSentReadId = lastMessageId;
+                await VM.MarkRoomReadAsync(RoomId, lastMessageId);
+                await InvokeAsync(() => RoomsVM.MarkRoomAsReadLocal(RoomId, lastMessageId));
+            }
+            catch { }
+        }, ct);
+        return Task.CompletedTask;
+    }
+
+    private async Task ScrollToMessage(Guid messageId) { var elementId = $"message-{messageId}"; await JS.InvokeVoidAsync("scrollToMessage", elementId); await JS.InvokeVoidAsync("highlightMessage", elementId); }
+    private async Task ScrollToBottom() => await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
+    private Task RemoveMember(Guid userId) => VM.RemoveMemberAsync(RoomId, userId);
+    private Task BlockOtherUser() => VM.OtherUser == null ? Task.CompletedTask : VM.BlockUserAsync(VM.OtherUser.Id);
+    private Task ToggleMute() => VM.ToggleMuteAsync(RoomId);
+    private void OpenMembers() { if (VM.Room?.Type == "Group") _membersOpen = true; }
+    private void CloseMembers() => _membersOpen = false;
+    private Task UnblockOtherUser() => VM.OtherUser == null ? Task.CompletedTask : VM.UnblockUserAsync(VM.OtherUser.Id);
+
+    private void ShowToast(string message) { _toastMessage = message; _showToast = true; StateHasChanged(); _ = Task.Delay(3000).ContinueWith(_ => { _showToast = false; InvokeAsync(StateHasChanged); }); }
+    private async void OnVmChanged()
+    {
+        if (_renderQueued || VM.IsSearching) return;
+        _renderQueued = true;
+        _ = InvokeAsync(async () => { try { await Task.Delay(50); StateHasChanged(); await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages"); } finally { _renderQueued = false; } });
+    }
+
+    public void Dispose()
+    {
+        VM.Changed -= OnVmChanged; VM.MessageReceived -= OnMessageReceivedAsync;
+        Realtime.GroupRenamed -= HandleGroupRenamedRealtime;
+        _readCts?.Cancel(); _readCts?.Dispose();
+        _ = Task.Run(async () => { try { await VM.DisposeAsync(); } catch { } });
+        _ = Task.Run(async () => { try { if (_chatModule != null) { await _chatModule.InvokeVoidAsync("unregisterEscape"); await _chatModule.DisposeAsync(); } } catch { } });
+        _objRef?.Dispose();
+    }
+
+    private void OpenAttachmentsDrawer() { _attachMenuOpen = false; _attachmentsOpen = true; }
+    private void CloseAttachments() => _attachmentsOpen = false;
+    private void ToggleAttachMenu() => _attachMenuOpen = !_attachMenuOpen;
+    private void CloseAttachMenuIfOpen() { if (_attachMenuOpen) { _attachMenuOpen = false; StateHasChanged(); } }
+    private void TriggerFileUpload() { _attachMenuOpen = false; _ = JS.InvokeVoidAsync("eval", "document.getElementById('attach-file-input').click()"); }
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
         if (RoomId == Guid.Empty) return;
-
         bool uploaded = false;
-
         foreach (var file in e.GetMultipleFiles())
         {
             const long maxBytes = 25 * 1024 * 1024;
@@ -362,354 +460,25 @@
             await AttachmentsApi.UploadAsync(RoomId, stream, file.Name, file.ContentType);
             uploaded = true;
         }
-
-        if (uploaded)
-        {
-            ShowToast("File uploaded successfully!");
-        }
-
+        if (uploaded) ShowToast("File uploaded successfully!");
         StateHasChanged();
     }
 
-    #endregion
-
-    #region Message Management
-
-    private async Task SendMessage()
-    {
-        if (string.IsNullOrWhiteSpace(currentMessage)) return;
-
-        await HandleSendMessage(currentMessage.Trim());
-        currentMessage = string.Empty;
-
-        await ScrollToBottom();
-        StateHasChanged();
-    }
-
-    private async Task OnKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter" && !e.ShiftKey)
-        {
-            await SendMessage();
-            return;
-        }
-
-        // Send typing notification with debounce
-        await NotifyTyping();
-    }
-
-    private async Task HandleSendMessage(string text)
-    {
-        Guid? replyTo = ReplyCtx.MessageId != Guid.Empty ? ReplyCtx.MessageId : null;
-        ReplyInfoModel? replySnapshot = null;
-
-        if (replyTo.HasValue)
-        {
-            replySnapshot = new ReplyInfoModel
-            {
-                MessageId = ReplyCtx.MessageId,
-                SenderName = ReplyCtx.SenderName,
-                ContentPreview = ReplyCtx.ContentPreview,
-                CreatedAt = ReplyCtx.CreatedAt,
-                IsDeleted = false
-            };
-
-            var originalMessage = VM.Messages.FirstOrDefault(m => m.Id == ReplyCtx.MessageId);
-            if (originalMessage != null)
-            {
-                replySnapshot.SenderId = originalMessage.SenderId;
-            }
-        }
-
-        if (replyTo.HasValue)
-        {
-            await VM.SendMessageWithReplyAsync(RoomId, text, replyTo, replySnapshot);
-        }
-        else
-        {
-            await VM.SendAsync(RoomId, text);
-        }
-
-        await ScrollToBottom();
-        ReplyCtx.Clear();
-    }
-
-    private async Task RetrySend(MessageModel msg)
-        => await VM.SendAsync(RoomId, msg.Content);
-
-    private Task NotifyTyping() => VM.NotifyTypingAsync(RoomId);
-
-    private Task HandleReplyRequest(Guid messageId)
-    {
-        var message = VM.Messages.FirstOrDefault(m => m.Id == messageId);
-        if (message == null) return Task.CompletedTask;
-
-        ReplyCtx.MessageId = message.Id;
-        ReplyCtx.SenderName = message.SenderId == VM.CurrentUserId ? "You" : VM.GetSenderName(message.SenderId);
-        ReplyCtx.ContentPreview = message.Content.Length > 60 ? message.Content[..60] + "…" : message.Content;
-        ReplyCtx.CreatedAt = message.CreatedAt;
-
-        StateHasChanged();
-        return Task.CompletedTask;
-    }
-
-    private void StartEdit(MessageModel msg)
-    {
-        _editingMessage = msg;
-        currentMessage = msg.Content;
-        // Focus on the input
-        _ = JS.InvokeVoidAsync("eval", "document.querySelector('.composer-input').focus()");
-    }
-
-    private async Task HandleDeleteRequested(MessageModel msg)
-    {
-        if (msg.SenderId == VM.CurrentUserId)
-        {
-            bool forEveryone = await JS.InvokeAsync<bool>("confirm", "Delete for everyone?");
-            await VM.DeleteMessageAsync(msg.Id, forEveryone);
-        }
-        else
-        {
-            await VM.DeleteMessageAsync(msg.Id, false);
-        }
-    }
-
-    #endregion
-
-    #region Reaction Management
-
-    private Task ToggleReaction(Guid messageId)
-    {
-        OpenReactionMessageId = OpenReactionMessageId == messageId ? null : messageId;
-        return Task.CompletedTask;
-    }
-
-    private async Task OpenReactionDetails(Guid messageId)
-    {
-        _reactionMessageId = messageId;
-        _reactionModalOpen = true;
-
-        _reactionDetails = await VM.GetMessageReactionsDetailsAsync(messageId);
-        StateHasChanged();
-    }
-
-    private async Task RemoveMyReaction(Guid userId)
-    {
-        if (_reactionMessageId == Guid.Empty) return;
-
-        var message = VM.Messages.FirstOrDefault(m => m.Id == _reactionMessageId);
-        if (message?.Reactions?.CurrentUserReactionType == null) return;
-
-        await VM.AddReactionAsync(
-            _reactionMessageId,
-            message.Reactions.CurrentUserReactionType.Value
-        );
-
-        _reactionModalOpen = false;
-    }
-
-    private void CloseReactionDetails()
-    {
-        _reactionModalOpen = false;
-        _reactionDetails = null;
-        _reactionMessageId = Guid.Empty;
-    }
-
-    private async Task OnReaction(ReactionPayload payload)
-    {
-        await VM.AddReactionAsync(payload.MessageId, payload.Type);
-    }
-
-    #endregion
-
-    #region Message Events
-
-    private async Task OnMessageReceivedAsync(MessageModel message)
-    {
-        var existingMessage = VM.Messages.FirstOrDefault(m => m.Id == message.Id);
-        if (existingMessage != null)
-        {
-            existingMessage.ReplyInfo = message.ReplyInfo;
-            existingMessage.Status = message.Status;
-            return;
-        }
-
-        if (message.ReplyToMessageId.HasValue && message.ReplyInfo == null)
-        {
-            var originalMessage = VM.Messages.FirstOrDefault(m => m.Id == message.ReplyToMessageId.Value);
-            if (originalMessage != null)
-            {
-                message.ReplyInfo = new ReplyInfoModel
-                {
-                    MessageId = originalMessage.Id,
-                    SenderId = originalMessage.SenderId,
-                    SenderName = VM.GetSenderName(originalMessage.SenderId),
-                    ContentPreview = originalMessage.Content.Length > 60
-                        ? originalMessage.Content[..60] + "…"
-                        : originalMessage.Content,
-                    CreatedAt = originalMessage.CreatedAt,
-                    IsDeleted = originalMessage.IsDeleted
-                };
-            }
-        }
-
-        await InvokeAsync(StateHasChanged);
-        await ScrollToBottom(); // ✅ التمرير للأسفل تلقائياً
-    }
-    private Task HandleReachedBottom(Guid lastMessageId)
-    {
-        if (lastMessageId == Guid.Empty) return Task.CompletedTask;
-        if (lastMessageId == _lastSentReadId) return Task.CompletedTask;
-
-        Console.WriteLine($"[Chat] 📖 Reached bottom, marking room as read: {lastMessageId}");
-
-        _readCts?.Cancel();
-        _readCts?.Dispose();
-        _readCts = new CancellationTokenSource();
-        var ct = _readCts.Token;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(400, ct);
-                if (ct.IsCancellationRequested) return;
-
-                _lastSentReadId = lastMessageId;
-
-                // ✅ Mark room as read
-                await VM.MarkRoomReadAsync(RoomId, lastMessageId);
-
-                // ✅ Update local rooms list
-                await InvokeAsync(() => RoomsVM.MarkRoomAsReadLocal(RoomId, lastMessageId));
-
-                Console.WriteLine($"[Chat] ✅ Room marked as read: {RoomId}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Chat] ❌ Mark read failed: {ex.Message}");
-            }
-        }, ct);
-
-        return Task.CompletedTask;
-    }
-    #endregion
-
-    #region UI Actions
-
-    private async Task ScrollToMessage(Guid messageId)
-    {
-        var elementId = $"message-{messageId}";
-        await JS.InvokeVoidAsync("scrollToMessage", elementId);
-        await JS.InvokeVoidAsync("highlightMessage", elementId);
-    }
-
-    private async Task ScrollToBottom()
-    {
-        await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
-    }
-
-    private Task RemoveMember(Guid userId) => VM.RemoveMemberAsync(RoomId, userId);
-
-    private Task BlockOtherUser()
-        => VM.OtherUser == null ? Task.CompletedTask : VM.BlockUserAsync(VM.OtherUser.Id);
-
-    private Task ToggleMute() => VM.ToggleMuteAsync(RoomId);
-
-    private void OpenMembers()
-    {
-        if (VM.Room?.Type == "Group") _membersOpen = true;
-    }
-
-    private void CloseMembers() => _membersOpen = false;
-
-    private Task UnblockOtherUser()
-        => VM.OtherUser == null ? Task.CompletedTask : VM.UnblockUserAsync(VM.OtherUser.Id);
-
-    #endregion
-
-    #region Toast & State Management
-
-    private void ShowToast(string message)
-    {
-        _toastMessage = message;
-        _showToast = true;
-        StateHasChanged();
-
-        // Auto-hide after 3 seconds
-        _ = Task.Delay(3000).ContinueWith(_ =>
-        {
-            _showToast = false;
-            InvokeAsync(StateHasChanged);
-        });
-    }
-
-    private async void OnVmChanged()
-    {
-        if (_renderQueued) return;
-
-        // Don't auto-scroll when searching
-        if (VM.IsSearching)
-        {
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
-
-        _renderQueued = true;
-        _ = InvokeAsync(async () =>
-        {
-            try
-            {
-                await Task.Delay(50);
-                StateHasChanged();
-                await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
-            }
-            finally { _renderQueued = false; }
-        });
-    }
-
-    #endregion
-
-    #region Helper Properties
-
-    private IReadOnlyList<MessageModel> OrderedMessages
-        => VM.Messages?.OrderBy(m => m.CreatedAt).ToList() ?? new List<MessageModel>();
-
-    #endregion
-
-    #region JavaScript Interop Class
+    private IReadOnlyList<MessageModel> OrderedMessages => VM.Messages?.OrderBy(m => m.CreatedAt).ToList() ?? new List<MessageModel>();
 
     private sealed class ChatPageInterop
     {
         private readonly Chat _page;
         public ChatPageInterop(Chat page) => _page = page;
-
         [JSInvokable]
         public Task OnGlobalEscape()
         {
             var changed = false;
-
-            if (_page._attachmentsOpen)
-            {
-                _page.CloseAttachments();
-                changed = true;
-            }
-
-            if (_page._membersOpen)
-            {
-                _page.CloseMembers();
-                changed = true;
-            }
-
-            if (_page._attachMenuOpen)
-            {
-                _page._attachMenuOpen = false;
-                changed = true;
-            }
-
+            if (_page._attachmentsOpen) { _page.CloseAttachments(); changed = true; }
+            if (_page._membersOpen) { _page.CloseMembers(); changed = true; }
+            if (_page._attachMenuOpen) { _page._attachMenuOpen = false; changed = true; }
             return changed ? _page.InvokeAsync(_page.StateHasChanged) : Task.CompletedTask;
         }
     }
-
     #endregion
 }

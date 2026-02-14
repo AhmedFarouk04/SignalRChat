@@ -19,7 +19,9 @@ public sealed class SendMessageCommandHandler
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMessageBroadcaster? _broadcaster;
     private readonly IUserDirectoryService _userDirectory;
-
+    private readonly IPresenceService _presenceService;
+    private readonly IMediator _mediator;                  // جديد
+    private readonly IMessageReceiptRepository _receiptRepo;  // جديد
     public SendMessageCommandHandler(
         IChatRoomRepository roomRepository,
         IMessageRepository messageRepository,
@@ -27,7 +29,10 @@ public sealed class SendMessageCommandHandler
         IRoomAuthorizationService authorization,
         IUnitOfWork unitOfWork,
         IUserDirectoryService userDirectory,
-        IMessageBroadcaster? broadcaster = null)
+        IPresenceService presenceService,
+        IMessageBroadcaster? broadcaster = null,
+        IMediator mediator = null!,                        // أضف ده
+    IMessageReceiptRepository receiptRepo = null!)
     {
         _roomRepository = roomRepository;
         _messageRepository = messageRepository;
@@ -36,7 +41,11 @@ public sealed class SendMessageCommandHandler
         _unitOfWork = unitOfWork;
         _userDirectory = userDirectory;
         _broadcaster = broadcaster;
+        _presenceService = presenceService;
+        _mediator = mediator;
+        _receiptRepo = receiptRepo;
     }
+    
 
     public async Task<MessageDto> Handle(SendMessageCommand command, CancellationToken ct)
     {
@@ -86,14 +95,58 @@ public sealed class SendMessageCommandHandler
 
         // 2. إنشاء الرسالة وحفظها
         var message = new Message(
-            command.RoomId,
-            command.SenderId,
-            command.Content,
-            recipients,
-            command.ReplyToMessageId);
+       command.RoomId,
+       command.SenderId,
+       command.Content,
+       recipients,
+       command.ReplyToMessageId);
 
         await _messageRepository.AddAsync(message, ct);
         await _unitOfWork.CommitAsync(ct);
+        if (!isBlocked && recipients.Any())
+        {
+            foreach (var recipientId in recipients)
+            {
+                var isOnline = await _presenceService.IsOnlineAsync(recipientId);
+                if (isOnline)
+                {
+                    // لو أونلاين، هنعمل Deliver فوري
+                    await _mediator.Send(new DeliverMessageCommand(message.Id, recipientId), ct);
+                }
+            }
+        }
+        var stats = message.GetReceiptStats();
+    
+
+        // ────────────────────────────────────────────────────────────────
+        // بعد حفظ الرسالة مباشرة: حدد Delivered لكل مستلم أونلاين
+        // ────────────────────────────────────────────────────────────────
+
+        // 1. جيب كل المستخدمين الأونلاين حاليًا (من Redis Presence)
+        var allOnlineUsers = await _presenceService.GetOnlineUsersAsync(); // بدون ct
+        // 2. فلتر المستلمين اللي أونلاين (من recipients)
+        var onlineRecipients = recipients
+            .Where(r => allOnlineUsers.Contains(r))
+            .ToList();
+
+        // 3. لكل مستلم أونلاين → اعمل Delivered فورًا (من غير ما يفتح الشات)
+        foreach (var onlineUser in onlineRecipients)
+        {
+            // استدعي الـ command أو اعمل broadcast مباشر
+            await _mediator.Send(new DeliverMessageCommand(message.Id, onlineUser), ct);
+            // أو لو عايز أسرع: broadcast مباشر بدون command
+            // await _broadcaster.MessageDeliveredAsync(message.Id.Value, onlineUser.Value);
+        }
+
+        // 4. (اختياري) لو عايز تحدث الـ stats للمرسل فورًا بعد الـ Delivered الجديد
+        var statsAfterOnline = await _receiptRepo.GetMessageStatsAsync(message.Id, ct);
+        await _broadcaster.MessageReceiptStatsUpdatedAsync(
+            message.Id.Value,
+            command.SenderId.Value,
+            statsAfterOnline.TotalRecipients,
+            statsAfterOnline.DeliveredCount,
+            statsAfterOnline.ReadCount
+        );
 
         Console.WriteLine($"[SEND] Message {message.Id.Value} created with {message.Receipts.Count} receipts");
 
@@ -107,9 +160,9 @@ public sealed class SendMessageCommandHandler
             ReplyInfo = replyInfo,
             ReplyToMessageId = command.ReplyToMessageId?.Value,
             Status = MessageStatus.Sent,
-            ReadCount = 0,
-            DeliveredCount = 0,
-            TotalRecipients = recipients.Count,
+            ReadCount = stats.ReadCount,
+            DeliveredCount = stats.DeliveredCount,
+            TotalRecipients = stats.TotalRecipients,
             IsEdited = false,
             IsDeleted = false
         };

@@ -45,7 +45,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public event Func<MessageModel, Task>? MessageUpdated;
     public event Func<MessageModel, Task>? MessageReplyReceived;
     public event Action<ReplyContext?>? ReplyContextChanged;
-
+    private Guid? _openMenuMessageId;
+   
     public event PropertyChangedEventHandler? PropertyChanged;
     private bool _isPinModalOpen;
     public bool IsPinModalOpen { get => _isPinModalOpen; set { _isPinModalOpen = value; NotifyChanged(); } }
@@ -389,22 +390,22 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             foreach (var msg in Messages) msg.TotalRecipients = memberCount;
 
             // ✅ 6. Mark delivered
-            var toDeliver = Messages
-      .Where(m => m.SenderId != myId && (int)m.PersonalStatus < (int)ClientMessageStatus.Delivered)
-      .Select(m => m.Id)
-      .ToList();
+      //      var toDeliver = Messages
+      //.Where(m => m.SenderId != myId && (int)m.PersonalStatus < (int)ClientMessageStatus.Delivered)
+      //.Select(m => m.Id)
+      //.ToList();
 
 
-            if (toDeliver.Any())
-            {
-                _ = Task.Run(async () =>
-                {
-                    foreach (var id in toDeliver)
-                    {
-                        try { await _chatService.MarkMessageDeliveredAsync(id); } catch { }
-                    }
-                });
-            }
+      //      if (toDeliver.Any())
+      //      {
+      //          _ = Task.Run(async () =>
+      //          {
+      //              foreach (var id in toDeliver)
+      //              {
+      //                  try { await _chatService.MarkMessageDeliveredAsync(id); } catch { }
+      //              }
+      //          });
+      //      }
 
             // ✅ 7. Subscribe to events
             _flags.RoomMuteChanged += OnRoomMuteChanged;
@@ -438,7 +439,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         catch (Exception ex)
         {
             UiError = ex.Message;
-            Room = null;
+            //Room = null;
             NotifyChanged();
         }
     }
@@ -490,6 +491,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _realtime.MessageUpdated += OnMessageUpdated;
         _realtime.MessageDeleted += OnMessageDeleted;
         _realtime.MessagePinned += OnMessagePinned;
+        _realtime.OnDemandOnlineCheckRequested += HandleOnDemandCheck;
+        _realtime.MessageReceiptStatsUpdated += OnMessageReceiptStatsUpdated;
         _eventsRegistered = true;
     }
 
@@ -520,76 +523,120 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _realtime.MessageDeliveredToAll -= OnMessageDeliveredToAll;
         _realtime.MessageReadToAll -= OnMessageReadToAll;
         _realtime.MessageReactionUpdated -= OnMessageReactionUpdated;
-
+        _realtime.OnDemandOnlineCheckRequested -= HandleOnDemandCheck;
+        _realtime.MessageReceiptStatsUpdated -= OnMessageReceiptStatsUpdated;
         _eventsRegistered = false;
         _eventsRoomId = null;
     }
 
     // ✅ Realtime Event Handlers
-    private void OnRealtimeMessageReceived(MessageModel message)
+    private void OnMessageReadToAll(Guid messageId, Guid readerId)
     {
-        Console.WriteLine(
-            $"[VM] 🟢 MESSAGE RECEIVED IN VM! ID: {message.Id}, Room: {message.RoomId}, CurrentRoom: {_currentRoomId}, " +
-            $"Sender: {message.SenderId}, MyId: {CurrentUserId}, Initial PersonalStatus: {message.PersonalStatus}, Status: {message.Status}"
-        );
+        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg == null) return;
 
-        if (_currentRoomId != message.RoomId)
+        Console.WriteLine($"[VM] OnMessageReadToAll: msg={messageId}, read by={readerId}, myId={CurrentUserId}");
+
+        // لو الرسالة مني أنا
+        if (msg.SenderId == CurrentUserId)
         {
-            Console.WriteLine($"[VM] Message for different room, ignoring");
-            return;
-        }
+            // نجيب الإحصائيات من السيرفر
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var stats = await _chatService.GetMessageStatsAsync(messageId);
+                    if (stats != null)
+                    {
+                        msg.ReadCount = stats.ReadCount;
+                        msg.DeliveredCount = stats.DeliveredCount;
+                        msg.TotalRecipients = stats.TotalRecipients;
 
-        // 1) محاولة مطابقة الرسالة مع Pending/Sent محلياً (قبل ما السيرفر يرجّع ID الحقيقي)
-        var existing = Messages.FirstOrDefault(m =>
-            (m.Status == ClientMessageStatus.Pending || m.Status == ClientMessageStatus.Sent) &&
-            m.Content == message.Content &&
-            m.SenderId == message.SenderId &&
-            Math.Abs((m.CreatedAt - message.CreatedAt).TotalSeconds) < 5);
+                        if (msg.ReadCount >= msg.TotalRecipients - 1)
+                            msg.PersonalStatus = ClientMessageStatus.Read;
+                        else if (msg.DeliveredCount > 0)
+                            msg.PersonalStatus = ClientMessageStatus.Delivered;
 
-        if (existing != null)
-        {
-            // تحديث الرسالة المحلية بدل إضافة نسخة جديدة
-            existing.Id = message.Id;
-            existing.Status = ClientMessageStatus.Sent;
-
-            // ✅ أهم تغيير: ما تعملش Reset اجباري للـ PersonalStatus هنا
-            // لأن ممكن تكون اتحركت بالفعل عن طريق events (Delivered/Read/StatusUpdated)
-            // خليك حذر: لو existing.PersonalStatus = Delivered مثلاً، متخليش event جديد يرجّعها Sent
-            if ((int)existing.PersonalStatus < (int)message.PersonalStatus)
-                existing.PersonalStatus = message.PersonalStatus;
-
-            existing.Error = null;
-            existing.ReplyInfo = message.ReplyInfo;
-            existing.ReplyToMessageId = message.ReplyToMessageId;
-
-            Console.WriteLine($"[VM] Replaced pending/local message -> server messageId={message.Id}, kept PersonalStatus={existing.PersonalStatus}");
+                        NotifyChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[VM] Error getting stats: {ex.Message}");
+                }
+            });
         }
         else
         {
-            // 2) إضافة الرسالة الجديدة
-            // ✅ أهم تغيير: لا تعمل auto-set Delivered للرسائل الواردة
-            // خلي PersonalStatus كما جاء من السيرفر (غالباً Sent) وسيتم ترقيته عبر events فقط
-            if (message.SenderId == CurrentUserId)
+            // لو الرسالة من حد تاني وأنا قريتها، حدث الحالة
+            if (readerId == CurrentUserId)
             {
-                // رسالتك: خليها Sent افتراضياً
-                if (message.PersonalStatus == default)
-                    message.PersonalStatus = ClientMessageStatus.Sent;
+                msg.PersonalStatus = ClientMessageStatus.Read;
+                NotifyChanged();
             }
-            else
-            {
-                // رسالة واردة: متلمسش PersonalStatus
-                // (خصوصاً في سيناريو block حيث قد لا توجد receipts أصلاً)
-            }
+        }
+    }
+    private async void HandleOnDemandCheck(Guid userId)
+    {
+        try
+        {
+            // سحب قائمة الأونلاين الحالية من السيرفر
+            var onlineUsers = await _realtime.GetOnlineUsersAsync();
 
+            if (onlineUsers.Contains(userId))
+            {
+                // نستخدم NotifyChanged بدلاً من InvokeAsync
+                // لأنها ستقوم بتنبيه صفحة Chat.razor لتعمل StateHasChanged
+                OnUserOnline(userId);
+                NotifyChanged("HandleOnDemandCheck");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Check Error] {ex.Message}");
+        }
+    }
+    private async void OnRealtimeMessageReceived(MessageModel message)
+    {
+        if (_currentRoomId != message.RoomId) return;
+
+        var existing = Messages.FirstOrDefault(m =>
+            m.Status == ClientMessageStatus.Pending &&
+            m.Content == message.Content &&
+            m.SenderId == message.SenderId);
+
+        if (existing != null)
+        {
+            existing.Id = message.Id;
+            existing.Status = ClientMessageStatus.Sent;
+        }
+        else
+        {
             Messages.Add(message);
-
-            Console.WriteLine(
-                $"[VM] Added new message {message.Id} sender={message.SenderId} " +
-                $"PersonalStatus={message.PersonalStatus} Status={message.Status}"
-            );
         }
 
-        MessageReceived?.Invoke(message);
+        // ✅ لو الرسالة مش مني، أعمل Delivered فورًا
+        if (message.SenderId != CurrentUserId)
+        {
+            try
+            {
+                // 1. Delivered فوري
+                await _chatService.MarkMessageDeliveredAsync(message.Id);
+                Console.WriteLine($"[VM] Auto-delivered message {message.Id}");
+
+                // 2. لو أنا فاتح الروم دلوقتي، أعمل Read فوري
+                if (_currentRoomId == message.RoomId)
+                {
+                    await _chatService.MarkMessageReadAsync(message.Id);
+                    Console.WriteLine($"[VM] Auto-read message {message.Id} because room is open");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[VM] Auto-deliver/read failed: {ex.Message}");
+            }
+        }
+
         NotifyChanged();
     }
     private void OnMessageDelivered(Guid messageId)
@@ -638,10 +685,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             OtherUser.IsOnline = true;
             OtherUser.LastSeen = null;
         }
-
         if (Room?.Type == "Group")
             RebuildPresenceFromRealtime();
-
         NotifyChangedThrottled();
     }
 
@@ -652,10 +697,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             OtherUser.IsOnline = false;
             OtherUser.LastSeen = DateTime.UtcNow;
         }
-
         if (Room?.Type == "Group")
             RebuildPresenceFromRealtime();
-
         NotifyChangedThrottled();
     }
 
@@ -734,9 +777,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     private async void OnGroupRenamed(Guid roomId, string newName)
     {
         if (_currentRoomId != roomId) return;
-        await RefreshRoomStateAsync(roomId);
-    }
 
+        // تحديث البيانات بهدوء
+        await RefreshRoomStateAsync(roomId);
+
+        // ✅ إخطار كل المشتركين (بما فيهم الـ Sidebar) إن فيه تغيير حصل
+        NotifyChanged("OnGroupRenamed");
+    }
     private async void OnMemberAdded(Guid roomId, Guid userId, string displayName)
     {
         if (_currentRoomId != roomId) return;
@@ -795,15 +842,34 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void OnMessageDeliveredToAll(Guid messageId, Guid senderId)
     {
-        return;
+        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg == null) return;
+
+        // لو الرسالة مني أنا → حدث الـ DeliveredCount
+        if (msg.SenderId == CurrentUserId)
+        {
+            msg.DeliveredCount = Math.Max(msg.DeliveredCount, 1); // أو اجيب الـ real count لو عايز
+            if (msg.PersonalStatus < ClientMessageStatus.Delivered)
+                msg.PersonalStatus = ClientMessageStatus.Delivered;
+            UpdateMessageStatusStats(msg);
+            NotifyChangedThrottled();
+        }
     }
 
-    private void OnMessageReadToAll(Guid messageId, Guid senderId)
+       
+
+    public async Task RefreshMessageReceiptsAsync(Guid messageId)
     {
-        return;
+        var stats = await _chatService.GetMessageStatsAsync(messageId);
+        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg != null && stats != null)
+        {
+            msg.DeliveredCount = stats.DeliveredCount;
+            msg.ReadCount = stats.ReadCount;
+            msg.TotalRecipients = stats.TotalRecipients;
+            NotifyChanged();
+        }
     }
-
-
     private void OnMessageReactionUpdated(Guid messageId, Guid userId, int reactionTypeInt, bool isNewReaction)
     {
         var message = Messages.FirstOrDefault(m => m.Id == messageId);
@@ -890,7 +956,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             message.ReadCount = Math.Max(message.ReadCount, 1);
     }
 
-
+ 
     private void NotifyChangedThrottled()
     {
         lock (_notifyLock)
@@ -1494,5 +1560,34 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         await _chatService.PinMessageAsync(Room.Id, messageId, duration);
         // السيرفر هيبعت SignalR يضيف رسالة نظام تلقائياً في الشات
         // والـ TopBar هيحدث نفسه فوراً
+    }
+
+    private void OnMessageReceiptStatsUpdated(Guid messageId, int total, int delivered, int read)
+    {
+        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg == null || msg.SenderId != CurrentUserId) return;
+
+        var oldStatus = msg.PersonalStatus;
+
+        msg.TotalRecipients = total;
+        msg.DeliveredCount = delivered;
+        msg.ReadCount = read;
+
+        // تحديث الحالة
+        if (read >= total - 1) // الكل قرأ
+        {
+            msg.PersonalStatus = ClientMessageStatus.Read;
+        }
+        else if (delivered > 0) // في ناس وصلت
+        {
+            msg.PersonalStatus = ClientMessageStatus.Delivered;
+        }
+
+        // لو الحالة اتغيرت، حدث الـ UI
+        if (oldStatus != msg.PersonalStatus)
+        {
+            Console.WriteLine($"[VM] Message {messageId} status changed: {oldStatus} -> {msg.PersonalStatus}");
+            NotifyChanged();
+        }
     }
 }

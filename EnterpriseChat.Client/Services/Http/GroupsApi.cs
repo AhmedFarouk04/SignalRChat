@@ -33,9 +33,19 @@ public sealed class GroupsApi
         return dto ?? throw new InvalidOperationException("Invalid create group response.");
     }
 
-    public Task UpdateGroupAsync(Guid roomId, string name, CancellationToken ct = default)
-        => _api.PutAsync(ApiEndpoints.UpdateGroup(roomId), new UpdateGroupRequest { Name = name }, ct);
-
+    // في GroupsApi.cs
+    public async Task UpdateGroupAsync(Guid roomId, string name, CancellationToken ct = default)
+    {
+        try
+        {
+            await _api.PutAsync(ApiEndpoints.UpdateGroup(roomId), new UpdateGroupRequest { Name = name }, ct);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GroupsApi] Update failed: {ex.Message}");
+            throw; // Important: رجع الخطأ عشان نقدر نتعامل معاه
+        }
+    }
     public Task DeleteGroupAsync(Guid roomId, CancellationToken ct = default)
         => _api.DeleteAsync(ApiEndpoints.DeleteGroup(roomId), ct);
 

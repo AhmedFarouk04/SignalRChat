@@ -262,7 +262,6 @@ public sealed class RoomsViewModel
         var list = Rooms.ToList();
         var idx = list.FindIndex(r => r.Id == dto.Id);
 
-        // map dto -> RoomListItemModel
         var model = new RoomListItemModel
         {
             Id = dto.Id,
@@ -276,13 +275,19 @@ public sealed class RoomsViewModel
             LastMessagePreview = dto.LastMessagePreview,
             LastMessageId = dto.LastMessageId,
             LastMessageSenderId = dto.LastMessageSenderId,
-            LastMessageStatus = dto.LastMessageStatus is null
-   ? null
-    : (MessageStatus?)(int)dto.LastMessageStatus.Value
+            LastMessageStatus = dto.LastMessageStatus is null ? null : (MessageStatus?)(int)dto.LastMessageStatus.Value
         };
 
-        if (idx >= 0) list[idx] = model;
-        else list.Insert(0, model); // ✅ تظهر فوق فورًا
+        if (idx >= 0)
+        {
+            // ✅ الغرفة موجودة بالفعل: حدث بياناتها في نفس مكانها (ترتيبها) الحالي
+            list[idx] = model;
+        }
+        else
+        {
+            // ✅ غرفة جديدة تماماً: تظهر في أول القائمة
+            list.Insert(0, model);
+        }
 
         Rooms = list;
         ApplyFilter();
@@ -381,51 +386,28 @@ public sealed class RoomsViewModel
 
     private async void OnRoomUpdated(RoomUpdatedModel upd)
     {
-        Console.WriteLine($"[RoomsVM] 📥 RoomUpdated RECEIVED! RoomId={upd.RoomId}, Delta={upd.UnreadDelta}");
-
         var list = Rooms.ToList();
         var idx = list.FindIndex(r => r.Id == upd.RoomId);
-        if (idx < 0)
-        {
-            Console.WriteLine($"[RoomsVM] Room {upd.RoomId} not found, ignoring");
-            return;
-        }
+        if (idx < 0) return;
 
         var r = list[idx];
+
+        // ✅ القاعدة الذهبية: هل هذا تحديث لرسالة جديدة فعلاً؟
+        // نعتبرها رسالة جديدة فقط لو الـ ID مختلف وليس فارغاً
+        bool isActuallyNewMessage = upd.MessageId != Guid.Empty && upd.MessageId != r.LastMessageId;
+
         var isActive = _flags.ActiveRoomId == upd.RoomId;
         var currentUnread = _flags.GetUnread(upd.RoomId);
 
         int nextUnread;
+        if (upd.UnreadDelta < 0 || isActive) nextUnread = 0;
+        else nextUnread = currentUnread + upd.UnreadDelta;
 
-        // ✅ مهم جداً: التعامل مع Delta=-1
-        if (upd.UnreadDelta < 0)
-        {
-            // Delta سالب = قراءة الروم
-            nextUnread = 0;
-            Console.WriteLine($"[RoomsVM] 📖 Room marked as read, setting unread=0");
-        }
-        else if (isActive)
-        {
-            // الروم مفتوحة = unread=0
-            nextUnread = 0;
-            Console.WriteLine($"[RoomsVM] Active room, forcing unread=0");
-        }
-        else
-        {
-            // رسالة جديدة
-            nextUnread = currentUnread + upd.UnreadDelta;
-            Console.WriteLine($"[RoomsVM] New message, unread: {currentUnread} + {upd.UnreadDelta} = {nextUnread}");
-        }
-
-        // ✅ تأكد من إنها مش سالبة
         nextUnread = Math.Max(0, nextUnread);
-
-        // ✅ حدث الـ Flags Store
         _flags.SetUnread(upd.RoomId, nextUnread);
-        Console.WriteLine($"[RoomsVM] Unread count for room {upd.RoomId}: {currentUnread} -> {nextUnread}");
 
-        // ✅ تحديث الـ Room في القائمة
-        list[idx] = new RoomListItemModel
+        // تجهيز الموديل المحدث
+        var updatedRoom = new RoomListItemModel
         {
             Id = r.Id,
             Name = r.Name,
@@ -433,13 +415,34 @@ public sealed class RoomsViewModel
             OtherUserId = r.OtherUserId,
             OtherDisplayName = r.OtherDisplayName,
             IsMuted = r.IsMuted,
-            UnreadCount = nextUnread,  // ✅ هنا الأهم!
-            LastMessageAt = upd.CreatedAt != DateTime.MinValue ? upd.CreatedAt : r.LastMessageAt,
-            LastMessagePreview = !string.IsNullOrEmpty(upd.Preview) ? upd.Preview : r.LastMessagePreview,
-            LastMessageId = upd.MessageId != Guid.Empty ? upd.MessageId : r.LastMessageId,
-            LastMessageSenderId = upd.SenderId != Guid.Empty ? upd.SenderId : r.LastMessageSenderId,
-            LastMessageStatus = r.LastMessageStatus
+            UnreadCount = nextUnread,
+            // ✅ فقط لو رسالة جديدة فعلاً نحدر الـ last message data (ده هيمنع البمب الخاطئ)
+            LastMessageAt = isActuallyNewMessage
+        ? (upd.CreatedAt != DateTime.MinValue ? upd.CreatedAt : r.LastMessageAt)
+        : r.LastMessageAt,
+            LastMessagePreview = isActuallyNewMessage
+        ? (!string.IsNullOrEmpty(upd.Preview) ? upd.Preview : r.LastMessagePreview)
+        : r.LastMessagePreview,
+            LastMessageId = isActuallyNewMessage
+        ? (upd.MessageId != Guid.Empty ? upd.MessageId : r.LastMessageId)
+        : r.LastMessageId,
+            LastMessageSenderId = isActuallyNewMessage
+        ? (upd.SenderId != Guid.Empty ? upd.SenderId : r.LastMessageSenderId)
+        : r.LastMessageSenderId,
+            LastMessageStatus = r.LastMessageStatus  // الـ status ممكن يتحدث دايمًا (دليفري/ريد) لو حابب، أو خليه زي ما هو
         };
+
+        if (isActuallyNewMessage)
+        {
+            // ✅ رسالة جديدة: انقلها للأعلى
+            list.RemoveAt(idx);
+            list.Insert(0, updatedRoom);
+        }
+        else
+        {
+            // ✅ مجرد تحديث حالة: حدثها في مكانها الحالي بدون تغيير الترتيب
+            list[idx] = updatedRoom;
+        }
 
         Rooms = list;
         ApplyFilter();
