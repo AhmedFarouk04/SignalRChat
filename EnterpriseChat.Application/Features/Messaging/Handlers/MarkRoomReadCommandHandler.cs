@@ -16,15 +16,18 @@ public sealed class MarkRoomReadCommandHandler
     private readonly IRoomAuthorizationService _auth;
     private readonly IMessageBroadcaster? _broadcaster;
     private readonly IChatRoomRepository _roomRepository;
+    private readonly IMessageReceiptRepository _receiptRepo;
 
     public MarkRoomReadCommandHandler(
-        IMessageRepository messageRepo,
-        IRoomAuthorizationService auth,
-        IUnitOfWork uow,
-        IChatRoomRepository roomRepository,
-        IMessageBroadcaster? broadcaster = null)
+    IMessageRepository messageRepo,
+    IMessageReceiptRepository receiptRepo,     // ✅ ADD
+    IRoomAuthorizationService auth,
+    IUnitOfWork uow,
+    IChatRoomRepository roomRepository,
+    IMessageBroadcaster? broadcaster = null)
     {
         _messageRepo = messageRepo;
+        _receiptRepo = receiptRepo;                // ✅ ADD
         _auth = auth;
         _uow = uow;
         _roomRepository = roomRepository;
@@ -67,40 +70,54 @@ public sealed class MarkRoomReadCommandHandler
 
         if (_broadcaster is not null)
         {
-            // جيب كل أعضاء الروم (بما فيهم الـ sender)
             var room = await _roomRepository.GetByIdWithMembersAsync(command.RoomId, ct);
-            if (room != null)
+            if (room is null) return Unit.Value;
+
+            var allMembers = room.Members.Select(m => m.UserId).ToList();
+
+            var tasks = new List<Task>();
+
+            foreach (var msg in unreadBefore)
             {
-                var allMembers = room.Members.Select(m => m.UserId).ToList();
+                // ✅ Read status للكل (مرّة واحدة لكل رسالة)
+                tasks.Add(_broadcaster.MessageStatusUpdatedAsync(
+                    msg.Id,
+                    command.UserId,                 // اللي قرأ فعلاً
+                    MessageStatus.Read,
+                    allMembers));
 
-                // 1. ابعت MessageReadToAll لكل الرسائل اللي تأثرت
-                // (ده اللي هيخلي الـ sender يحدث الـ blue ticks)
-                foreach (var msg in unreadBefore)
+                // ✅ Stats للـ sender عشان ✓✓ تبقى زرقا عنده
+                tasks.Add(Task.Run(async () =>
                 {
-                    // ابعت لكل الأعضاء (بما فيهم الـ sender)
-                    await _broadcaster.MessageReadToAllAsync(
-                        msg.Id,
-                        msg.SenderId,           // اللي أرسل الرسالة
-                        allMembers);            // كل الأعضاء (بما فيهم الـ sender)
-                }
+                    var stats = await _receiptRepo.GetMessageStatsAsync(msg.Id, ct);
 
-                // 2. RoomUpdated (لتحديث الـ unread count في الـ sidebar)
-                var update = new RoomUpdatedDto
-                {
-                    RoomId = command.RoomId.Value,
-                    MessageId = command.LastMessageId.Value,
-                    SenderId = command.UserId.Value,
-                    Preview = "",
-                    CreatedAt = DateTime.UtcNow,
-                    UnreadDelta = -unreadBefore.Count, // ← الأفضل (مش -1)
-                    RoomName = room.Name,
-                    RoomType = room.Type.ToString()
-                };
-                await _broadcaster.RoomUpdatedAsync(update, allMembers);
-
-                Console.WriteLine($"[MarkRoomRead] Broadcasted MessageReadToAll for {unreadBefore.Count} messages + RoomUpdated to {allMembers.Count} members");
+                    await _broadcaster.MessageReceiptStatsUpdatedAsync(
+                        msg.Id.Value,
+                        msg.SenderId.Value,
+                        stats.TotalRecipients,
+                        stats.DeliveredCount,
+                        stats.ReadCount);
+                }, ct));
             }
+
+            // ✅ تحديث sidebar unread count
+            var update = new RoomUpdatedDto
+            {
+                RoomId = command.RoomId.Value,
+                MessageId = command.LastMessageId.Value,
+                SenderId = command.UserId.Value,
+                Preview = "",
+                CreatedAt = DateTime.UtcNow,
+                UnreadDelta = -unreadBefore.Count,
+                RoomName = room.Name,
+                RoomType = room.Type.ToString()
+            };
+
+            tasks.Add(_broadcaster.RoomUpdatedAsync(update, allMembers));
+
+            await Task.WhenAll(tasks);
         }
+
 
         return Unit.Value;
     }

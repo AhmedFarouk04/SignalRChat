@@ -34,14 +34,10 @@
         import { downloadFileFromStream } from './js/download.js';
         import * as chatInput from './js/chatInput.js';
         import { initNotifySound, playNotify, unlockNotify } from './js/notify.js';
-
-        // ✅ استيراد دوال الردود الجديدة
         import './js/chat-utils.js';
 
-        // تعيين الدوال على window
+        // ✅ تعيين الدوال على window
         window.chatInsertNewline = chatInput.chatInsertNewline || chatInsertNewline;
-
-        // ✅ استخدام الدالة الجديدة
         window.chatFocus = window.focusElement || chatInput.focusEl || chatInput.focus;
 
         window.scrollToBottom = scrollToBottom;
@@ -54,32 +50,31 @@
 
         window.downloadFileFromStream = downloadFileFromStream;
 
-        initNotifySound('/sounds/notify.mp3');
+        // ✅ الأهم: تعيين دوال الصوت على window
+        window.initNotifySound = initNotifySound;
         window.notifyUnlock = unlockNotify;
         window.notifyPlay = playNotify;
 
-        // ✅ تعيين دوال إضافية
-      // ✅ تحسين الوصول للرسالة وجعلها في منتصف الشاشة
-window.scrollToMessage = (id) => {
-    const el = document.getElementById(id);
-    if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-};
+        // ✅ تهيئة الصوت فوراً
+        window.initNotifySound('/sounds/notify.mp3');
 
-// ✅ تنفيذ الوميض باستخدام الكلاس المتفق عليه في الـ CSS
-window.highlightMessage = (id) => {
-    const el = document.getElementById(id);
-    if (el) {
-        // نستخدم نفس الاسم اللي في الـ CSS
-        el.classList.add('highlight-flash'); 
-        
-        // نشيله بعد ثانيتين (مدة الأنميشن)
-        setTimeout(() => {
-            el.classList.remove('highlight-flash');
-        }, 2000);
-    }
-};
+        // ✅ دوال التمرير
+        window.scrollToMessage = (id) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+
+        window.highlightMessage = (id) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('highlight-flash');
+                setTimeout(() => {
+                    el.classList.remove('highlight-flash');
+                }, 2000);
+            }
+        };
     </script>
 </body>
 </html>

@@ -54,30 +54,22 @@ public sealed class ReadMessageCommandHandler : IRequestHandler<ReadMessageComma
         var roomMembers = await _messageRepo.GetRoomMemberIdsAsync(msg.RoomId, ct);
         var stats = await _receiptRepo.GetMessageStatsAsync(command.MessageId, ct);
 
-        // ✅ البث لكل الأعضاء (تصحيح الخطأ)
-        var tasks = new List<Task>();
+        // 1) ابعت تحديث "Read" لكل أعضاء الروم مرة واحدة
+        await _broadcaster.MessageStatusUpdatedAsync(
+            command.MessageId,
+            command.UserId,               // اللي قرأ
+            MessageStatus.Read,
+            roomMembers.ToList());
 
-        foreach (var memberId in roomMembers)
-        {
-            tasks.Add(_broadcaster.MessageStatusUpdatedAsync(
-                command.MessageId,
-                command.UserId,
-                MessageStatus.Read,
-                new List<UserId> { memberId }));  // ✅ حولها لـ List مش array
+        // 2) ابعت receipt stats للـ sender فقط (هو اللي بيشوف ✓✓)
+        await _broadcaster.MessageReceiptStatsUpdatedAsync(
+            command.MessageId.Value,
+            msg.SenderId.Value,           // ✅ sender
+            stats.TotalRecipients,
+            stats.DeliveredCount,
+            stats.ReadCount);
 
-            // لو العضو ده هو الـ sender، ابعتله إحصائية كاملة
-            if (memberId == msg.SenderId)
-            {
-                tasks.Add(_broadcaster.MessageReceiptStatsUpdatedAsync(
-                    command.MessageId.Value,
-                    memberId.Value,
-                    stats.TotalRecipients,
-                    stats.DeliveredCount,
-                    stats.ReadCount));
-            }
-        }
-
-        await Task.WhenAll(tasks);
         return Unit.Value;
+
     }
 }

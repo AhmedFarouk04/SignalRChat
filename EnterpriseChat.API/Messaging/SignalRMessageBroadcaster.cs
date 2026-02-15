@@ -39,16 +39,16 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
 
     public async Task MessageReceiptStatsUpdatedAsync(
-    Guid messageId,
-    Guid targetUserId,
-    int totalRecipients,
-    int deliveredCount,
-    int readCount)
+      Guid messageId,
+      Guid roomId,  // ← جديد: roomId بدل targetUserId
+      int totalRecipients,
+      int deliveredCount,
+      int readCount)
     {
-        await _hub.Clients.User(targetUserId.ToString())
+        // ابعت للـ group بتاع الـ room (موثوق 100%)
+        await _hub.Clients.Group(roomId.ToString())
             .SendAsync("MessageReceiptStatsUpdated", messageId, totalRecipients, deliveredCount, readCount);
     }
-
     // عدل الطرق الحالية لترسل لكل الأعضاء
     public async Task MessageDeliveredAsync(
         MessageId messageId,

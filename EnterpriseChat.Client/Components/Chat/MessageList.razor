@@ -13,9 +13,10 @@
 
         @{
             var originalMessages = Messages
-                .Where(m => !m.ReplyToMessageId.HasValue)
-                .OrderBy(m => m.CreatedAt)
-                .ToList();
+            .Where(m => !m.ReplyToMessageId.HasValue)
+            .DistinctBy(m => m.Id)
+            .OrderBy(m => m.CreatedAt)
+            .ToList();
         }
 
         @for (int i = 0; i < originalMessages.Count; i++)
@@ -29,12 +30,12 @@
 
             if (prev is null || prevDate != currDate)
             {
-                <div class="date-sep" @key="@($"date-{currDate}")">@FormatDateLabel(currDate)</div>
+                <div class="date-sep" @key="@($"date-{currDate:yyyyMMdd}")">@FormatDateLabel(currDate)</div>
             }
 
             @if (IsSystemMessage(msg))
             {
-                <div class="system-message-container" @key="@($"system-{msg.Id}")">
+                <div class="system-message-container" @key="@($"sys-{msg.Id}")">
                     <div class="system-content">
                         <span class="system-text">@FormatSystemMessage(msg.Content)</span>
                     </div>
@@ -45,15 +46,16 @@
                 var samePrev = IsSameGroup(prev, msg);
                 var sameNext = IsSameGroup(msg, next);
                 var pos = (!samePrev && !sameNext) ? "single" :
-                         (!samePrev && sameNext) ? "start" :
-                         (samePrev && sameNext) ? "mid" : "end";
+                (!samePrev && sameNext) ? "start" :
+                (samePrev && sameNext) ? "mid" : "end";
 
-                <MessageBubble @key="@($"msg-{msg.Id}")"
+                @* ✅ استخدام Fixed @key عشان منع إعادة الإنشاء *@
+                <MessageBubble @key="@msg.Id"
                                Message="@msg"
                                CurrentUserId="@CurrentUserId"
                                GroupMembers="@GroupMembers"
                                GroupPosition="@pos"
-                               IsNew="@newIds.Contains(msg.Id)"
+                               IsNew="@(newIds.Contains(msg.Id) && !_processedNewMessages.Contains(msg.Id))"
                                ShowMeta="true"
                                OnRetry="@OnRetry"
                                OnReaction="@OnReaction"
@@ -67,12 +69,14 @@
 
                 @foreach (var reply in GetRepliesForMessage(msg.Id))
                 {
+                    @* ✅ نفس الشي للردود *@
                     <div class="reply-container" @key="@($"reply-{reply.Id}")" data-parent="@msg.Id">
-                        <MessageBubble Message="@reply"
+                        <MessageBubble @key="@reply.Id"
+                                       Message="@reply"
                                        CurrentUserId="@CurrentUserId"
                                        GroupMembers="@GroupMembers"
                                        GroupPosition="single"
-                                       IsNew="@newIds.Contains(reply.Id)"
+                                       IsNew="@(newIds.Contains(reply.Id) && !_processedNewMessages.Contains(reply.Id))"
                                        ShowMeta="true"
                                        OnRetry="@OnRetry"
                                        OnReaction="@OnReaction"
@@ -117,13 +121,16 @@
     private bool isAtBottom = true;
     private bool showNewDivider;
     private readonly HashSet<Guid> newIds = new();
+    private readonly HashSet<Guid> _processedNewMessages = new(); // ✅ متتبع الرسائل الجديدة المعالجة
+    private string _lastMessagesHash = string.Empty;
+    private bool _isCheckingBottom = false;
 
     private bool IsSystemMessage(MessageModel msg)
     {
         if (msg == null) return false;
         if (msg.IsSystem || msg.Type == "System") return true;
         if (string.IsNullOrEmpty(msg.Content)) return false;
-        
+
         var lower = msg.Content.ToLower();
         return lower.Contains("created the group") ||
                lower.Contains("was added by") ||
@@ -161,26 +168,92 @@
         return date.ToString("MMM dd, yyyy").ToUpper();
     }
 
+    // ✅ تحسين: منع إعادة الرسم غير الضرورية (بدون async)
+    protected override bool ShouldRender()
+    {
+        // حساب Hash للرسائل الحالية
+        var currentHash = string.Join("|", Messages.Select(m => $"{m.Id}:{m.Content?.Length}:{m.PersonalStatus}:{m.ReadCount}:{m.DeliveredCount}"));
+
+        if (_lastMessagesHash == currentHash)
+        {
+            return false;
+        }
+
+        _lastMessagesHash = currentHash;
+        return true;
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (Messages.Count == 0) { lastMessageCount = 0; return; }
-
-        if (Messages.Count > lastMessageCount)
+        if (Messages.Count == 0)
         {
-            if (AutoScroll && isAtBottom)
+            lastMessageCount = 0;
+            return;
+        }
+
+        // ✅ منع إعادة المعالجة إذا كان العدد نفسه
+        if (Messages.Count <= lastMessageCount)
+        {
+            return;
+        }
+
+        // ✅ التحقق من isAtBottom بشكل غير متزامن
+        var atBottom = await CheckIfAtBottom();
+
+        if (AutoScroll && atBottom)
+        {
+            try
             {
-                try { await Scroll.ScrollToBottomAsync(listRef); } catch { }
+                await Scroll.ScrollToBottomAsync(listRef);
+
+                // تنظيف الـ new messages
                 showNewDivider = false;
                 newIds.Clear();
-                await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+                _processedNewMessages.Clear();
+
+                if (Messages.Count > 0)
+                {
+                    await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+                }
             }
-            else
+            catch { }
+        }
+        else
+        {
+            // إضافة الرسائل الجديدة فقط
+            for (int i = lastMessageCount; i < Messages.Count; i++)
             {
-                for (int i = lastMessageCount; i < Messages.Count; i++)
-                    newIds.Add(Messages[i].Id);
-                showNewDivider = true;
+                var newMsg = Messages[i];
+                newIds.Add(newMsg.Id);
+
+                // ✅ لو الرسالة مش جديدة (قدام), نضيفها للمعالجة عشان متظهرش كـ New
+                if (newMsg.CreatedAt < DateTime.UtcNow.AddSeconds(-30))
+                {
+                    _processedNewMessages.Add(newMsg.Id);
+                }
             }
-            lastMessageCount = Messages.Count;
+            showNewDivider = newIds.Count > 0;
+        }
+
+        lastMessageCount = Messages.Count;
+    }
+
+    private async Task<bool> CheckIfAtBottom()
+    {
+        if (_isCheckingBottom) return isAtBottom;
+
+        try
+        {
+            _isCheckingBottom = true;
+            return await Scroll.IsAtBottomAsync(listRef);
+        }
+        catch
+        {
+            return true;
+        }
+        finally
+        {
+            _isCheckingBottom = false;
         }
     }
 
@@ -199,8 +272,15 @@
 
         if (!isAtBottom) return;
 
-        showNewDivider = false;
-        newIds.Clear();
+        // ✅ تنظيف الـ new messages عند الوصول للأسفل
+        if (showNewDivider || newIds.Count > 0)
+        {
+            showNewDivider = false;
+            newIds.Clear();
+            _processedNewMessages.Clear();
+            await InvokeAsync(StateHasChanged);
+        }
+
         if (Messages.Count == 0) return;
 
         var lastId = Messages[^1].Id;
@@ -214,9 +294,16 @@
     {
         await Scroll.ScrollToBottomSmoothAsync(listRef);
         isAtBottom = true;
+
+        // ✅ تنظيف الـ new messages
         showNewDivider = false;
         newIds.Clear();
-        if (Messages.Count > 0) await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+        _processedNewMessages.Clear();
+
+        if (Messages.Count > 0)
+        {
+            await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+        }
     }
 
     public async Task ForceRefreshAsync()

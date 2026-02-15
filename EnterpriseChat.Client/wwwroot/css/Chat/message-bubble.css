@@ -806,3 +806,17 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     margin-left: 3px;
     vertical-align: super;
 }
+/* تحسين شكل الميتا في الجروبات */
+.message-status-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.read-count {
+    font-size: 9px; /* صغر الحجم شوية */
+    font-weight: 700;
+    line-height: 1;
+    /* بدل super استخدم transform لو محتاج رفعة بسيطة */
+    transform: translateY(-1px);
+}

@@ -113,7 +113,12 @@ builder.Services.AddSignalR(options =>
     options.Configuration.SyncTimeout = 5000;
     options.Configuration.DefaultDatabase = 0;
 });
+builder.Services.AddSignalR()
+    .AddHubOptions<ChatHub>(options =>
+    {
+    });
 
+builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
 builder.Services.AddScoped<IUserPresenceNotifier, SignalRUserPresenceNotifier>();
 

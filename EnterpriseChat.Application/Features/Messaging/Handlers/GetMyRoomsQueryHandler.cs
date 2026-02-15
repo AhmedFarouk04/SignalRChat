@@ -178,15 +178,24 @@ public sealed class GetMyRoomsQueryHandler
 
         return result;
     }
-    private static MessageStatus ComputeGroupStatus(int total, int delivered, int read)
+    private static MessageStatus ComputeGroupStatus(int totalRecipients, int deliveredCount, int readCount)
     {
-        if (total <= 0) return MessageStatus.Sent;
-        if (read >= total) return MessageStatus.Read;
+        if (totalRecipients <= 0)
+            return MessageStatus.Sent;
 
-        var half = (int)Math.Ceiling(total / 2.0);
-        if (delivered >= half) return MessageStatus.Delivered;
+        // ✅ All read => blue double check
+        if (readCount >= totalRecipients)
+            return MessageStatus.Read;
 
+        // ✅ Half or more read => white double check
+        // "نص" = ceil(total/2)
+        var halfOrMore = (int)Math.Ceiling(totalRecipients / 2.0);
+        if (readCount >= halfOrMore)
+            return MessageStatus.Delivered;
+
+        // ✅ Less than half read => single check
         return MessageStatus.Sent;
     }
+
 
 }

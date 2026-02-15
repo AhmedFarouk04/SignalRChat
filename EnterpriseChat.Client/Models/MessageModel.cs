@@ -6,7 +6,19 @@ namespace EnterpriseChat.Client.Models;
 public class MessageModel : INotifyPropertyChanged
 {
     private Guid _id;
-    public MessageStatus PersonalStatus { get; set; } = MessageStatus.Sent;  // default Sent
+    private MessageStatus _personalStatus = MessageStatus.Sent;
+    public MessageStatus PersonalStatus
+    {
+        get => _personalStatus;
+        set
+        {
+            if (_personalStatus != value)
+            {
+                _personalStatus = value;
+                OnPropertyChanged(); // دي اللي بتخلي الأيقونة تنور أزرق أو تظهر صحين فوراً
+            }
+        }
+    }
     public Guid Id
     {
         get => _id;

@@ -54,6 +54,8 @@ public sealed class RoomsViewModel
         _rt.MessageRead += OnMessageRead;
         _rt.MessageDeliveredToAll += OnMessageDeliveredToAll;
         _rt.MessageReadToAll += OnMessageReadToAll;
+        _rt.MessageReceiptStatsUpdated += OnMessageReceiptStatsUpdated;
+
 
     }
     private void OnRemovedFromRoom(Guid roomId)
@@ -70,6 +72,43 @@ public sealed class RoomsViewModel
 
         _toasts.Info("Removed", "You were removed from a room.");
     }
+    private void OnMessageReceiptStatsUpdated(Guid messageId, int total, int delivered, int read)
+    {
+        var list = Rooms.ToList();
+        var idx = list.FindIndex(r => r.LastMessageId == messageId);
+        if (idx < 0) return;
+
+        var room = list[idx];
+
+        // ✅ meaningful بس لو آخر رسالة مني
+        if (room.LastMessageSenderId != _cachedUserId) return;
+
+        var st =
+            (read >= total && total > 0) ? MessageStatus.Read :
+            (delivered >= 1) ? MessageStatus.Delivered :
+            MessageStatus.Sent;
+
+        list[idx] = new RoomListItemModel
+        {
+            Id = room.Id,
+            Name = room.Name,
+            Type = room.Type,
+            OtherUserId = room.OtherUserId,
+            OtherDisplayName = room.OtherDisplayName,
+            IsMuted = room.IsMuted,
+            UnreadCount = room.UnreadCount,
+            LastMessageAt = room.LastMessageAt,
+            LastMessagePreview = room.LastMessagePreview,
+            LastMessageId = room.LastMessageId,
+            LastMessageSenderId = room.LastMessageSenderId,
+            LastMessageStatus = st
+        };
+
+        Rooms = list;
+        ApplyFilter();
+        NotifyChanged();
+    }
+
     private void OnMemberRemovedRealtime(Guid roomId, Guid userId)
     {
         _toasts.Info("Member removed", "A member was removed from the group");
@@ -226,11 +265,14 @@ public sealed class RoomsViewModel
             // احذف الـ try { await _rt.ConnectAsync(); } catch { }
 
             var userId = await _currentUser.GetUserIdAsync();
-            if (userId.HasValue)
-            {
-                _cachedUserId = userId.Value;
-                _userIdCached = true;
-            }
+            if (!userId.HasValue)
+                return;
+
+            _cachedUserId = userId.Value;
+
+            // ✅ ADD THIS
+            CurrentUserId = userId.Value;
+
             ApplyFilter();
         }
         catch

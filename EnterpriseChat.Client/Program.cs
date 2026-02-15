@@ -1,4 +1,4 @@
-using EnterpriseChat.Client;
+﻿using EnterpriseChat.Client;
 using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Authentication.Services;
 using EnterpriseChat.Client.Services.Attachments;
@@ -64,7 +64,10 @@ builder.Services.AddScoped<NotificationSoundService>();
 builder.Services.AddScoped<EnterpriseChat.Client.Models.ReplyContext>();
 builder.Services.AddScoped<ReactionsApi>();
 builder.Services.AddScoped<MenuStateService>();
+builder.Services.AddScoped<NotificationSoundService>();
+builder.Services.AddScoped<NotificationManager>();
 
+// ✅ تأكد إن ICurrentUser مسجل كـ Scoped
 builder.Logging.SetMinimumLevel(LogLevel.Debug);
 builder.Logging.AddFilter("Microsoft.AspNetCore.Components.WebAssembly.Rendering", LogLevel.Debug);
 builder.Logging.AddFilter("Microsoft.AspNetCore.Components", LogLevel.Debug);

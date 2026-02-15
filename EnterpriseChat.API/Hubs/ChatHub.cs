@@ -41,6 +41,8 @@ public sealed class ChatHub : Hub
         _blockRepository = blockRepository;
     }
 
+    // ✅ ChatHub.cs - الجزء المُصلح من OnConnectedAsync
+
     public override async Task OnConnectedAsync()
     {
         var userId = GetUserId();
@@ -48,11 +50,45 @@ public sealed class ChatHub : Hub
 
         await _presence.UserConnectedAsync(userId, connectionId);
 
-        // ✅ لما المستلم يتصل، نعمل Deliver لكل الرسائل غير المسلمة في كل روماته
-       
+        // ✅ الحل: خلي المستخدم ينضم لكل "روماته" في SignalR أول ما يفتح
+        try
+        {
+            var rooms = await _roomRepository.GetForUserAsync(userId, CancellationToken.None);
+            foreach (var room in rooms)
+            {
+                await Groups.AddToGroupAsync(connectionId, room.Id.ToString());
+                Console.WriteLine($"[ChatHub] User {userId} joined room {room.Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ChatHub] Error joining rooms: {ex.Message}");
+        }
+
+        // ✅ Auto-deliver غير المُسلَّمة (اختياري - لو محتاجه)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // هنا ممكن تضيف Logic لتسليم الرسائل القديمة غير المُسلَّمة
+                await Task.Delay(1000); // انتظر ثانية عشان الـ connection يستقر
+
+                // مثال: جلب الرسائل غير المُسلَّمة
+                // var undelivered = await _messageRepository.GetUndeliveredForUserAsync(userId);
+                // foreach (var msg in undelivered)
+                // {
+                //     await _mediator.Send(new DeliverMessageCommand(msg.Id, userId));
+                // }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ChatHub] Auto-deliver error: {ex.Message}");
+            }
+        });
 
         await base.OnConnectedAsync();
     }
+
     public async Task HandleBlockUpdate(Guid blockerId, Guid blockedId, bool isBlocked)
     {
         if (isBlocked)
@@ -268,9 +304,20 @@ public sealed class ChatHub : Hub
             TotalRecipients = result.TotalRecipients
         };
 
-        //// ✅ ابعت MessageDto مش Object
-        //await Clients.Group(request.RoomId.ToString())
-        //    .SendAsync("MessageReceived", messageDto);
+        // 🔥 فك التعليق عن السطر ده!
+        await Clients.Group(request.RoomId.ToString())
+        .SendAsync("MessageReceived", messageDto);
+
+        // 2. ابعت مباشرة لكل عضو (Fallback)
+        var room = await _roomRepository.GetByIdWithMembersAsync(new RoomId(request.RoomId));
+        if (room != null)
+        {
+            foreach (var member in room.Members)
+            {
+                await Clients.User(member.UserId.Value.ToString())
+                    .SendAsync("MessageReceived", messageDto);
+            }
+        }
     }
     private UserId GetUserId()
 {

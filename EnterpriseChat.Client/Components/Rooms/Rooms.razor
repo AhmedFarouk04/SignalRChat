@@ -1,5 +1,6 @@
 ﻿@page "/rooms"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using EnterpriseChat.Client.Authentication.Abstractions
 @using EnterpriseChat.Client.Services.Ui
 @using EnterpriseChat.Client.ViewModels
 @using EnterpriseChat.Client.Services.Realtime
@@ -7,6 +8,8 @@
 @inject IChatRealtimeClient Realtime
 @inject NavigationManager Nav
 @implements IAsyncDisposable
+@inject NotificationManager NotificationManager
+@inject ICurrentUser CurrentUser
 @inject RoomFlagsStore Flags
 
 
@@ -116,7 +119,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        VM.Changed += OnVmChanged;
+        var userId = await CurrentUser.GetUserIdAsync();
+        NotificationManager.SetCurrentPage("rooms", null, userId); VM.Changed += OnVmChanged;
         SubscribeRealtime();
 
         // 1️⃣ ابدأ الاتصال وتحميل البيانات بالتوازي
@@ -305,6 +309,7 @@
     {
         VM.Changed -= OnVmChanged;
         UnsubscribeRealtime();
+        NotificationManager.SetCurrentPage("unknown", null, Guid.Empty);
 
         _searchCts?.Cancel();
         _searchCts?.Dispose();
