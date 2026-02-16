@@ -259,19 +259,23 @@ public sealed class RoomsViewModel
         try
         {
             Rooms = await _roomService.GetRoomsAsync();
+
+            // ✅ لو الـ API مش بترجع LastSeen، جرب تملأها من حتة تانية
             foreach (var r in Rooms)
+            {
                 _flags.SetUnread(r.Id, r.UnreadCount);
 
-            // احذف الـ try { await _rt.ConnectAsync(); } catch { }
-
-            var userId = await _currentUser.GetUserIdAsync();
-            if (!userId.HasValue)
-                return;
-
-            _cachedUserId = userId.Value;
-
-            // ✅ ADD THIS
-            CurrentUserId = userId.Value;
+                // لو الـ room private وحاول تجيب آخر ظهور من الـ realtime
+                if (r.Type == "Private" && r.OtherUserId.HasValue)
+                {
+                    try
+                    {
+                        // ممكن تجيب آخر ظهور من الـ realtime هنا
+                        // r.LastSeenAt = ... 
+                    }
+                    catch { }
+                }
+            }
 
             ApplyFilter();
         }

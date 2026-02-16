@@ -43,12 +43,19 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // CORS
+// CORS
 builder.Services.AddCors(opt =>
 {
     opt.AddPolicy("client", p =>
-        p.AllowAnyHeader()
+        p.WithOrigins(
+            "https://localhost:7080",  // URL الـ Client
+            "http://localhost:7080",
+            "https://localhost:7188",   // API نفسها (للتجربة)
+            "http://localhost:5055"     // HTTP version
+          )
+         .AllowAnyHeader()
          .AllowAnyMethod()
-         .SetIsOriginAllowed(_ => true)); // بدون AllowCredentials
+         .AllowCredentials()); // ✅ مهم جداً للـ SignalR
 });
 
 
@@ -112,12 +119,9 @@ builder.Services.AddSignalR(options =>
     options.Configuration.ConnectTimeout = 5000;
     options.Configuration.SyncTimeout = 5000;
     options.Configuration.DefaultDatabase = 0;
-});
-builder.Services.AddSignalR()
-    .AddHubOptions<ChatHub>(options =>
-    {
-    });
+}).AddHubOptions<ChatHub>(options => { });
 
+builder.Services.AddHostedService<PresenceCleanupService>();
 builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
 builder.Services.AddScoped<IUserPresenceNotifier, SignalRUserPresenceNotifier>();

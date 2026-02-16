@@ -9,6 +9,6 @@ public interface IRoomPresenceService
 
     Task<int> GetOnlineCountAsync(RoomId roomId);
     Task<IReadOnlyCollection<UserId>> GetOnlineUsersAsync(RoomId roomId);
-
+    Task<bool> IsUserInRoomAsync(RoomId roomId, UserId userId);
     Task<IReadOnlyCollection<RoomId>> RemoveUserFromAllRoomsAsync(UserId userId);
 }

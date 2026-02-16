@@ -1,5 +1,10 @@
 ﻿@using EnterpriseChat.Client.Models
 @using EnterpriseChat.Client.ViewModels
+@using EnterpriseChat.Client.Services.Realtime
+@using EnterpriseChat.Client.Authentication.Abstractions
+@inject IChatRealtimeClient Realtime
+@inject ICurrentUser CurrentUser
+@implements IDisposable
 
 <div class="topbar">
     @if (VM?.IsSearching == true)
@@ -47,10 +52,22 @@
                             }
                             else if (OtherUser.LastSeen != null)
                             {
-                                <span>Last seen @OtherUser.LastSeen.Value.ToLocalTime().ToShortTimeString()</span>
+                                var lastSeen = OtherUser.LastSeen.Value.ToLocalTime();
+                                var today = DateTime.Today;
+                                var yesterday = today.AddDays(-1);
+                                string lastSeenText;
+                                if (lastSeen.Date == today)
+                                    lastSeenText = $"Today at {lastSeen:t}";
+                                else if (lastSeen.Date == yesterday)
+                                    lastSeenText = $"Yesterday at {lastSeen:t}";
+                                else
+                                    lastSeenText = lastSeen.ToString("MMM dd, yyyy 'at' h:mm tt");
+                                <span class="dot offline"></span>
+                                <span>Last seen @lastSeenText</span>
                             }
                             else
                             {
+                                <span class="dot offline"></span>
                                 <span>Offline</span>
                             }
                         }
@@ -63,7 +80,6 @@
                     </div>
                 </div>
                 <div class="room-actions">
-                    <!-- زر البحث الجديد -->
                     <button class="icon-btn" title="Search" @onclick="() => VM.IsSearching = true">🔍</button>
                     @if (!IsPrivate)
                     {
@@ -118,39 +134,101 @@
     [Parameter] public EventCallback OnMuteToggle { get; set; }
     [Parameter] public EventCallback OnBlock { get; set; }
     [Parameter] public EventCallback OnMembers { get; set; }
-    [Parameter] public bool IsBlockedByMe { get; set; }   // ← التغيير الرئيسي هنا
+    [Parameter] public bool IsBlockedByMe { get; set; }
     [Parameter] public EventCallback OnUnblock { get; set; }
 
     private bool IsPrivate => Room?.Type == "Private";
     private string Title => IsPrivate ? Room?.OtherDisplayName ?? "Private Chat" : Room?.Name ?? "Group";
-
     private int _displayIndex = 0;
+    private Guid _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await CurrentUser.GetUserIdAsync();
+        _currentUserId = userId ?? Guid.Empty;
+
+        Realtime.UserOnline += OnUserOnline;
+        Realtime.UserOffline += OnUserOffline;
+        Realtime.UserLastSeenUpdated += OnUserLastSeenUpdated;
+        Realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
+    }
+
+    private void OnUserOnline(Guid userId)
+    {
+        if (OtherUser?.Id == userId)
+        {
+            OtherUser.IsOnline = true;
+            OtherUser.LastSeen = null;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnUserOffline(Guid userId)
+    {
+        if (OtherUser?.Id == userId)
+        {
+            OtherUser.IsOnline = false;
+            OtherUser.LastSeen = DateTime.UtcNow;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnUserLastSeenUpdated(Guid userId, DateTime lastSeen)
+    {
+        if (OtherUser?.Id == userId)
+        {
+            OtherUser.IsOnline = false;
+            OtherUser.LastSeen = lastSeen;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnRoomPresenceUpdated(Guid roomId, int count)
+    {
+        if (Room?.Id == roomId && !IsPrivate)
+        {
+            OnlineCount = count; // تحديث القيمة
+            InvokeAsync(StateHasChanged); // إعادة الرسم
+            Console.WriteLine($"[TopBar] Updated online count for room {roomId}: {count}");
+        }
+    }
 
     private MessageModel GetCurrentPinned()
     {
+        if (VM?.PinnedMessages == null || !VM.PinnedMessages.Any())
+            return null;
         if (_displayIndex >= VM.PinnedMessages.Count) _displayIndex = 0;
         return VM.PinnedMessages[_displayIndex];
     }
 
     private void RotatePinnedMessages()
     {
+        if (VM?.PinnedMessages == null || !VM.PinnedMessages.Any()) return;
         if (VM.PinnedMessages.Count <= 1)
         {
             OnScrollToMessage.InvokeAsync(VM.PinnedMessages[0].Id);
             return;
         }
         _displayIndex++;
-        if (_displayIndex >= VM.PinnedMessages.Count)
-        {
-            _displayIndex = 0;
-        }
+        if (_displayIndex >= VM.PinnedMessages.Count) _displayIndex = 0;
         StateHasChanged();
     }
 
     private async Task OnSearchResultClick(Guid messageId)
     {
-        VM.IsSearching = false;
-        await Task.Delay(100);
-        await OnScrollToMessage.InvokeAsync(messageId);
+        if (VM != null)
+        {
+            VM.IsSearching = false;
+            await Task.Delay(100);
+            await OnScrollToMessage.InvokeAsync(messageId);
+        }
+    }
+
+    public void Dispose()
+    {
+        Realtime.UserOnline -= OnUserOnline;
+        Realtime.UserOffline -= OnUserOffline;
+        Realtime.UserLastSeenUpdated -= OnUserLastSeenUpdated;
+        Realtime.RoomPresenceUpdated -= OnRoomPresenceUpdated;
     }
 }

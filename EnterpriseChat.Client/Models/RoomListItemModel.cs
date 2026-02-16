@@ -11,6 +11,7 @@ public sealed class RoomListItemModel
     public Guid? OtherUserId { get; init; }
     public string? OtherDisplayName { get; init; }
 
+    public DateTime? LastSeenAt { get; set; }
     // ✅ realtime fields (mutable)
     public int UnreadCount { get; set; }
     public bool IsMuted { get; set; }

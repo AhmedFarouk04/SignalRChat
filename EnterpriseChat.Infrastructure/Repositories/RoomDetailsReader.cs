@@ -20,6 +20,7 @@ public sealed class RoomDetailsReader : IRoomDetailsReader
         var room = await _context.ChatRooms
             .AsNoTracking()
             .Include(r => r.Members)
+            .AsSplitQuery() // ✅ أضف هنا
             .FirstOrDefaultAsync(r => r.Id == roomId, ct);
 
         if (room is null) return null;

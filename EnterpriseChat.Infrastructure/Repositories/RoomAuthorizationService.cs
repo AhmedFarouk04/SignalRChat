@@ -20,6 +20,7 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
         var room = await _context.ChatRooms
             .AsNoTracking()
             .Include(r => r.Members)
+            .AsSplitQuery() // ✅ أضف هنا
             .FirstOrDefaultAsync(r => r.Id == roomId.Value, ct);
 
         if (room is null)
@@ -35,6 +36,7 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
         var room = await _context.ChatRooms
             .AsNoTracking()
             .Include(r => r.Members)
+            .AsSplitQuery() // ✅ أضف هنا
             .FirstOrDefaultAsync(r => r.Id == roomId.Value, ct);
 
         if (room is null)
@@ -53,7 +55,9 @@ public sealed class RoomAuthorizationService : IRoomAuthorizationService
         var room = await _context.ChatRooms
             .AsNoTracking()
             .Include(r => r.Members)
-           .FirstOrDefaultAsync(r => r.Id == roomId.Value, ct);
+            .AsSplitQuery() // ✅ أضف هنا
+            .FirstOrDefaultAsync(r => r.Id == roomId.Value, ct);
+
         if (room is null)
             throw new InvalidOperationException("Room not found.");
 

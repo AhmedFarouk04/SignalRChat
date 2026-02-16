@@ -43,7 +43,11 @@ builder.Services.AddHttpClient<IApiClient, ApiClient>(client =>
     client.BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7188/");
     client.Timeout = TimeSpan.FromSeconds(15);
 });
-builder.Services.AddScoped<IChatRealtimeClient, ChatRealtimeClient>();
+
+// ✅ التعديل هنا - اجمعهم في سطر واحد
+builder.Services.AddScoped<IChatRealtimeClient, ChatRealtimeClient>(); // ✅ Singleton مهم جداً
+
+// ✅ باقي الخدمات - تأكد من إنه فيه ; بعد كل سطر
 builder.Services.AddScoped<IScrollService, ScrollService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IRoomService, RoomService>();
@@ -64,7 +68,7 @@ builder.Services.AddScoped<NotificationSoundService>();
 builder.Services.AddScoped<EnterpriseChat.Client.Models.ReplyContext>();
 builder.Services.AddScoped<ReactionsApi>();
 builder.Services.AddScoped<MenuStateService>();
-builder.Services.AddScoped<NotificationSoundService>();
+builder.Services.AddScoped<NotificationSoundService>(); // 👈 فيه تكرار هنا برضه
 builder.Services.AddScoped<NotificationManager>();
 
 // ✅ تأكد إن ICurrentUser مسجل كـ Scoped

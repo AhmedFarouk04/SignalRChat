@@ -13,12 +13,16 @@
         }
         else
         {
-            <div class="room-avatar private" aria-label="Private chat">
+            <div class="room-avatar private" aria-label="Private chat" style="position: relative; overflow: visible;">
                 <span class="avatar-text">@GetAvatarText()</span>
 
                 @if (IsOnline == true)
                 {
                     <span class="online-dot" title="Online" aria-label="Online"></span>
+                }
+                else if (!string.IsNullOrEmpty(LastSeenText))
+                {
+                    <span class="last-seen-dot" title="@LastSeenText" aria-label="Last seen">⏱️</span>
                 }
             </div>
         }
@@ -87,9 +91,19 @@
     [Parameter] public string? LastSeenText { get; set; }
     [Parameter] public bool IsTyping { get; set; }
     [Parameter] public Guid CurrentUserId { get; set; }
-
     private bool IsMyLastMessage => Room.LastMessageSenderId == CurrentUserId;
+    protected override void OnParametersSet()
+    {
+        Console.WriteLine($"[RoomListItem] Room: {Room.Name}, Type: {Room.Type}, OtherUserId: {Room.OtherUserId}");
+        Console.WriteLine($"[RoomListItem] IsOnline: {IsOnline}, LastSeenText: {LastSeenText}");
 
+        if (Room.Type == "Private" && IsOnline == true)
+        {
+            Console.WriteLine($"[RoomListItem] ⚠️ Should show green dot for {Room.Name}");
+        }
+
+        base.OnParametersSet();
+    }
     private static string GetStatusClass(MessageStatus status) => status switch
     {
         MessageStatus.Pending => "pending",
@@ -144,4 +158,5 @@
         if (text.Length <= max) return text;
         return text.Substring(0, max - 1) + "…";
     }
+   
 }

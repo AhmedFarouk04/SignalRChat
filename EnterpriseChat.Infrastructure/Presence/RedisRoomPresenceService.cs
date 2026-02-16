@@ -15,15 +15,20 @@ public sealed class RedisRoomPresenceService : IRoomPresenceService
     {
         _db = redis.GetDatabase();
     }
-
+    public async Task<bool> IsUserInRoomAsync(RoomId roomId, UserId userId)
+    {
+        return await _db.SetContainsAsync(RoomUsersKey(roomId.Value), userId.Value.ToString());
+    }
     private static string RoomUsersKey(Guid roomId) => $"{RoomPrefix}{roomId}:users";
     private static string UserRoomsKey(Guid userId) => $"{UserPrefix}{userId}:rooms";
 
     public async Task JoinRoomAsync(RoomId roomId, UserId userId)
     {
         await _db.SetAddAsync(RoomUsersKey(roomId.Value), userId.Value.ToString());
-
         await _db.SetAddAsync(UserRoomsKey(userId.Value), roomId.Value.ToString());
+
+        // ✅ إضافة TTL للغرفة (اختياري)
+        await _db.KeyExpireAsync(RoomUsersKey(roomId.Value), TimeSpan.FromHours(1));
     }
 
     public async Task LeaveRoomAsync(RoomId roomId, UserId userId)

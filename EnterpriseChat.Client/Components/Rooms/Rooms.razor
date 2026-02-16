@@ -12,8 +12,6 @@
 @inject ICurrentUser CurrentUser
 @inject RoomFlagsStore Flags
 
-
-
 @implements IDisposable
 
 <div class="rooms-page">
@@ -88,16 +86,12 @@
                 <RoomListItem @key="room.Id"
                               Room="room"
                               CurrentUserId="VM.CurrentUserId"
-                              IsOnline="@(IsBlockedPrivate(room) ? (bool?)null :
-                                                                 (room.Type == "Private" && room.OtherUserId != null
-                                                                     && _onlineMap.TryGetValue(room.OtherUserId.Value, out var on)
-                                                                         ? on
-                                                                         : (bool?)null))"
-                      LastSeenText="@(IsBlockedPrivate(room) ? null : GetLastSeenText(room))"
-                      IsTyping="@(IsBlockedPrivate(room) ? false :
-                                                         (room.Type == "Private" && room.OtherUserId != null
-                                                             && _typingMap.Contains(room.OtherUserId.Value)))" />
-
+                              IsOnline="@(IsRoomBlocked(room) ? (bool?)null :
+                                                                                     (room.Type == "Private" && room.OtherUserId != null
+                                                                                         ? IsUserOnline(room.OtherUserId.Value)
+                                                                                         : (bool?)null))"
+                      LastSeenText="@(IsRoomBlocked(room) ? null : GetLastSeenText(room.OtherUserId))"
+                      IsTyping="@(IsRoomBlocked(room) ? false : IsTyping(room.OtherUserId))" />
                 }
         </ul>
     }
@@ -105,53 +99,286 @@
 
 @code {
     private CancellationTokenSource? _searchCts;
-
-    // presence state
-    private readonly Dictionary<Guid, bool> _onlineMap = new();
+    private readonly Dictionary<Guid, bool> _onlineStatus = new();
     private readonly Dictionary<Guid, DateTime> _lastSeenMap = new();
-
-    // typing in rooms list:
-    // NOTE: Rooms page مش بتنضم لكل الرومات، فغالبًا مش هيوصل typing events.
-    // هنسيبها جاهزة، ولما تعمل JoinRoomsList() في السيرفر هتشتغل تلقائيًا.
-    private readonly HashSet<Guid> _typingMap = new();
-
+    private readonly HashSet<Guid> _typingUsers = new();
     private bool _realtimeSubscribed;
+    private Timer? _presenceRefreshTimer;
+    private bool _isDisposed = false;
 
+    // ✅ متغيرات للـ Cache لتقليل الاستعلامات
+    private DateTime? _lastOnlineUsersRefresh;
+    private List<Guid>? _cachedOnlineUsers;
+    private Guid? _cachedCurrentUserId;
+    private DateTime _lastRoomPresenceUpdate = DateTime.UtcNow;
+    private readonly TimeSpan _roomPresenceThrottle = TimeSpan.FromSeconds(3);
+    private readonly HashSet<Guid> _recentlyUpdatedRooms = new();
+
+    private async void OnRoomPresenceUpdated(Guid roomId, int count)
+    {
+        // ✅ تجاهل التحديثات المتكررة لنفس الغرفة
+        var now = DateTime.UtcNow;
+        if (_recentlyUpdatedRooms.Contains(roomId))
+        {
+            if (now - _lastRoomPresenceUpdate < _roomPresenceThrottle)
+            {
+                Console.WriteLine($"[Rooms] Throttling presence update for room {roomId}");
+                return;
+            }
+            _recentlyUpdatedRooms.Remove(roomId);
+        }
+
+        _recentlyUpdatedRooms.Add(roomId);
+        _lastRoomPresenceUpdate = now;
+
+        Console.WriteLine($"[Rooms] Room {roomId} presence updated: {count}");
+
+        // تحديث الـ UI
+        await InvokeAsync(() =>
+        {
+            // لو عايز تحديث حاجة معينة
+            StateHasChanged();
+        });
+
+        // شيل الغرفة من الـ HashSet بعد فترة
+        _ = Task.Delay(5000).ContinueWith(_ =>
+        {
+            _recentlyUpdatedRooms.Remove(roomId);
+        });
+    }
+    private async void OnUserBlockedByMeChanged(Guid userId, bool blocked)
+    {
+        Console.WriteLine($"[Rooms] OnUserBlockedByMeChanged: userId={userId}, blocked={blocked}");
+
+        // لو فك البلوك (blocked = false)
+        if (!blocked)
+        {
+            try
+            {
+                // نجيب الحالة مباشرة من GetOnlineUsers
+                var onlineUsers = await Realtime.GetOnlineUsersAsync();
+                var isOnline = onlineUsers?.Contains(userId) ?? false;
+
+                // تحديث الحالة في الـ dictionary
+                _onlineStatus[userId] = isOnline;
+
+                if (isOnline)
+                {
+                    _lastSeenMap.Remove(userId);
+                    Console.WriteLine($"[Rooms] User {userId} is ONLINE after unblock");
+                }
+                else
+                {
+                    // لو أوفلاين، نجيب آخر ظهور
+                    var status = await Realtime.GetUserOnlineStatus(userId);
+                    if (status != null)
+                    {
+                        var lastSeen = (DateTime?)status.GetType().GetProperty("LastSeen")?.GetValue(status);
+                        if (lastSeen.HasValue)
+                        {
+                            _lastSeenMap[userId] = lastSeen.Value;
+                            Console.WriteLine($"[Rooms] LastSeen for {userId} after unblock: {lastSeen}");
+                        }
+                    }
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Rooms] Error updating status after unblock: {ex.Message}");
+            }
+        }
+        else
+        {
+            // لو بلوك جديد، نخليه أوفلاين
+            _onlineStatus[userId] = false;
+            _lastSeenMap[userId] = DateTime.UtcNow;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
     protected override async Task OnInitializedAsync()
     {
         var userId = await CurrentUser.GetUserIdAsync();
-        NotificationManager.SetCurrentPage("rooms", null, userId); VM.Changed += OnVmChanged;
+        _cachedCurrentUserId = userId;
+        NotificationManager.SetCurrentPage("rooms", null, userId);
+
+        VM.Changed += OnVmChanged;
         SubscribeRealtime();
 
-        // 1️⃣ ابدأ الاتصال وتحميل البيانات بالتوازي
-        var connectTask = Realtime.ConnectAsync();
-        var loadTask = VM.LoadAsync();
+        // ✅ تحميل البيانات
+        await Task.WhenAll(Realtime.ConnectAsync(), VM.LoadAsync());
 
-        await Task.WhenAll(connectTask, loadTask);
-        Console.WriteLine("[RoomsPage] Core data loaded ✅");
+        // ✅ محاولة جلب الـ online users مع إعادة المحاولة لو فاضية
+        try
+        {
+            var onlineUsers = await Realtime.GetOnlineUsersAsync();
 
-        // 2️⃣ ✅ الحل الذكي: بدلاً من الانضمام لكل الرومات هنا وإحداث فوضى
-        // نكتفي بحدث RefreshRoomStatusesAsync الذي يجلب الحالة النهائية
-        await VM.RefreshRoomStatusesAsync();
+            // لو القائمة فاضية، حاول تاني بعد 500ms
+            if (onlineUsers == null || onlineUsers.Count == 0)
+            {
+                Console.WriteLine("[Rooms] Online users list empty, retrying in 500ms...");
+                await Task.Delay(500);
+                onlineUsers = await Realtime.GetOnlineUsersAsync();
+            }
 
-        // 3️⃣ الانضمام للرومات في الخلفية بدون انتظار (Fire and Forget)
-        // وبدون إجبار الواجهة على إعادة الترتيب العنيف
-        // _ = Task.Run(async () =>
-        // {
-        //     foreach (var room in VM.Rooms)
-        //     {
-        //         try
-        //         {
-        //             await Realtime.JoinRoomAsync(room.Id);
-        //             await Task.Delay(20); 
-        //         }
-        //         catch { }
-        //     }
-        // });
+            _cachedOnlineUsers = onlineUsers ?? new List<Guid>();
+            _lastOnlineUsersRefresh = DateTime.UtcNow;
 
-        ApplyOnlineSnapshot();
-        await InvokeAsync(StateHasChanged);
+            await UpdateOnlineStatusFromList(onlineUsers);
+            Console.WriteLine($"[Rooms] Initial online users loaded: {onlineUsers?.Count ?? 0}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Rooms] Failed to load initial online users: {ex.Message}");
+        }
+
+        // تحديث الحالة الأولية (كخطة احتياطية)
+        await RefreshAllPresenceAsync(forceRefresh: true);
+
+        _presenceRefreshTimer = new Timer(async _ => await RefreshAllPresenceAsync(),
+            null, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2));
     }
+
+
+    private async Task UpdateOnlineStatusFromList(List<Guid>? onlineUsers)
+    {
+        if (onlineUsers == null) return;
+
+        var onlineSet = onlineUsers.ToHashSet();
+        var changed = false;
+
+        foreach (var room in VM.Rooms.Where(x => x.Type == "Private" && x.OtherUserId != null))
+        {
+            var userId = room.OtherUserId!.Value;
+
+            if (userId == _cachedCurrentUserId) continue;
+            if (Flags.GetBlocked(userId)) continue;
+
+            var isOnline = onlineSet.Contains(userId);
+            var currentStatus = _onlineStatus.TryGetValue(userId, out var online) ? online : false;
+
+            if (currentStatus != isOnline)
+            {
+                _onlineStatus[userId] = isOnline;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            Console.WriteLine("[Rooms] Re-rendered, checking if refresh needed...");
+
+            // ✅ نحدث بس لو آخر تحديث كان من فترة
+            if (_lastOnlineUsersRefresh == null || (DateTime.UtcNow - _lastOnlineUsersRefresh.Value).TotalSeconds > 30)
+            {
+                await RefreshAllPresenceAsync(forceRefresh: true);
+            }
+        }
+    }
+    private async Task RefreshAllPresenceAsync(bool forceRefresh = false)
+    {
+        try
+        {
+            var currentUserId = _cachedCurrentUserId ?? await CurrentUser.GetUserIdAsync();
+            _cachedCurrentUserId = currentUserId;
+
+            var privateRooms = VM.Rooms?.Where(x => x.Type == "Private" && x.OtherUserId != null).ToList() ?? new();
+            if (!privateRooms.Any()) return;
+
+            // ✅ استخدام Cache إذا مش force refresh
+            List<Guid> onlineUsers;
+            if (forceRefresh || _lastOnlineUsersRefresh == null || (DateTime.UtcNow - _lastOnlineUsersRefresh.Value).TotalSeconds > 30)
+            {
+                onlineUsers = await Realtime.GetOnlineUsersAsync();
+                _lastOnlineUsersRefresh = DateTime.UtcNow;
+                _cachedOnlineUsers = onlineUsers;
+                Console.WriteLine($"[Rooms] Online users from hub: {onlineUsers.Count} (fresh)");
+            }
+            else
+            {
+                onlineUsers = _cachedOnlineUsers ?? new List<Guid>();
+                Console.WriteLine($"[Rooms] Online users from hub: {onlineUsers.Count} (cached)");
+            }
+
+            var onlineSet = onlineUsers.ToHashSet();
+            bool changed = false;
+
+            foreach (var room in privateRooms)
+            {
+                var userId = room.OtherUserId!.Value;
+
+                // لو المستخدم هو أنا، نتخطاه
+                if (userId == currentUserId)
+                {
+                    continue;
+                }
+
+                // لو محظور، متجيبش حاجة
+                if (Flags.GetBlocked(userId))
+                {
+                    continue;
+                }
+
+                // تحقق من الحالة الفعلية
+                var isOnline = onlineSet.Contains(userId);
+                var currentStatus = _onlineStatus.TryGetValue(userId, out var online) ? online : false;
+
+                if (currentStatus != isOnline)
+                {
+                    _onlineStatus[userId] = isOnline;
+                    changed = true;
+
+                    if (isOnline)
+                    {
+                        _lastSeenMap.Remove(userId);
+                        Console.WriteLine($"[Rooms] ✅ User {userId} is ONLINE");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[Rooms] ❌ User {userId} is OFFLINE");
+                    }
+                }
+
+                // جلب Last Seen للمستخدمين الأوفلاين (مرة واحدة بس)
+                if (!isOnline && !_lastSeenMap.ContainsKey(userId) && forceRefresh)
+                {
+                    try
+                    {
+                        var result = await Realtime.GetUserOnlineStatus(userId);
+                        var lastSeen = (DateTime?)result.GetType().GetProperty("LastSeen")?.GetValue(result, null);
+                        if (lastSeen.HasValue)
+                        {
+                            _lastSeenMap[userId] = lastSeen.Value;
+                            Console.WriteLine($"[Rooms] Got last seen for {userId}: {lastSeen}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Rooms] Error getting last seen for {userId}: {ex.Message}");
+                    }
+                }
+            }
+
+            if (changed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Presence Refresh] Error: {ex.Message}");
+        }
+    }
+
     private void SubscribeRealtime()
     {
         if (_realtimeSubscribed) return;
@@ -159,16 +386,27 @@
 
         Realtime.UserOnline += OnUserOnline;
         Realtime.UserOffline += OnUserOffline;
-
-        // typing (غالبًا مش هيوصل لحد ما تعمل JoinRoomsList)
+        Realtime.UserLastSeenUpdated += OnUserLastSeenUpdated;
         Realtime.TypingStarted += OnTypingStarted;
         Realtime.TypingStopped += OnTypingStopped;
-        Realtime.RoomUpdated += OnRoomUpdatedDirect;
+        Realtime.RoomUpdated += OnRoomUpdated;
+        Realtime.UserBlockedByMeChanged += OnUserBlockedByMeChanged;
 
-        // لو حصل reconnect نعيد snapshot
+        // ✅ استخدم الدالة الجديدة
+        Realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
+
+        Realtime.Disconnected += OnRealtimeDisconnected;
         Realtime.Reconnected += OnRealtimeReconnected;
-    }
 
+        if (Realtime.State.IsConnected)
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(100);
+                await InvokeAsync(async () => await RefreshAllPresenceAsync(forceRefresh: true));
+            });
+        }
+    }
     private void UnsubscribeRealtime()
     {
         if (!_realtimeSubscribed) return;
@@ -176,111 +414,194 @@
 
         Realtime.UserOnline -= OnUserOnline;
         Realtime.UserOffline -= OnUserOffline;
-
+        Realtime.UserLastSeenUpdated -= OnUserLastSeenUpdated;
         Realtime.TypingStarted -= OnTypingStarted;
         Realtime.TypingStopped -= OnTypingStopped;
-
+        Realtime.RoomUpdated -= OnRoomUpdated;
+        Realtime.Disconnected -= OnRealtimeDisconnected;
         Realtime.Reconnected -= OnRealtimeReconnected;
+        Realtime.UserBlockedByMeChanged += OnUserBlockedByMeChanged;
+
     }
 
-    private void OnRealtimeReconnected()
+    private async void OnUserOnline(Guid userId)
     {
-        ApplyOnlineSnapshot();
-        _ = InvokeAsync(StateHasChanged);
-    }
-
-    private void ApplyOnlineSnapshot()
-    {
-        // snapshot من السيرفر: GetOnlineUsers جوا ConnectAsync
-        var set = Realtime.State.OnlineUsers?.ToHashSet() ?? new HashSet<Guid>();
-
-        // هنحدّث بس الـ users اللي ظاهرين في rooms
-        foreach (var r in VM.Rooms.Where(x => x.Type == "Private" && x.OtherUserId != null))
+        // منع المستخدم من رؤية نفسه كـ Online
+        var currentUserId = _cachedCurrentUserId ?? await CurrentUser.GetUserIdAsync();
+        if (userId == currentUserId)
         {
-            var uid = r.OtherUserId!.Value;
-            var isOnline = set.Contains(uid);
-
-            _onlineMap[uid] = isOnline;
-            if (isOnline)
-                _lastSeenMap.Remove(uid);
+            return;
         }
-    }
 
-    private void OnUserOnline(Guid userId)
-    {
-        _onlineMap[userId] = true;
+        if (Flags.GetBlocked(userId))
+            return;
+
+        _onlineStatus[userId] = true;
         _lastSeenMap.Remove(userId);
 
-        _ = InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
     }
 
-    private void OnUserOffline(Guid userId)
+    private async void OnUserOffline(Guid userId)
     {
-        _onlineMap[userId] = false;
-        _lastSeenMap[userId] = DateTime.Now;
+        var currentUserId = _cachedCurrentUserId ?? await CurrentUser.GetUserIdAsync();
+        if (userId == currentUserId)
+        {
+            return;
+        }
 
-        // لو كان typing شغال نخليه يقف
-        _typingMap.Remove(userId);
+        _onlineStatus[userId] = false;
+        _lastSeenMap[userId] = DateTime.UtcNow;
+        _typingUsers.Remove(userId);
 
-        _ = InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnUserLastSeenUpdated(Guid userId, DateTime lastSeen)
+    {
+        var currentUserId = _cachedCurrentUserId ?? await CurrentUser.GetUserIdAsync();
+        if (userId == currentUserId)
+        {
+            return;
+        }
+
+        if (Flags.GetBlocked(userId))
+            return;
+
+        _lastSeenMap[userId] = lastSeen;
+        _onlineStatus[userId] = false;
+        _typingUsers.Remove(userId);
+
+        await InvokeAsync(StateHasChanged);
     }
 
     private void OnTypingStarted(Guid roomId, Guid userId)
     {
-        // rooms list: typing يظهر فقط للـ private users
-        _typingMap.Add(userId);
+        if (Flags.GetBlocked(userId))
+            return;
+
+        _typingUsers.Add(userId);
         _ = InvokeAsync(StateHasChanged);
     }
 
     private void OnTypingStopped(Guid roomId, Guid userId)
     {
-        _typingMap.Remove(userId);
+        _typingUsers.Remove(userId);
         _ = InvokeAsync(StateHasChanged);
     }
-    private bool IsBlockedPrivate(RoomListItemModel room)
+
+    private async void OnRealtimeDisconnected()
     {
-        if (room.Type != "Private" || room.OtherUserId == null) return false;
+        Console.WriteLine("[Rooms] Realtime disconnected - but keeping local status");
+
+        // ✅ متعملش marking all users offline
+        // _onlineStatus.Clear();  // ❌
+
+        _ = InvokeAsync(StateHasChanged);
+
+        // ✅ محاولة إعادة الاتصال بشكل أذكى
+        _ = Task.Run(async () =>
+        {
+            int attempts = 0;
+            while (attempts < 3 && !Realtime.State.IsConnected && !_isDisposed)
+            {
+                try
+                {
+                    Console.WriteLine($"[Rooms] Reconnect attempt {attempts + 1}");
+                    await Task.Delay(1000 * (attempts + 1)); // 1s, 2s, 3s
+                    await Realtime.ConnectAsync();
+
+                    if (Realtime.State.IsConnected)
+                    {
+                        Console.WriteLine("[Rooms] Reconnected successfully");
+
+                        var onlineUsers = await Realtime.GetOnlineUsersAsync();
+                        await InvokeAsync(async () => await UpdateOnlineStatusFromList(onlineUsers));
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Rooms] Reconnect attempt {attempts + 1} failed: {ex.Message}");
+                }
+                attempts++;
+            }
+        });
+    }
+    private async void OnRealtimeReconnected()
+    {
+        Console.WriteLine("[Rooms] Realtime reconnected - immediate presence refresh");
+        await RefreshAllPresenceAsync(forceRefresh: true);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRoomUpdated(RoomUpdatedModel upd)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private bool IsUserOnline(Guid userId)
+    {
+        if (Flags.GetBlocked(userId))
+            return false;
+        return _onlineStatus.TryGetValue(userId, out var online) && online;
+    }
+
+    private bool IsRoomBlocked(RoomListItemModel room)
+    {
+        if (room.Type != "Private" || room.OtherUserId == null)
+            return false;
         return Flags.GetBlocked(room.OtherUserId.Value);
     }
 
-    private string? GetLastSeenText(RoomListItemModel room)
+    private string? GetLastSeenText(Guid? userId)
     {
-        if (room.Type != "Private" || room.OtherUserId == null) return null;
-
-        if (Flags.GetBlocked(room.OtherUserId.Value))
-            return null; // ✅ اخفاء بالكامل
-
-        var id = room.OtherUserId.Value;
-
-        if (_onlineMap.TryGetValue(id, out var on) && on)
+        if (!userId.HasValue || Flags.GetBlocked(userId.Value))
             return null;
 
-        if (_lastSeenMap.TryGetValue(id, out var dt))
-            return $"Last seen {dt:HH:mm}";
+        if (IsUserOnline(userId.Value))
+            return null;
 
+        if (_lastSeenMap.TryGetValue(userId.Value, out var lastSeen))
+        {
+            var now = DateTime.UtcNow;
+            var timeSpan = now - lastSeen;
+            var localLastSeen = lastSeen.ToLocalTime();
+
+            if (timeSpan.TotalMinutes < 1)
+                return "Just now";
+            if (timeSpan.TotalHours < 1)
+            {
+                var minutes = (int)timeSpan.TotalMinutes;
+                return $"Last seen {minutes} minute{(minutes > 1 ? "s" : "")} ago";
+            }
+            if (lastSeen.Date == now.Date)
+                return $"Last seen today at {localLastSeen:HH:mm}";
+            if (lastSeen.Date == now.Date.AddDays(-1))
+                return $"Last seen yesterday at {localLastSeen:HH:mm}";
+            return $"Last seen {localLastSeen:MMM dd} at {localLastSeen:HH:mm}";
+        }
         return "Offline";
     }
 
+    private bool IsTyping(Guid? userId)
+    {
+        return userId.HasValue && _typingUsers.Contains(userId.Value) && !Flags.GetBlocked(userId.Value);
+    }
 
     private void OnSearch(ChangeEventArgs e)
     {
         var q = e.Value?.ToString() ?? "";
-
         _searchCts?.Cancel();
         _searchCts?.Dispose();
-
         _searchCts = new CancellationTokenSource();
         var ct = _searchCts.Token;
 
         _ = Task.Run(async () =>
         {
-            try
-            {
-                await Task.Delay(150, ct);
-                if (!ct.IsCancellationRequested)
-                    VM.SetSearch(q);
-            }
-            catch { }
+            await Task.Delay(150, ct);
+            if (!ct.IsCancellationRequested)
+                VM.SetSearch(q);
         }, ct);
     }
 
@@ -289,41 +610,67 @@
     {
         if (_isRendering) return;
         _isRendering = true;
-
-        await InvokeAsync(async () =>
-        {
-            ApplyOnlineSnapshot();
-            StateHasChanged();
-            await Task.Delay(50); // منع الـ Flicker
-            _isRendering = false;
-        });
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(50);
+        _isRendering = false;
     }
 
-   
-    private void OnRoomUpdatedDirect(RoomUpdatedModel upd)
-    {
-        Console.WriteLine($"[RoomsPage] RoomUpdated DIRECT RECEIVED: RoomId={upd.RoomId}");
-        _ = InvokeAsync(StateHasChanged); // لو الـ VM مش كفاية
-    }
-    public async ValueTask DisposeAsync()
-    {
-        VM.Changed -= OnVmChanged;
-        UnsubscribeRealtime();
-        NotificationManager.SetCurrentPage("unknown", null, Guid.Empty);
-
-        _searchCts?.Cancel();
-        _searchCts?.Dispose();
-
-        // تنظيف إضافي إذا احتجت
-        _onlineMap.Clear();
-        _typingMap.Clear();
-    }
     public void Dispose()
     {
-        // Sync cleanup - ابقى زي ما هو أو أضف تنظيف إضافي
+        _isDisposed = true;
         VM.Changed -= OnVmChanged;
         UnsubscribeRealtime();
+        _presenceRefreshTimer?.Dispose();
         _searchCts?.Cancel();
         _searchCts?.Dispose();
+    }
+
+
+    public async ValueTask DisposeAsync()
+    {
+        _isDisposed = true;
+
+        try
+        {
+            Console.WriteLine("[Rooms] Disposing async...");
+
+            VM.Changed -= OnVmChanged;
+            UnsubscribeRealtime();
+
+            if (_presenceRefreshTimer != null)
+            {
+                await _presenceRefreshTimer.DisposeAsync();
+                _presenceRefreshTimer = null;
+            }
+
+            if (_searchCts != null)
+            {
+                try
+                {
+                    _searchCts.Cancel();
+                    _searchCts.Dispose();
+                    _searchCts = null;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Rooms] Error disposing search CTS: {ex.Message}");
+                }
+            }
+
+            NotificationManager.SetCurrentPage("unknown", null, Guid.Empty);
+
+            _onlineStatus.Clear();
+            _lastSeenMap.Clear();
+            _typingUsers.Clear();
+            _cachedOnlineUsers = null;
+            _lastOnlineUsersRefresh = null;
+            _cachedCurrentUserId = null;
+
+            Console.WriteLine("[Rooms] Disposed async successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Rooms] Error in DisposeAsync: {ex.Message}");
+        }
     }
 }

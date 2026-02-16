@@ -46,7 +46,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public event Func<MessageModel, Task>? MessageReplyReceived;
     public event Action<ReplyContext?>? ReplyContextChanged;
     private Guid? _openMenuMessageId;
-   
+
     public event PropertyChangedEventHandler? PropertyChanged;
     private bool _isPinModalOpen;
     public bool IsPinModalOpen { get => _isPinModalOpen; set { _isPinModalOpen = value; NotifyChanged(); } }
@@ -245,8 +245,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string? UiError { get; private set; }
     public Guid CurrentUserId { get; private set; }
     public bool IsMuted { get; private set; }
-    public bool IsBlockedByMe { get; private set; }
-    public bool IsBlockedMe { get; private set; }
+    public bool IsBlockedByMe { get;  set; }
+    public bool IsBlockedMe { get;  set; }
     public bool IsDisconnected { get; private set; }
     public bool IsOtherDeleted { get; private set; }
     public bool IsRemoved { get; private set; }
@@ -493,7 +493,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _realtime.MessageRead += OnMessageRead;
         _realtime.RoomMuteChanged += OnRealtimeRoomMuteChanged;
         _realtime.UserOnline += OnUserOnline;
-        _realtime.UserOffline += OnUserOffline; 
+        _realtime.UserOffline += OnUserOffline;
+        _realtime.UserLastSeenUpdated += OnUserLastSeenUpdated;
         _realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
         _realtime.TypingStarted += OnTypingStarted;
         _realtime.TypingStopped += OnTypingStopped;
@@ -667,8 +668,11 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             OtherUser.IsOnline = true;
             OtherUser.LastSeen = null;
         }
+
+        // تحديث القائمة للغرف الجماعية
         if (Room?.Type == "Group")
             RebuildPresenceFromRealtime();
+
         NotifyChangedThrottled();
     }
 
@@ -677,19 +681,42 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         if (OtherUser?.Id == id)
         {
             OtherUser.IsOnline = false;
-            OtherUser.LastSeen = DateTime.UtcNow;
         }
+
         if (Room?.Type == "Group")
             RebuildPresenceFromRealtime();
+
         NotifyChangedThrottled();
     }
 
-    private void OnRoomPresenceUpdated(Guid rid, int _)
+    private void OnUserLastSeenUpdated(Guid userId, DateTime lastSeen)
     {
-        if (_eventsRoomId != rid) return;
-        RebuildPresenceFromRealtime();
+        if (OtherUser?.Id == userId)
+        {
+            OtherUser.LastSeen = lastSeen;
+            Console.WriteLine($"[VM] Last seen updated for {userId}: {lastSeen}");
+            NotifyChangedThrottled();
+        }
     }
 
+    private void OnRoomPresenceUpdated(Guid rid, int count)
+    {
+        if (_currentRoomId == rid && Room?.Type == "Group")
+        {
+            // تحديث العدد الكلي للمتصلين
+            // هذا سيتم تمريره إلى TopBar
+            Console.WriteLine($"[VM] Room {rid} presence updated: {count} online");
+
+            // تحديث OnlineUsers ObservableCollection
+            // هذا سيتم ربطه مع TopBar
+            // سنقوم بإعادة بناء القائمة
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(100);
+                RebuildPresenceFromRealtime();
+            });
+        }
+    }
     private void OnTypingStarted(Guid rid, Guid uid)
     {
         if (_eventsRoomId != rid || uid == CurrentUserId) return;

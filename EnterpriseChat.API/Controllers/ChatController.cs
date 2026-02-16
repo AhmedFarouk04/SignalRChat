@@ -108,11 +108,19 @@ public sealed class ChatController : BaseController
         await _mediator.Send(new BlockUserCommand(me, new UserId(userId)), ct);
 
         // ✅ تحديث فوري: إخفاء حالة الأونلاين عند الطرفين فوراً
-        await _hub.Clients.User(me.Value.ToString()).SendAsync("UserOffline", userId);
-        await _hub.Clients.User(userId.ToString()).SendAsync("UserOffline", me.Value);
+        await _hub.Clients.User(me.Value.ToString()).SendAsync("UserOffline", userId, ct);
+        await _hub.Clients.User(userId.ToString()).SendAsync("UserOffline", me.Value, ct);
 
-        await _hub.Clients.User(me.Value.ToString()).SendAsync("UserBlockedByMeChanged", userId, true);
-        await _hub.Clients.User(userId.ToString()).SendAsync("UserBlockedMeChanged", me.Value, true);
+        // ✅ إرسال Last Seen للمحظور (اختياري)
+        var presenceService = HttpContext.RequestServices.GetRequiredService<IPresenceService>();
+        var lastSeen = await presenceService.GetLastSeenAsync(new UserId(userId));
+        if (lastSeen.HasValue)
+        {
+            await _hub.Clients.User(me.Value.ToString()).SendAsync("UserLastSeenUpdated", userId, lastSeen.Value, ct);
+        }
+
+        await _hub.Clients.User(me.Value.ToString()).SendAsync("UserBlockedByMeChanged", userId, true, ct);
+        await _hub.Clients.User(userId.ToString()).SendAsync("UserBlockedMeChanged", me.Value, true, ct);
 
         return NoContent();
     }
@@ -223,14 +231,13 @@ public sealed class ChatController : BaseController
         await _mediator.Send(new UnblockUserCommand(me, new UserId(userId)), ct);
 
         // ✅ التحديث اللحظي عبر SignalR
-        // نستخدم Try/Catch هنا عشان لو الـ Hub فيه مشكلة ميعطلش العملية الأساسية
         try
         {
-            await _hub.Clients.User(me.Value.ToString()).SendAsync("CheckUserOnline", userId);
-            await _hub.Clients.User(userId.ToString()).SendAsync("CheckUserOnline", me.Value);
+            await _hub.Clients.User(me.Value.ToString()).SendAsync("CheckUserOnline", userId, ct);
+            await _hub.Clients.User(userId.ToString()).SendAsync("CheckUserOnline", me.Value, ct);
 
-            await _hub.Clients.User(me.Value.ToString()).SendAsync("UserBlockedByMeChanged", userId, false);
-            await _hub.Clients.User(userId.ToString()).SendAsync("UserBlockedMeChanged", me.Value, false);
+            await _hub.Clients.User(me.Value.ToString()).SendAsync("UserBlockedByMeChanged", userId, false, ct);
+            await _hub.Clients.User(userId.ToString()).SendAsync("UserBlockedMeChanged", me.Value, false, ct);
         }
         catch (Exception ex)
         {
@@ -239,7 +246,6 @@ public sealed class ChatController : BaseController
 
         return NoContent();
     }
-
 
     [HttpGet("blocked")]
     [ProducesResponseType(typeof(IReadOnlyList<BlockedUserDto>), StatusCodes.Status200OK)]

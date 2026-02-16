@@ -15,27 +15,24 @@ public sealed class RoomService : IRoomService
 
     public async Task<IReadOnlyList<RoomListItemModel>> GetRoomsAsync()
     {
-        var dtos = await _api.GetAsync<IReadOnlyList<RoomListItemDto>>(ApiEndpoints.Rooms) ?? [];
+        var dtos = await _api.GetAsync<List<RoomListItemDto>>("api/rooms") ?? new();
+
         return dtos.Select(d => new RoomListItemModel
         {
             Id = d.Id,
-            Name = d.Name,
-            Type = d.Type,
+            Name = d.Name ?? "Room",
+            Type = d.Type ?? "Group",
             OtherUserId = d.OtherUserId,
             OtherDisplayName = d.OtherDisplayName,
-            UnreadCount = d.UnreadCount,
             IsMuted = d.IsMuted,
+            UnreadCount = d.UnreadCount,
             LastMessageAt = d.LastMessageAt,
             LastMessagePreview = d.LastMessagePreview,
             LastMessageId = d.LastMessageId,
-
-            // ✅ NEW (هنا بالظبط)
             LastMessageSenderId = d.LastMessageSenderId,
-            LastMessageStatus = d.LastMessageStatus.HasValue
-         ? (EnterpriseChat.Client.Models.MessageStatus)d.LastMessageStatus.Value
-         : null,
+            LastMessageStatus = d.LastMessageStatus is null ? null : (MessageStatus?)(int)d.LastMessageStatus.Value,
+            LastSeenAt = d.LastSeenAt // ➕ أضف هذا السطر
         }).ToList();
-
     }
     public Task<RoomModel?> GetRoomAsync(Guid roomId)
         => _api.GetAsync<RoomModel>(ApiEndpoints.Room(roomId));

@@ -16,7 +16,7 @@ public interface IChatRealtimeClient
     event Action<Guid>? OnDemandOnlineCheckRequested;
     event Action<Guid>? UserOnline;
     event Action<Guid>? UserOffline;
-
+    event Action<Guid, DateTime>? UserLastSeenUpdated;
     event Action<Guid, int>? RoomPresenceUpdated;
 
     event Action<Guid, Guid>? TypingStarted;
@@ -46,13 +46,18 @@ public interface IChatRealtimeClient
     event Action<Guid, Guid> MessageReadToAll; // messageId, senderId
     event Action<Guid, Guid, int, bool> MessageReactionUpdated; // messageId, userId, reactionType, isNewReaction
     event Action<Guid, Guid?>? MessagePinned; // (roomId, messageId)
+     event Action<List<Guid>>? InitialOnlineUsersReceived;
 
     event Action<Guid, int, int, int>? MessageReceiptStatsUpdated;
+
+
+
+
     Task PinMessageAsync(Guid roomId, Guid? messageId);
     Task SendMessageWithReplyAsync(Guid roomId, MessageModel message);
 
     Task ConnectAsync();
-    Task DisconnectAsync();
+    Task DisconnectAsync(bool force = false);
 
     Task JoinRoomAsync(Guid roomId);
     Task LeaveRoomAsync(Guid roomId);
@@ -61,6 +66,8 @@ public interface IChatRealtimeClient
     Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId);
     Task GroupRenamedAsync(Guid roomId, string newName);
     Task NotifyTypingAsync(Guid roomId);
+    Task<bool> CheckUserOnlineStatus(Guid userId);
+    Task<object> GetUserOnlineStatus(Guid userId);
     Task<List<Guid>> GetOnlineUsersAsync(); // ✅ أضف هذا السطر أيضاً
 
 
