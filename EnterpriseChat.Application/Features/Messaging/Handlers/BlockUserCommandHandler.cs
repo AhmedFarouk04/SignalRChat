@@ -25,13 +25,13 @@ public sealed class BlockUserCommandHandler : IRequestHandler<BlockUserCommand, 
         await _repo.AddAsync(BlockedUser.Create(command.BlockerId, command.BlockedId), ct);
         await _uow.CommitAsync(ct);
 
-        // ✅ اخفاء presence فورًا
+        // ✅ مهم جداً: نبعت UserOffline للاتنين
         await _presenceNotifier.HideUsersFromEachOtherAsync(
             command.BlockerId.Value,
             command.BlockedId.Value,
             ct);
 
-        // (اختياري) تحديث flag
+        // ✅ نحدث الـ flags
         await _presenceNotifier.BlockChangedAsync(command.BlockerId.Value, command.BlockedId.Value, true, ct);
 
         return Unit.Value;

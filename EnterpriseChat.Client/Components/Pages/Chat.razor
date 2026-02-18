@@ -20,6 +20,8 @@
 @inject RoomsViewModel RoomsVM
 @inject EnterpriseChat.Client.Models.ReplyContext ReplyCtx
 @inject AttachmentsApi AttachmentsApi
+@using ClientMessageStatus = EnterpriseChat.Client.Models.MessageStatus
+
 @implements IDisposable
 @inject NotificationManager NotificationManager
 @inject ICurrentUser CurrentUser
@@ -229,15 +231,16 @@
 
     protected override async Task OnInitializedAsync()
     {
+        VM.IsPageActive = true;
         _isEnteringChat = true; // ✅ علامة إننا داخلين الشات
 
-        var userId = await CurrentUser.GetUserIdAsync();
+        var userId = await CurrentUser.GetUserIdAsync();
         NotificationManager.SetCurrentPage("chat", RoomId, userId);
         VM.Changed += OnVmChanged;
         VM.MessageReceived += OnMessageReceivedAsync;
 
-        // ✅ إلغاء الاشتراك في أحداث UserOnline/Offline مؤقتاً
-        Realtime.UserOnline -= OnUserOnline;
+        // ✅ إلغاء الاشتراك في أحداث UserOnline/Offline مؤقتاً
+        Realtime.UserOnline -= OnUserOnline;
         Realtime.UserOffline -= OnUserOffline;
 
         Realtime.UserLastSeenUpdated += OnUserLastSeenUpdated;
@@ -245,7 +248,9 @@
         Realtime.UserBlockedByMeChanged += OnUserBlockedByMeChanged;
         Realtime.UserBlockedMeChanged += OnUserBlockedMeChanged;
         Realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
+        Realtime.MessageReceiptStatsUpdated += OnMessageReceiptStatsUpdated;
 
+        Realtime.MessageReceiptStatsUpdated += HandleGlobalStatsUpdate;
         Realtime.MemberAdded += (rid, uid, name) => InvokeAsync(async () =>
         {
             if (rid == RoomId)
@@ -271,71 +276,65 @@
         }
 
         _isEnteringChat = false; // ✅ خلصنا
+    }
+
+    private void OnMessageReceiptStatsUpdated(Guid messageId, Guid roomId, int total, int delivered, int read)
+    {
+        if (roomId != RoomId) return;
+
+        var msg = VM.Messages.FirstOrDefault(m => m.Id == messageId);
+        if (msg == null) return;
+
+        // حدّث العدادات
+        msg.TotalRecipients = total;
+        msg.DeliveredCount = delivered;
+        msg.ReadCount = read;
+
+        // في private: أول ما delivered >= 1 يبقى ✓✓
+        // أول ما read >= 1 يبقى ✓✓ read
+        msg.PersonalStatus =
+            (read >= 1) ? EnterpriseChat.Client.Models.MessageStatus.Read :
+            (delivered >= 1) ? EnterpriseChat.Client.Models.MessageStatus.Delivered :
+            EnterpriseChat.Client.Models.MessageStatus.Sent;
+
+        _ = InvokeAsync(StateHasChanged);
     }
+
+// دالة مساعدة لاستقبال التحديث من SignalR مباشرة
+private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) => InvokeAsync(StateHasChanged);  
+
+
     private async void OnUserBlockedByMeChanged(Guid userId, bool blocked)
     {
         Console.WriteLine($"[Chat] OnUserBlockedByMeChanged: userId={userId}, blocked={blocked}, OtherUserId={VM.OtherUser?.Id}");
 
-        // لو المستخدم المتغير هو الطرف الآخر في هذه الغرفة
         if (VM.OtherUser?.Id == userId)
         {
             VM.IsBlockedByMe = blocked;
 
-            if (!blocked)
+            if (blocked)
             {
-                // ✅ بعد فك البلوك، نجيب الحالة مباشرة من GetOnlineUsers (الأضمن)
-                try
-                {
-                    // الطريقة الأسهل والأضمن
-                    var onlineUsers = await Realtime.GetOnlineUsersAsync();
-                    var isOnline = onlineUsers?.Contains(userId) ?? false;
+                // ✅ بلوك جديد - خلاصة offline فوراً
+                VM.OtherUser.IsOnline = false;
+                VM.OtherUser.LastSeen = null;
 
-                    VM.OtherUser.IsOnline = isOnline;
-                    VM.OtherUser.LastSeen = null; // مؤقتاً، هيتحدث لو كان أوفلاين
-
-                    Console.WriteLine($"[Chat] After unblock - isOnline from GetOnlineUsers: {isOnline}");
-
-                    // ✅ لو طلع أوفلاين، نجيب آخر ظهور في الخلفية
-                    if (!isOnline)
-                    {
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                await Task.Delay(500);
-                                var status = await Realtime.GetUserOnlineStatus(userId);
-                                if (status != null)
-                                {
-                                    var lastSeen = (DateTime?)status.GetType().GetProperty("LastSeen")?.GetValue(status);
-                                    if (lastSeen.HasValue)
-                                    {
-                                        VM.OtherUser.LastSeen = lastSeen.Value;
-                                        await InvokeAsync(StateHasChanged);
-                                        Console.WriteLine($"[Chat] LastSeen updated in background: {lastSeen}");
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"[Chat] Background last seen error: {ex.Message}");
-                            }
-                        });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Chat] Error checking online status after unblock: {ex.Message}");
-
-                    // Fallback آمن
-                    VM.OtherUser.IsOnline = false;
-                    VM.OtherUser.LastSeen = null;
-                }
+                // ✅ إجبار الـ Realtime Client على تحديث حالته
+                await Realtime.GetOnlineUsersAsync(); // ده هيطبق الفلترة تلقائياً
             }
             else
             {
-                // لو بلوك جديد، نعتبره أوفلاين
-                VM.OtherUser.IsOnline = false;
-                VM.OtherUser.LastSeen = null;
+                // ✅ فك البلوك - نشوف هو أونلاين ولا لأ
+                var onlineUsers = await Realtime.GetOnlineUsersAsync();
+                var isOnline = onlineUsers.Contains(userId);
+
+                VM.OtherUser.IsOnline = isOnline;
+
+                if (!isOnline)
+                {
+                    var status = await Realtime.GetUserOnlineStatus(userId);
+                    var lastSeen = (DateTime?)status.GetType().GetProperty("LastSeen")?.GetValue(status);
+                    VM.OtherUser.LastSeen = lastSeen;
+                }
             }
 
             await InvokeAsync(StateHasChanged);
@@ -371,22 +370,102 @@
             InvokeAsync(StateHasChanged);
         }
     }
-        
-        protected override async Task OnAfterRenderAsync(bool firstRender)
+     
+    protected override async Task OnParametersSetAsync()
+    {
+        // ✅ كل ما يتغير الـ RoomId (بما في ذلك الريفرش)
+        if (VM.OtherUser != null)
+        {
+            // جلب الحالة من السيرفر مباشرة
+            var onlineUsers = await Realtime.GetOnlineUsersAsync();
+            var isOnline = onlineUsers.Contains(VM.OtherUser.Id);
+
+            // التحقق من البلوك محلياً
+            var isBlocked = VM.IsBlockedByMe || VM.IsBlockedMe;
+
+            if (isBlocked)
+            {
+                VM.OtherUser.IsOnline = false;
+                VM.OtherUser.LastSeen = null;
+            }
+            else
+            {
+                VM.OtherUser.IsOnline = isOnline;
+                if (!isOnline)
+                {
+                    // جلب آخر ظهور
+                    var status = await Realtime.GetUserOnlineStatus(VM.OtherUser.Id);
+                    var lastSeen = (DateTime?)status.GetType().GetProperty("LastSeen")?.GetValue(status);
+                    VM.OtherUser.LastSeen = lastSeen;
+                }
+            }
+
+            StateHasChanged();
+        }
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && VM.OtherUser != null)
         {
-            // تحقق من حالة المستخدم عند فتح الشات
             try
             {
-                var result = await Realtime.GetUserOnlineStatus(VM.OtherUser.Id);
-                var isOnline = (bool)result.GetType().GetProperty("IsOnline")?.GetValue(result, null)!;
-                var lastSeen = (DateTime?)result.GetType().GetProperty("LastSeen")?.GetValue(result, null);
-
-                VM.OtherUser.IsOnline = isOnline;
-                if (!isOnline && lastSeen.HasValue)
+                // ✅ التأكد من أن Realtime ليس null
+                if (Realtime == null)
                 {
-                    VM.OtherUser.LastSeen = lastSeen.Value;
+                    Console.WriteLine("[Chat] Realtime is null");
+                    return;
+                }
+
+                // ✅ التأكد من أن الاتصال موجود
+                if (!Realtime.State.IsConnected)
+                {
+                    Console.WriteLine("[Chat] Realtime not connected, will retry later");
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(1000);
+                        await InvokeAsync(StateHasChanged);
+                    });
+                    return;
+                }
+
+                var result = await Realtime.GetUserOnlineStatus(VM.OtherUser.Id);
+
+                // ✅ التحقق من أن result ليس null
+                if (result == null)
+                {
+                    Console.WriteLine("[Chat] GetUserOnlineStatus returned null");
+                    return;
+                }
+
+                var isOnline = false;
+                var lastSeen = (DateTime?)null;
+                var isBlocked = false;
+
+                try
+                {
+                    isOnline = (bool)result.GetType().GetProperty("IsOnline")?.GetValue(result, null)!;
+                    lastSeen = (DateTime?)result.GetType().GetProperty("LastSeen")?.GetValue(result, null);
+                    isBlocked = (bool)result.GetType().GetProperty("IsBlocked")?.GetValue(result, null)!;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Chat] Error extracting properties: {ex.Message}");
+                }
+
+                if (isBlocked || VM.IsBlockedByMe || VM.IsBlockedMe)
+                {
+                    VM.OtherUser.IsOnline = false;
+                    VM.OtherUser.LastSeen = null;
+                }
+                else
+                {
+                    VM.OtherUser.IsOnline = isOnline;
+                    if (!isOnline && lastSeen.HasValue)
+                    {
+                        VM.OtherUser.LastSeen = lastSeen.Value;
+                    }
                 }
 
                 StateHasChanged();
@@ -614,6 +693,17 @@
     // في Chat.razor - داخل @code
     private async Task OnMessageReceivedAsync(MessageModel message)
     {
+        if (VM.Room?.Type == "Private" && VM.OtherUser != null && message.SenderId == VM.CurrentUserId)
+        {
+            message.SenderId = VM.OtherUser.Id;
+        }
+
+        // ✅ لو الرسالة من الطرف الآخر في محادثة خاصة، خليها مقروءة فوراً
+        if (VM.Room?.Type == "Private" && message.SenderId != VM.CurrentUserId)
+        {
+            message.PersonalStatus = ClientMessageStatus.Read;
+            Console.WriteLine($"[Chat] 🟦 Forced Read for incoming private message {message.Id}");
+        }
         // ✅ ابحث عن الرسالة لو موجودة
         var existingMessage = VM.Messages.FirstOrDefault(m => m.Id == message.Id);
         if (existingMessage != null)
@@ -801,6 +891,8 @@
 
     public void Dispose()
     {
+        VM.DeactivateChat();
+        VM.IsPageActive = false;
         VM.Changed -= OnVmChanged;
         VM.MessageReceived -= OnMessageReceivedAsync;
         Realtime.GroupRenamed -= HandleGroupRenamedRealtime;
@@ -808,11 +900,58 @@
         Realtime.UserBlockedByMeChanged -= OnUserBlockedByMeChanged;
         Realtime.UserBlockedMeChanged -= OnUserBlockedMeChanged;
         Realtime.RoomPresenceUpdated -= OnRoomPresenceUpdated;
+        Realtime.MessageReceiptStatsUpdated -= OnMessageReceiptStatsUpdated;
 
         NotificationManager.SetCurrentPage("unknown", null, Guid.Empty);
 
         _readCts?.Cancel();
         _readCts?.Dispose();
+
+        // ✅ تحديث جميع الرسائل كمقروءة عند الخروج
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (VM.Room?.Type == "Private" && VM.Messages.Any())
+                {
+                    // نجيب آخر رسالة من الطرف الآخر
+                    var lastMessageFromOther = VM.Messages
+                        .Where(m => m.SenderId != VM.CurrentUserId)
+                        .OrderByDescending(m => m.CreatedAt)
+                        .FirstOrDefault();
+
+                    if (lastMessageFromOther != null)
+                    {
+                        Console.WriteLine($"[Chat] Marking ALL messages as read on exit up to {lastMessageFromOther.Id}");
+
+                        // 1. تحديث جميع الرسائل محلياً
+                        foreach (var msg in VM.Messages.Where(m => m.SenderId != VM.CurrentUserId))
+                        {
+                            if (msg.PersonalStatus < ClientMessageStatus.Read)
+                            {
+                                msg.PersonalStatus = ClientMessageStatus.Read;
+                            }
+                        }
+
+                        // 2. تحديث السيرفر بآخر رسالة
+                        await VM.MarkRoomReadAsync(RoomId, lastMessageFromOther.Id);
+
+                        // 3. تحديث الـ Sidebar
+                        if (RoomsVM != null)
+                        {
+                            RoomsVM.UpdateLastMessageStatus(RoomId, lastMessageFromOther.Id, ClientMessageStatus.Read);
+                            RoomsVM.MarkRoomAsReadLocal(RoomId, lastMessageFromOther.Id);
+                        }
+
+                        Console.WriteLine($"[Chat] ✅ Updated all messages as read on exit");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Chat] Error marking messages as read on exit: {ex.Message}");
+            }
+        });
 
         // ✅ فقط اترك الغرفة ولا تقطع الاتصال
         _ = Task.Run(async () =>
@@ -846,8 +985,7 @@
 
         _objRef?.Dispose();
     }
-
-    private void OpenAttachmentsDrawer() { _attachMenuOpen = false; _attachmentsOpen = true; }
+private void OpenAttachmentsDrawer() { _attachMenuOpen = false; _attachmentsOpen = true; }
 
     private void CloseAttachments() => _attachmentsOpen = false;
 
@@ -884,7 +1022,9 @@
         if (uploaded) ShowToast("File uploaded successfully!");
         StateHasChanged();
     }
+    
 
+ 
     private sealed class ChatPageInterop
     {
         private readonly Chat _page;

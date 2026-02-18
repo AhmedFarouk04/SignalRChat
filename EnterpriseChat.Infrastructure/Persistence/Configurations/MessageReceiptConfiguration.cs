@@ -28,6 +28,19 @@ public sealed class MessageReceiptConfiguration : IEntityTypeConfiguration<Messa
 
         builder.Property(x => x.MessageId).IsRequired();
 
+        // ✅ RoomId (الجديد)
+        builder.Property(x => x.RoomId)
+            .HasConversion(
+                id => id.Value,
+                value => new RoomId(value))
+            .Metadata.SetValueComparer(
+                new ValueComparer<RoomId>(
+                    (a, b) => a.Value == b.Value,
+                    v => v.Value.GetHashCode(),
+                    v => new RoomId(v.Value)));
+
+        builder.Property(x => x.RoomId).IsRequired();
+
         // UserId
         builder.Property(x => x.UserId)
             .HasConversion(
@@ -51,6 +64,7 @@ public sealed class MessageReceiptConfiguration : IEntityTypeConfiguration<Messa
         // Indexes
         builder.HasIndex(x => x.MessageId);
         builder.HasIndex(x => x.UserId);
-        builder.HasIndex(x => new { x.UserId, x.Status });
+        builder.HasIndex(x => x.RoomId);  // ✅ أضفنا Index للـ RoomId
+        builder.HasIndex(x => new { x.UserId, x.Status, x.RoomId }); // ✅ Index مركب للبحث السريع
     }
 }

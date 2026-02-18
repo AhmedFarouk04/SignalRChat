@@ -2,6 +2,7 @@
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Events;
 using EnterpriseChat.Domain.ValueObjects;
+using EnterpriseChat.Domain.Enums;
 
 namespace EnterpriseChat.Domain.Entities;
 
@@ -26,6 +27,11 @@ public class Message
     public bool IsDeleted { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
     public DateTime? DeletedAt { get; private set; }
+
+    // ✅ الخصائص المحسوبة الجديدة
+    public int DeliveredCount => _receipts.Count(r => r.Status >= MessageStatus.Delivered);
+    public int ReadCount => _receipts.Count(r => r.Status >= MessageStatus.Read);
+
     private Message() { }
 
     public Message(
@@ -42,10 +48,10 @@ public class Message
         CreatedAt = DateTime.UtcNow;
         ReplyToMessageId = replyToMessageId;
 
-
+        // ✅ تعديل هنا: نضيف RoomId للـ Receipt
         foreach (var userId in recipients)
         {
-            _receipts.Add(new MessageReceipt(Id, userId));
+            _receipts.Add(new MessageReceipt(Id, roomId, userId));
         }
 
         AddDomainEvent(new MessageSentEvent(
@@ -93,6 +99,7 @@ public class Message
 
         AddDomainEvent(new MessageReadEvent(Id, userId));
     }
+
     public void Edit(string newContent)
     {
         if (IsDeleted) throw new InvalidOperationException("Cannot edit a deleted message.");
@@ -100,19 +107,13 @@ public class Message
         Content = newContent;
         IsEdited = true;
         UpdatedAt = DateTime.UtcNow;
-
-        // هنضيف Domain Event هنا لاحقاً عشان الـ Real-time
-        // AddDomainEvent(new MessageUpdatedEvent(Id, RoomId, Content, UpdatedAt.Value));
     }
 
-    // Method لحذف الرسالة
     public void Delete()
     {
         IsDeleted = true;
         DeletedAt = DateTime.UtcNow;
-        Content = "This message was deleted"; // Placeholder
-
-        // AddDomainEvent(new MessageDeletedEvent(Id, RoomId, DeletedAt.Value));
+        Content = "This message was deleted";
     }
 
     private void AddDomainEvent(DomainEvent domainEvent)
@@ -133,23 +134,19 @@ public class Message
         {
             if (existing.Type == reactionType)
             {
-                // نفس الـ reaction → احذفه (toggle)
                 _reactions.Remove(existing);
             }
             else
             {
-                // reaction مختلف → عدله
                 existing.UpdateType(reactionType);
             }
         }
         else
         {
-            // reaction جديد
             _reactions.Add(new Reaction(Id, userId, reactionType));
         }
     }
 
-    // في ملف Message.cs أضف هذه الميثود
     public MessageReceiptStats GetReceiptStats()
     {
         var receipts = _receipts.ToList();

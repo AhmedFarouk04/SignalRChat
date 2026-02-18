@@ -105,6 +105,7 @@
     private bool _realtimeSubscribed;
     private Timer? _presenceRefreshTimer;
     private bool _isDisposed = false;
+    private bool _forceRefresh = false;
 
     // ✅ متغيرات للـ Cache لتقليل الاستعلامات
     private DateTime? _lastOnlineUsersRefresh;
@@ -205,7 +206,7 @@
 
         VM.Changed += OnVmChanged;
         SubscribeRealtime();
-
+        Console.WriteLine($"[Rooms] Subscribed to realtime events. MessageReceiptStatsUpdated handler attached: {_realtimeSubscribed}");
         // ✅ تحميل البيانات
         await Task.WhenAll(Realtime.ConnectAsync(), VM.LoadAsync());
 
@@ -384,6 +385,8 @@
         if (_realtimeSubscribed) return;
         _realtimeSubscribed = true;
 
+        Console.WriteLine("[Rooms] Subscribing to realtime events...");
+
         Realtime.UserOnline += OnUserOnline;
         Realtime.UserOffline += OnUserOffline;
         Realtime.UserLastSeenUpdated += OnUserLastSeenUpdated;
@@ -391,10 +394,8 @@
         Realtime.TypingStopped += OnTypingStopped;
         Realtime.RoomUpdated += OnRoomUpdated;
         Realtime.UserBlockedByMeChanged += OnUserBlockedByMeChanged;
-
-        // ✅ استخدم الدالة الجديدة
         Realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
-
+        Realtime.MessageReceiptStatsUpdated += OnMessageReceiptStatsUpdated;
         Realtime.Disconnected += OnRealtimeDisconnected;
         Realtime.Reconnected += OnRealtimeReconnected;
 
@@ -407,6 +408,7 @@
             });
         }
     }
+
     private void UnsubscribeRealtime()
     {
         if (!_realtimeSubscribed) return;
@@ -420,11 +422,22 @@
         Realtime.RoomUpdated -= OnRoomUpdated;
         Realtime.Disconnected -= OnRealtimeDisconnected;
         Realtime.Reconnected -= OnRealtimeReconnected;
-        Realtime.UserBlockedByMeChanged += OnUserBlockedByMeChanged;
+        Realtime.UserBlockedByMeChanged -= OnUserBlockedByMeChanged;
+        Realtime.RoomPresenceUpdated -= OnRoomPresenceUpdated;
+        Realtime.MessageReceiptStatsUpdated -= OnMessageReceiptStatsUpdated; // ✅ مهم جداً
+    }
+   
+    private void OnMessageReceiptStatsUpdated(Guid messageId, Guid roomId, int total, int delivered, int read)
+    {
+        Console.WriteLine($"[Rooms PAGE] 🔔🔔🔔 EVENT FIRED! msg={messageId}, room={roomId}, d={delivered}, r={read}");
 
+        // استدعي ViewModel مباشرة
+        VM.UpdateMessageStatusFromEvent(messageId, roomId, total, delivered, read);
+        InvokeAsync(StateHasChanged); // تأكيد التحديث على الشاشة
     }
 
-    private async void OnUserOnline(Guid userId)
+
+private async void OnUserOnline(Guid userId)
     {
         // منع المستخدم من رؤية نفسه كـ Online
         var currentUserId = _cachedCurrentUserId ?? await CurrentUser.GetUserIdAsync();

@@ -8,8 +8,7 @@ using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Handlers;
 
-public sealed class MarkRoomReadCommandHandler
-    : IRequestHandler<MarkRoomReadCommand, Unit>
+public sealed class MarkRoomReadCommandHandler : IRequestHandler<MarkRoomReadCommand, Unit>
 {
     private readonly IMessageRepository _messageRepo;
     private readonly IUnitOfWork _uow;
@@ -19,106 +18,62 @@ public sealed class MarkRoomReadCommandHandler
     private readonly IMessageReceiptRepository _receiptRepo;
 
     public MarkRoomReadCommandHandler(
-    IMessageRepository messageRepo,
-    IMessageReceiptRepository receiptRepo,     // ✅ ADD
-    IRoomAuthorizationService auth,
-    IUnitOfWork uow,
-    IChatRoomRepository roomRepository,
-    IMessageBroadcaster? broadcaster = null)
+        IMessageRepository messageRepo,
+        IMessageReceiptRepository receiptRepo,
+        IRoomAuthorizationService auth,
+        IUnitOfWork uow,
+        IChatRoomRepository roomRepository,
+        IMessageBroadcaster? broadcaster = null)
     {
         _messageRepo = messageRepo;
-        _receiptRepo = receiptRepo;                // ✅ ADD
+        _receiptRepo = receiptRepo;
         _auth = auth;
         _uow = uow;
         _roomRepository = roomRepository;
         _broadcaster = broadcaster;
     }
 
+    // داخل MarkRoomReadCommandHandler.cs
     public async Task<Unit> Handle(MarkRoomReadCommand command, CancellationToken ct)
     {
-        Console.WriteLine($"[MarkRoomRead] Room={command.RoomId.Value}, User={command.UserId.Value}, LastMsg={command.LastMessageId.Value}");
         await _auth.EnsureUserIsMemberAsync(command.RoomId, command.UserId, ct);
-
         var lastCreatedAt = await _messageRepo.GetCreatedAtAsync(command.LastMessageId, ct);
-        if (lastCreatedAt is null)
-        {
-            Console.WriteLine("[MarkRoomRead] Last message not found");
-            return Unit.Value;
-        }
+        if (lastCreatedAt is null) return Unit.Value;
 
-        // جيب الرسائل اللي كانت unread فعلاً
-        var unreadBefore = await _messageRepo.GetUnreadUpToAsync(
-            command.RoomId,
-            lastCreatedAt.Value,
-            command.UserId,
-            take: 5000,
-            ct: ct);
+        var unreadBefore = await _messageRepo.GetUnreadUpToAsync(command.RoomId, lastCreatedAt.Value, command.UserId, 1000, ct);
+        if (!unreadBefore.Any()) return Unit.Value;
 
-        // Bulk mark read
         await _messageRepo.BulkMarkReadUpToAsync(command.RoomId, lastCreatedAt.Value, command.UserId, ct);
-
-        // تحديث LastRead
-        await _roomRepository.UpdateMemberLastReadAsync(
-            command.RoomId,
-            command.UserId,
-            command.LastMessageId,
-            ct);
-
+        await _roomRepository.UpdateMemberLastReadAsync(command.RoomId, command.UserId, command.LastMessageId, ct);
         await _uow.CommitAsync(ct);
-
-        Console.WriteLine($"[MarkRoomRead] Marked read count={unreadBefore.Count}");
 
         if (_broadcaster is not null)
         {
             var room = await _roomRepository.GetByIdWithMembersAsync(command.RoomId, ct);
-            if (room is null) return Unit.Value;
-
-            var allMembers = room.Members.Select(m => m.UserId).ToList();
-
-            var tasks = new List<Task>();
+            var allMembers = room?.Members.Select(m => m.UserId).ToList() ?? new();
 
             foreach (var msg in unreadBefore)
             {
-                // ✅ Read status للكل (مرّة واحدة لكل رسالة)
-                tasks.Add(_broadcaster.MessageStatusUpdatedAsync(
-                    msg.Id,
-                    command.UserId,                 // اللي قرأ فعلاً
-                    MessageStatus.Read,
-                    allMembers));
+                // 1. إبلاغ الجميع أن العضو "فلان" قرأ الرسالة
+                await _broadcaster.MessageStatusUpdatedAsync(msg.Id, command.UserId, MessageStatus.Read, allMembers);
 
-                // ✅ Stats للـ sender عشان ✓✓ تبقى زرقا عنده
-                tasks.Add(Task.Run(async () =>
-                {
-                    var stats = await _receiptRepo.GetMessageStatsAsync(msg.Id, ct);
-
-                    await _broadcaster.MessageReceiptStatsUpdatedAsync(
-                        msg.Id.Value,
-                        msg.SenderId.Value,
-                        stats.TotalRecipients,
-                        stats.DeliveredCount,
-                        stats.ReadCount);
-                }, ct));
+                // 2. 🚀 الخطوة الأهم: إرسال الإحصائيات المحدثة للمرسل فوراً لضمان عدم تلوينها بالأزرق بالخطأ
+                var stats = await _receiptRepo.GetMessageStatsAsync(msg.Id, ct);
+                await _broadcaster.MessageReceiptStatsUpdatedAsync(
+                    msg.Id.Value,
+                    command.RoomId.Value,
+                    stats.TotalRecipients,
+                    stats.DeliveredCount,
+                    stats.ReadCount);
             }
 
-            // ✅ تحديث sidebar unread count
-            var update = new RoomUpdatedDto
+            // تحديث العداد للمستخدم الذي قرأ
+            await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
             {
                 RoomId = command.RoomId.Value,
-                MessageId = command.LastMessageId.Value,
-                SenderId = command.UserId.Value,
-                Preview = "",
-                CreatedAt = DateTime.UtcNow,
-                UnreadDelta = -unreadBefore.Count,
-                RoomName = room.Name,
-                RoomType = room.Type.ToString()
-            };
-
-            tasks.Add(_broadcaster.RoomUpdatedAsync(update, allMembers));
-
-            await Task.WhenAll(tasks);
+                UnreadDelta = -unreadBefore.Count
+            }, new[] { command.UserId });
         }
-
-
         return Unit.Value;
     }
 }

@@ -820,3 +820,42 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     /* بدل super استخدم transform لو محتاج رفعة بسيطة */
     transform: translateY(-1px);
 }
+
+/* ========== أيقونات الحالة ========== */
+.status-icon.sent {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.status-icon.delivered {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.status-icon.read {
+    color: #34b7f1 !important; /* اللون الأزرق الفاتح زي واتساب */
+}
+
+/* لو عايز لون أزرق أغمق شوية: */
+/* .status-icon.read {
+    color: #3b82f6 !important;
+} */
+
+/* تأكد إن مفيش حاجة بت override اللون */
+.msg.mine .message-status-icon.read .status-icon {
+    color: #34b7f1 !important;
+}
+.room-last-status.read {
+    color: #34b7f1 !important;
+}
+
+.room-last-status.delivered {
+    color: #6b7280 !important;
+}
+
+.room-last-status.sent {
+    color: #9ca3af !important;
+}
+
+.message-status-icon.delivered .status-icon {
+    color: #ffffff !important; /* لون أبيض واضح للصحيين */
+    opacity: 1;
+}

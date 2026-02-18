@@ -90,7 +90,7 @@ public sealed class DeliverRoomMessagesCommandHandler : IRequestHandler<DeliverR
                         {
                             await _broadcaster.MessageReceiptStatsUpdatedAsync(
                                 msgId.Value,
-                                senderId.Value,
+                                command.RoomId.Value,
                                 stats.TotalRecipients,
                                 stats.DeliveredCount,
                                 stats.ReadCount);

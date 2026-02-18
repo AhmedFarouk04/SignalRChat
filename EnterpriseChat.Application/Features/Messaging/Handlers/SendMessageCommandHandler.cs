@@ -99,9 +99,11 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
             command.ReplyToMessageId);
 
         await _messageRepository.AddAsync(message, ct);
+        room.UpdateLastMessage(message);
 
-        // 🔥 الخطوة 1: حفظ الرسالة والـ Receipts
+        // 🔥 الخطوة 1: حفظ الرسالة والـ Receipts وتحديث LastMessage
         await _unitOfWork.CommitAsync(ct);
+        // 🔥 الخطوة 1: حفظ الرسالة والـ Receipts
 
         // 🔥 الخطوة 2: عمل Deliver للأونلاين فوراً
         var onlineUsers = await _presenceService.GetOnlineUsersAsync();

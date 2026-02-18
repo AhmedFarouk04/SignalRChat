@@ -141,6 +141,7 @@ public sealed class ChatDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);  // ✅ SetNull مش Cascade
         });
 
+        // في ConfigureValueObjects method
         modelBuilder.Entity<MessageReceipt>(entity =>
         {
             entity.Property(e => e.MessageId)
@@ -148,6 +149,13 @@ public sealed class ChatDbContext : DbContext
                     v => v.Value,
                     v => new MessageId(v))
                 .Metadata.SetValueComparer(messageIdComparer);
+
+            // ✅ أضف هذا الجزء (RoomId)
+            entity.Property(e => e.RoomId)
+                .HasConversion(
+                    v => v.Value,
+                    v => new RoomId(v))
+                .Metadata.SetValueComparer(roomIdComparer);
 
             entity.Property(e => e.UserId)
                 .HasConversion(

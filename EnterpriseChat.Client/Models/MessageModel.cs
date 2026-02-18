@@ -19,6 +19,26 @@ public class MessageModel : INotifyPropertyChanged
             }
         }
     }
+
+    private bool _shouldForceRead;
+    public bool ShouldForceRead
+    {
+        get => _shouldForceRead;
+        set
+        {
+            if (_shouldForceRead != value)
+            {
+                _shouldForceRead = value;
+                OnPropertyChanged();
+
+                // ✅ لو القيمة اتغيرت لـ true، غير PersonalStatus على طول
+                if (value && PersonalStatus < MessageStatus.Read)
+                {
+                    PersonalStatus = MessageStatus.Read;
+                }
+            }
+        }
+    }
     public Guid Id
     {
         get => _id;
@@ -314,6 +334,11 @@ public class MessageModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    public void NotifyPropertyChanged(string propertyName)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }

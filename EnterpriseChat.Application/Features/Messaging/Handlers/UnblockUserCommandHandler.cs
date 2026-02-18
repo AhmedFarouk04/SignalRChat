@@ -21,9 +21,8 @@ public sealed class UnblockUserCommandHandler : IRequestHandler<UnblockUserComma
         await _repo.RemoveAsync(request.BlockerId, request.BlockedId, ct);
         await _uow.CommitAsync(ct);
 
-        // ✅ بس flag… بدون ما نرجع presence Online
+        // ✅ نبعت CheckUserOnline للاتنين عشان يشوفوا الحالة الحقيقية
         await _presenceNotifier.BlockChangedAsync(request.BlockerId.Value, request.BlockedId.Value, false, ct);
-        await _presenceNotifier.BlockChangedAsync(request.BlockedId.Value, request.BlockerId.Value, false, ct);
 
         return Unit.Value;
     }

@@ -16,13 +16,13 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 {
     private readonly IHubContext<ChatHub> _hub;
     private readonly IMutedRoomRepository _muteRepo;
+    private readonly IMessageRepository _messageRepo;
 
-    public SignalRMessageBroadcaster(
-        IHubContext<ChatHub> hub,
-        IMutedRoomRepository muteRepo)
+    public SignalRMessageBroadcaster(IHubContext<ChatHub> hub, IMutedRoomRepository muteRepo, IMessageRepository messageRepo)
     {
         _hub = hub;
         _muteRepo = muteRepo;
+        _messageRepo = messageRepo;
     }
 
     public async Task BroadcastMessageAsync(MessageDto message, IEnumerable<UserId> recipients)
@@ -37,29 +37,23 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await Task.WhenAll(tasks);
     }
 
+    // ✅ تعديل: نستخدم roomId للبث للغرفة
+    public async Task MessageReceiptStatsUpdatedAsync(Guid messageId, Guid roomId, int totalRecipients, int deliveredCount, int readCount)
+    {
+        var msg = await _messageRepo.GetByIdAsync(messageId, CancellationToken.None);
+        if (msg is null) return;
 
-    public async Task MessageReceiptStatsUpdatedAsync(
-      Guid messageId,
-      Guid roomId,  // ← جديد: roomId بدل targetUserId
-      int totalRecipients,
-      int deliveredCount,
-      int readCount)
-    {
-        // ابعت للـ group بتاع الـ room (موثوق 100%)
-        await _hub.Clients.Group(roomId.ToString())
-            .SendAsync("MessageReceiptStatsUpdated", messageId, totalRecipients, deliveredCount, readCount);
+        await _hub.Clients.User(msg.SenderId.Value.ToString())
+            .SendAsync("MessageReceiptStatsUpdated", messageId, roomId, totalRecipients, deliveredCount, readCount);
     }
-    // عدل الطرق الحالية لترسل لكل الأعضاء
-    public async Task MessageDeliveredAsync(
-        MessageId messageId,
-        UserId userId)
+
+
+
+    public async Task MessageDeliveredAsync(MessageId messageId, UserId userId)
     {
-        // احصل على أعضاء الغرفة أولاً (سنضيف هذا المنطق في الـ Handler)
-        // حالياً نرسل للمرسل فقط (للتوافق مع الكود الحالي)
         await _hub.Clients.User(userId.Value.ToString())
             .SendAsync("MessageDelivered", messageId.Value);
     }
-
 
     public async Task MemberLeftAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
     {
@@ -153,10 +147,10 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
                 .SendAsync("RoomUpdated", perUserUpdate));
         }
 
-       
         await Task.WhenAll(tasks);
         Console.WriteLine($"[Broadcast] RoomUpdated sent for room {update.RoomId}, delta={update.UnreadDelta}, recipients={users.Count()}");
     }
+
     public async Task RoomUpsertedAsync(RoomListItemDto room, IEnumerable<UserId> users)
     {
         var roomId = new RoomId(room.Id);
@@ -210,10 +204,7 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
     }
 
     public async Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
-    {
-        await MemberRemovedAsync(roomId, memberId, null, null, users);
-    }
-
+        => await MemberRemovedAsync(roomId, memberId, null, null, users);
 
     public async Task MessageUpdatedAsync(MessageId messageId, string newContent, IEnumerable<UserId> recipients)
     {
@@ -229,19 +220,12 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await Task.WhenAll(tasks);
     }
 
-    public async Task MessageReadAsync(
-    MessageId messageId,
-    UserId userId)
+    public async Task MessageReadAsync(MessageId messageId, UserId userId)
     {
         await _hub.Clients.User(userId.Value.ToString())
             .SendAsync("MessageRead", messageId.Value);
     }
 
-    
- 
-
-    
-    // في SignalRMessageBroadcaster.cs أضف:
     public async Task MessageReactionUpdatedAsync(
         MessageId messageId,
         UserId userId,
@@ -259,13 +243,12 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
         await Task.WhenAll(tasks);
     }
+
     public async Task NotifyMessagePinned(Guid roomId, Guid? messageId)
     {
-        // إرسال الإشارة لكل المشتركين في الغرفة عبر SignalR
         await _hub.Clients.Group(roomId.ToString())
             .SendAsync("MessagePinned", roomId, messageId);
     }
-
 
     public async Task MessageDeliveredToAllAsync(MessageId messageId, UserId senderId, IEnumerable<UserId> users)
     {
@@ -302,6 +285,4 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
         await Task.WhenAll(tasks);
     }
-
-
 }

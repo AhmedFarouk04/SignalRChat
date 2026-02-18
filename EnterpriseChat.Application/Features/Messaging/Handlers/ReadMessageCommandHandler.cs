@@ -64,7 +64,7 @@ public sealed class ReadMessageCommandHandler : IRequestHandler<ReadMessageComma
         // 2) ابعت receipt stats للـ sender فقط (هو اللي بيشوف ✓✓)
         await _broadcaster.MessageReceiptStatsUpdatedAsync(
             command.MessageId.Value,
-            msg.SenderId.Value,           // ✅ sender
+             msg.RoomId.Value,           // ✅ sender
             stats.TotalRecipients,
             stats.DeliveredCount,
             stats.ReadCount);

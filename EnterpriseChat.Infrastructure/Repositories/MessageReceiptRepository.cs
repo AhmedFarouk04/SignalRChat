@@ -5,7 +5,6 @@ using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-
 namespace EnterpriseChat.Infrastructure.Repositories;
 
 public sealed class MessageReceiptRepository
@@ -60,22 +59,36 @@ public sealed class MessageReceiptRepository
         MessageId messageId,
         CancellationToken ct = default)
     {
-        var receipts = await GetReceiptsForMessageAsync(messageId, ct);
+        // 1. نجيب العدد الإجمالي للمستلمين
+        var totalCount = await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId)
+            .CountAsync(ct);
 
-        var deliveredUsers = receipts
-            .Where(r => r.Status >= MessageStatus.Delivered)
-            .Select(r => r.UserId)
-            .ToList();
+        // 2. نجيب عدد المستلمين الذين حالتهم >= Delivered
+        var deliveredCount = await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Delivered)
+            .CountAsync(ct);
 
-        var readUsers = receipts
-            .Where(r => r.Status >= MessageStatus.Read)
+        // 3. نجيب عدد المستلمين الذين حالتهم >= Read
+        var readCount = await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Read)
+            .CountAsync(ct);
+
+        // 4. نجيب قوائم المستخدمين الذين تم التسليم لهم والقراءة (اختياري)
+        var deliveredUsers = await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Delivered)
             .Select(r => r.UserId)
-            .ToList();
+            .ToListAsync(ct);
+
+        var readUsers = await _context.MessageReceipts
+            .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Read)
+            .Select(r => r.UserId)
+            .ToListAsync(ct);
 
         return new MessageReceiptStats(
-            totalRecipients: receipts.Count,
-            deliveredCount: deliveredUsers.Count,
-            readCount: readUsers.Count,
+            totalRecipients: totalCount,
+            deliveredCount: deliveredCount,
+            readCount: readCount,
             deliveredUsers: deliveredUsers,
             readUsers: readUsers
         );
@@ -101,5 +114,5 @@ public sealed class MessageReceiptRepository
             .ToListAsync(ct);
     }
 
-
+    
 }

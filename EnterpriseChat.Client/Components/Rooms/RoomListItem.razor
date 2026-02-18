@@ -57,7 +57,7 @@
             @if (!string.IsNullOrWhiteSpace(Room.LastMessagePreview))
             {
                 <div class="room-preview" title="@Room.LastMessagePreview">
-                    @if (IsMyLastMessage && Room.LastMessageStatus.HasValue)
+                    @if (Room.LastMessageStatus.HasValue && IsMyLastMessage)
                     {
                         <span class="room-last-status @GetStatusClass(Room.LastMessageStatus.Value)"
                               title="@StatusTooltip(Room.LastMessageStatus.Value)">
@@ -65,7 +65,6 @@
                         </span>
                         <span>&nbsp;</span>
                     }
-
                     @if (IsTyping)
                     {
                         <span class="typing-indicator-room">
@@ -92,18 +91,7 @@
     [Parameter] public bool IsTyping { get; set; }
     [Parameter] public Guid CurrentUserId { get; set; }
     private bool IsMyLastMessage => Room.LastMessageSenderId == CurrentUserId;
-    protected override void OnParametersSet()
-    {
-        Console.WriteLine($"[RoomListItem] Room: {Room.Name}, Type: {Room.Type}, OtherUserId: {Room.OtherUserId}");
-        Console.WriteLine($"[RoomListItem] IsOnline: {IsOnline}, LastSeenText: {LastSeenText}");
-
-        if (Room.Type == "Private" && IsOnline == true)
-        {
-            Console.WriteLine($"[RoomListItem] ⚠️ Should show green dot for {Room.Name}");
-        }
-
-        base.OnParametersSet();
-    }
+    
     private static string GetStatusClass(MessageStatus status) => status switch
     {
         MessageStatus.Pending => "pending",
@@ -157,6 +145,24 @@
         text = text.Trim();
         if (text.Length <= max) return text;
         return text.Substring(0, max - 1) + "…";
+    }
+    protected override void OnParametersSet()
+    {
+        Console.WriteLine($"[RoomListItem] 🏠 Rendering: {Room.Name}, Status={Room.LastMessageStatus}, IsMyLastMessage={IsMyLastMessage}");
+
+        if (Room.Type == "Private" && IsOnline == true)
+        {
+            Console.WriteLine($"[RoomListItem] ⚠️ Should show green dot for {Room.Name}");
+        }
+
+        base.OnParametersSet();
+    }
+
+    // ✅ أضف هذه الدالة لتحديث الأيقونة فوراً
+    protected override bool ShouldRender()
+    {
+        // دايمًا نعيد الرسم عشان نضمن ظهور التحديثات
+        return true;
     }
    
 }

@@ -63,7 +63,7 @@ builder.Services.AddScoped<GroupsApi>();
 builder.Services.AddScoped<ModerationApi>();
 builder.Services.AddScoped<AttachmentsApi>();
 builder.Services.AddScoped<PresenceApi>();
-builder.Services.AddSingleton<RoomFlagsStore>();
+builder.Services.AddScoped<RoomFlagsStore>();
 builder.Services.AddScoped<NotificationSoundService>();
 builder.Services.AddScoped<EnterpriseChat.Client.Models.ReplyContext>();
 builder.Services.AddScoped<ReactionsApi>();

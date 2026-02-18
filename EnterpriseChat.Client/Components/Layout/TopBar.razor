@@ -45,7 +45,12 @@
                     <div class="room-sub">
                         @if (IsPrivate && OtherUser != null)
                         {
-                            @if (OtherUser.IsOnline)
+                            @if (VM.IsBlockedByMe || VM.IsBlockedMe)
+                            {
+                                <span class="dot offline"></span>
+                                <span>Offline</span>
+                            }
+                            else if (OtherUser.IsOnline)
                             {
                                 <span class="dot online"></span>
                                 <span>Online</span>
@@ -75,7 +80,7 @@
                         {
                             <span>@MembersCount members</span>
                             <span>•</span>
-                            <span>@OnlineCount online</span>
+                            <span>@(CurrentOnlineCount) online</span>
                         }
                     </div>
                 </div>
@@ -141,18 +146,49 @@
     private string Title => IsPrivate ? Room?.OtherDisplayName ?? "Private Chat" : Room?.Name ?? "Group";
     private int _displayIndex = 0;
     private Guid _currentUserId;
+    private int CurrentOnlineCount => VM?.OnlineUsers?.Count ?? OnlineCount;
 
     protected override async Task OnInitializedAsync()
     {
         var userId = await CurrentUser.GetUserIdAsync();
         _currentUserId = userId ?? Guid.Empty;
-
+        Realtime.UserBlockedByMeChanged += OnBlockedByMe;
+        Realtime.UserBlockedMeChanged += OnBlockedMe;
         Realtime.UserOnline += OnUserOnline;
         Realtime.UserOffline += OnUserOffline;
         Realtime.UserLastSeenUpdated += OnUserLastSeenUpdated;
         Realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
+
+        if (VM != null)
+        {
+            VM.Changed += OnViewModelChanged;
+        }
+    }
+    private void OnBlockedByMe(Guid userId, bool blocked)
+    {
+        if (OtherUser?.Id == userId)
+        {
+            if (blocked)
+            {
+                OtherUser.IsOnline = false;
+                OtherUser.LastSeen = null;
+            }
+            InvokeAsync(StateHasChanged);
+        }
     }
 
+    private void OnBlockedMe(Guid userId, bool blocked)
+    {
+        if (OtherUser?.Id == userId)
+        {
+            if (blocked)
+            {
+                OtherUser.IsOnline = false;
+                OtherUser.LastSeen = null;
+            }
+            InvokeAsync(StateHasChanged);
+        }
+    }
     private void OnUserOnline(Guid userId)
     {
         if (OtherUser?.Id == userId)
@@ -169,8 +205,9 @@
         {
             OtherUser.IsOnline = false;
             OtherUser.LastSeen = DateTime.UtcNow;
-            InvokeAsync(StateHasChanged);
         }
+        InvokeAsync(StateHasChanged);
+
     }
 
     private void OnUserLastSeenUpdated(Guid userId, DateTime lastSeen)
@@ -223,12 +260,22 @@
             await OnScrollToMessage.InvokeAsync(messageId);
         }
     }
-
+    private void OnViewModelChanged()
+    {
+        InvokeAsync(StateHasChanged);
+        Console.WriteLine($"[TopBar] ViewModel changed, online count: {VM?.OnlineUsers?.Count ?? 0}");
+    }
     public void Dispose()
     {
         Realtime.UserOnline -= OnUserOnline;
         Realtime.UserOffline -= OnUserOffline;
         Realtime.UserLastSeenUpdated -= OnUserLastSeenUpdated;
         Realtime.RoomPresenceUpdated -= OnRoomPresenceUpdated;
+        Realtime.UserBlockedByMeChanged -= OnBlockedByMe;
+        Realtime.UserBlockedMeChanged -= OnBlockedMe;
+        if (VM != null)
+        {
+            VM.Changed -= OnViewModelChanged;
+        }
     }
 }

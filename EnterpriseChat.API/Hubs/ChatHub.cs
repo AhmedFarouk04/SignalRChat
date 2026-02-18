@@ -20,9 +20,11 @@ public sealed class ChatHub : Hub
     private readonly IChatRoomRepository _roomRepository;
     private readonly IRoomPresenceService _roomPresence;
     private readonly ITypingService _typing;
+    private readonly IMessageRepository _messageRepository;
     private readonly IUserBlockRepository _blockRepository;  // ← أضف ده
     private static readonly ConcurrentDictionary<string, DateTime> _typingBroadcastGate = new();
     private static readonly ConcurrentDictionary<string, byte> _joinedRooms = new();
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public ChatHub(
         IPresenceService presence,
@@ -30,7 +32,9 @@ public sealed class ChatHub : Hub
         IChatRoomRepository roomRepository,
         IRoomPresenceService roomPresence,
         ITypingService typing,
-        IUserBlockRepository blockRepository)
+        IUserBlockRepository blockRepository,
+        IMessageRepository messageRepository,
+        IServiceScopeFactory scopeFactory)
     {
         _presence = presence;
         _mediator = mediator;
@@ -38,6 +42,8 @@ public sealed class ChatHub : Hub
         _roomPresence = roomPresence;
         _typing = typing;
         _blockRepository = blockRepository;
+        _messageRepository = messageRepository;
+        _scopeFactory = scopeFactory;
     }
 
     // ✅ ChatHub.cs - الجزء المُصلح من OnConnectedAsync
@@ -46,6 +52,8 @@ public sealed class ChatHub : Hub
     {
         var userId = GetUserId();
         var connectionId = Context.ConnectionId;
+
+        Console.WriteLine($"[ChatHub] 🔵 OnConnectedAsync START for user {userId.Value}");
 
         await _presence.UserConnectedAsync(userId, connectionId);
 
@@ -56,30 +64,25 @@ public sealed class ChatHub : Hub
             foreach (var target in visibleUsers)
             {
                 if (target == userId) continue;
-
                 await Clients.User(target.Value.ToString()).SendAsync("UserOnline", userId.Value);
-                Console.WriteLine($"[ChatHub] Notified user {target} that {userId} is online");
             }
 
-            // ✅ 2. كمان نبعت للمستخدم نفسه قائمة الـ online users الكاملة
             var allOnlineForMe = await GetVisibleOnlineUsersForMe(userId);
             var onlineIds = allOnlineForMe.Select(u => u.Value).ToList();
             await Clients.Caller.SendAsync("InitialOnlineUsers", onlineIds);
-            Console.WriteLine($"[ChatHub] Sent initial online users to {userId}: {onlineIds.Count}");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[ChatHub] Error broadcasting online status: {ex.Message}");
         }
 
-        // ✅ انضمام المستخدم لكل "روماته" في SignalR
+        // ✅ 2. انضمام المستخدم لكل "روماته" في SignalR
         try
         {
             var rooms = await _roomRepository.GetForUserAsync(userId, CancellationToken.None);
             foreach (var room in rooms)
             {
                 await Groups.AddToGroupAsync(connectionId, room.Id.ToString());
-                Console.WriteLine($"[ChatHub] User {userId} joined room {room.Id}");
             }
         }
         catch (Exception ex)
@@ -87,22 +90,54 @@ public sealed class ChatHub : Hub
             Console.WriteLine($"[ChatHub] Error joining rooms: {ex.Message}");
         }
 
-        // ✅ Auto-deliver غير المُسلَّمة (اختياري - لو محتاجه)
+        // ✅ 3. 🔥 Auto-delivery مع Scope منفصل
         _ = Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(1000); // انتظر ثانية عشان الـ connection يستقر
+                Console.WriteLine($"[Auto-Delivery] 🔍 Creating scope for user {userId.Value}");
+
+                // إنشاء Scope جديد
+                using var scope = _scopeFactory.CreateScope();
+
+                // الحصول على services جديدة من الـ scope
+                var roomRepository = scope.ServiceProvider.GetRequiredService<IChatRoomRepository>();
+                var messageRepository = scope.ServiceProvider.GetRequiredService<IMessageRepository>();
+                var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+                await Task.Delay(2000);
+                Console.WriteLine($"[Auto-Delivery] Delay completed for user {userId.Value}");
+
+                var rooms = await roomRepository.GetForUserAsync(userId, CancellationToken.None);
+                Console.WriteLine($"[Auto-Delivery] User {userId.Value} has {rooms.Count} rooms");
+
+                foreach (var room in rooms)
+                {
+                    Console.WriteLine($"[Auto-Delivery] Checking room {room.Id.Value}");
+
+                    var undeliveredMessages = await messageRepository.GetUndeliveredForUserAsync(room.Id, userId, CancellationToken.None);
+
+                    Console.WriteLine($"[Auto-Delivery] Room {room.Id.Value}: found {undeliveredMessages.Count} undelivered messages");
+
+                    foreach (var msg in undeliveredMessages)
+                    {
+                        Console.WriteLine($"[Auto-Delivery] Sending DeliverMessageCommand for msg {msg.Id.Value}");
+                        await mediator.Send(new DeliverMessageCommand(msg.Id, userId));
+                        Console.WriteLine($"[Auto-Delivery] ✅ Command sent for msg {msg.Id.Value}");
+                    }
+                }
+
+                Console.WriteLine($"[Auto-Delivery] ✅ Completed for user {userId.Value}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ChatHub] Auto-deliver error: {ex.Message}");
+                Console.WriteLine($"[Auto-Delivery] ❌ Error: {ex.Message}");
+                Console.WriteLine($"[Auto-Delivery] StackTrace: {ex.StackTrace}");
             }
         });
 
         await base.OnConnectedAsync();
     }
-
     public async Task HandleBlockUpdate(Guid blockerId, Guid blockedId, bool isBlocked)
     {
         if (isBlocked)
@@ -130,22 +165,37 @@ public sealed class ChatHub : Hub
     {
         try
         {
-            var me = GetUserId();
+            // ✅ حماية: لو مفيش User في الـ Context، ارجع default آمن
+            var meRaw = Context.User?.FindFirst("sub")?.Value
+                     ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                     ?? Context.User?.FindFirst("nameid")?.Value;
+
+            if (string.IsNullOrWhiteSpace(meRaw) || !Guid.TryParse(meRaw, out var meGuid) || meGuid == Guid.Empty)
+            {
+                Console.WriteLine($"[GetUserOnlineStatus] No valid user in context for target {userId}. Returning default offline.");
+                return new
+                {
+                    IsOnline = false,
+                    LastSeen = (DateTime?)null,
+                    IsBlocked = false
+                };
+            }
+
+            var me = new UserId(meGuid);
             var target = new UserId(userId);
 
-            // التحقق من Block - بشكل آمن
             bool isBlocked = false;
-            if (_blockRepository != null)
+            try
             {
-                try
+                if (_blockRepository != null)
                 {
                     isBlocked = await _blockRepository.IsBlockedAsync(me, target) ||
                                 await _blockRepository.IsBlockedAsync(target, me);
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[GetUserOnlineStatus] Block check error: {ex.Message}");
-                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GetUserOnlineStatus] Block check failed safely: {ex.Message}");
             }
 
             if (isBlocked)
@@ -158,47 +208,24 @@ public sealed class ChatHub : Hub
                 };
             }
 
-            bool isOnline = false;
-            if (_presence != null)
-            {
-                try
-                {
-                    isOnline = await _presence.IsOnlineAsync(target);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[GetUserOnlineStatus] IsOnline error: {ex.Message}");
-                }
-            }
-
+            bool isOnline = await _presence.IsOnlineAsync(target);
             DateTime? lastSeen = null;
-            if (!isOnline && _presence != null)
+
+            if (!isOnline)
             {
-                try
-                {
-                    lastSeen = await _presence.GetLastSeenAsync(target);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[GetUserOnlineStatus] LastSeen error: {ex.Message}");
-                }
+                lastSeen = await _presence.GetLastSeenAsync(target);
             }
 
-            // ✅ إرجاع كائن مجهول بشكل آمن
-            var result = new
+            return new
             {
                 IsOnline = isOnline,
                 LastSeen = lastSeen,
                 IsBlocked = false
             };
-
-            return result;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[GetUserOnlineStatus] Fatal error: {ex.Message}");
-
-            // ✅ إرجاع كائن افتراضي في حالة الخطأ
+            Console.WriteLine($"[GetUserOnlineStatus] Safe fallback - error: {ex.Message}");
             return new
             {
                 IsOnline = false,
@@ -411,7 +438,11 @@ public sealed class ChatHub : Hub
 
     public async Task MarkRoomRead(Guid roomId, Guid lastMessageId)
     {
-        await _mediator.Send(new MarkRoomReadCommand(
+        // إنشاء Scope مستقل يضمن عدم تداخل الـ DbContext
+        using var scope = _scopeFactory.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+        await mediator.Send(new MarkRoomReadCommand(
             new RoomId(roomId),
             GetUserId(),
             MessageId.From(lastMessageId)));
@@ -498,7 +529,6 @@ public sealed class ChatHub : Hub
         await Clients.Group(roomId.ToString()).SendAsync("MemberAdded", roomId, userId, displayName);
     }
 
-
     public async Task SendMessageWithReply(SendMessageWithReplyRequest request)
     {
         var userId = GetUserId();
@@ -507,52 +537,69 @@ public sealed class ChatHub : Hub
             new RoomId(request.RoomId),
             userId,
             request.Content,
-            request.ReplyToMessageId.HasValue ?
-                new MessageId(request.ReplyToMessageId.Value) : null);
+            request.ReplyToMessageId.HasValue
+                ? new MessageId(request.ReplyToMessageId.Value)
+                : null);
 
-        var result = await _mediator.Send(command);
+        await _mediator.Send(command);
 
-        // ✅ حول الـ result لـ MessageDto
-        var messageDto = new MessageDto
-        {
-            Id = result.Id,
-            RoomId = result.RoomId,
-            SenderId = result.SenderId,
-            Content = result.Content,
-            CreatedAt = result.CreatedAt,
-            Status = result.Status,
-            ReplyToMessageId = result.ReplyToMessageId,
-            ReplyInfo = result.ReplyInfo != null ? new ReplyInfoDto
-            {
-                MessageId = result.ReplyInfo.MessageId,
-                SenderId = result.ReplyInfo.SenderId,
-                SenderName = result.ReplyInfo.SenderName,
-                ContentPreview = result.ReplyInfo.ContentPreview,
-                CreatedAt = result.ReplyInfo.CreatedAt,
-                IsDeleted = result.ReplyInfo.IsDeleted
-            } : null,
-            IsEdited = result.IsEdited,
-            IsDeleted = result.IsDeleted,
-            ReadCount = result.ReadCount,
-            DeliveredCount = result.DeliveredCount,
-            TotalRecipients = result.TotalRecipients
-        };
-
-        // 🔥 فك التعليق عن السطر ده!
-        await Clients.Group(request.RoomId.ToString())
-        .SendAsync("MessageReceived", messageDto);
-
-        // 2. ابعت مباشرة لكل عضو (Fallback)
-        var room = await _roomRepository.GetByIdWithMembersAsync(new RoomId(request.RoomId));
-        if (room != null)
-        {
-            foreach (var member in room.Members)
-            {
-                await Clients.User(member.UserId.Value.ToString())
-                    .SendAsync("MessageReceived", messageDto);
-            }
-        }
+        // ✅ ممنوع تبعت MessageReceived هنا (ولا Group ولا Users)
     }
+
+    //public async Task SendMessageWithReply(SendMessageWithReplyRequest request)
+    //{
+    //    var userId = GetUserId();
+
+    //    var command = new SendMessageCommand(
+    //        new RoomId(request.RoomId),
+    //        userId,
+    //        request.Content,
+    //        request.ReplyToMessageId.HasValue ?
+    //            new MessageId(request.ReplyToMessageId.Value) : null);
+
+    //    var result = await _mediator.Send(command);
+
+    //    // ✅ حول الـ result لـ MessageDto
+    //    var messageDto = new MessageDto
+    //    {
+    //        Id = result.Id,
+    //        RoomId = result.RoomId,
+    //        SenderId = result.SenderId,
+    //        Content = result.Content,
+    //        CreatedAt = result.CreatedAt,
+    //        Status = result.Status,
+    //        ReplyToMessageId = result.ReplyToMessageId,
+    //        ReplyInfo = result.ReplyInfo != null ? new ReplyInfoDto
+    //        {
+    //            MessageId = result.ReplyInfo.MessageId,
+    //            SenderId = result.ReplyInfo.SenderId,
+    //            SenderName = result.ReplyInfo.SenderName,
+    //            ContentPreview = result.ReplyInfo.ContentPreview,
+    //            CreatedAt = result.ReplyInfo.CreatedAt,
+    //            IsDeleted = result.ReplyInfo.IsDeleted
+    //        } : null,
+    //        IsEdited = result.IsEdited,
+    //        IsDeleted = result.IsDeleted,
+    //        ReadCount = result.ReadCount,
+    //        DeliveredCount = result.DeliveredCount,
+    //        TotalRecipients = result.TotalRecipients
+    //    };
+
+    //    // 🔥 فك التعليق عن السطر ده!
+    //    await Clients.Group(request.RoomId.ToString())
+    //    .SendAsync("MessageReceived", messageDto);
+
+    //    // 2. ابعت مباشرة لكل عضو (Fallback)
+    //    //var room = await _roomRepository.GetByIdWithMembersAsync(new RoomId(request.RoomId));
+    //    //if (room != null)
+    //    //{
+    //    //    foreach (var member in room.Members)
+    //    //    {
+    //    //        await Clients.User(member.UserId.Value.ToString())
+    //    //            .SendAsync("MessageReceived", messageDto);
+    //    //    }
+    //    //}
+    //}
     private UserId GetUserId()
 {
     var raw =

@@ -1,5 +1,6 @@
 ﻿using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.ValueObjects;
+namespace EnterpriseChat.Domain.Common;
 
 public sealed class LastMessageInfo
 {

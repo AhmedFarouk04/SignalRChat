@@ -16,8 +16,15 @@ public sealed class ChatRoom
     public Guid? PinnedMessageId { get; private set; }
     public DateTime? PinnedUntilUtc { get; private set; }
 
+    // ✅ Last Message Info
+    public MessageId? LastMessageId { get; private set; }
+    public string? LastMessagePreview { get; private set; }
+    public DateTime? LastMessageAt { get; private set; }
+    public UserId? LastMessageSenderId { get; private set; }
+
     private readonly List<ChatRoomMember> _members = new();
     public IReadOnlyCollection<ChatRoomMember> Members => _members.AsReadOnly();
+
     private ChatRoom() { }
 
     public ChatRoom(string name, RoomType type, UserId creatorId)
@@ -80,7 +87,18 @@ public sealed class ChatRoom
         return room;
     }
 
+    // ✅ ميثود تحديث آخر رسالة
+    public void UpdateLastMessage(Message message)
+    {
+        if (message == null) return;
 
+        LastMessageId = message.Id;
+        LastMessagePreview = message.Content?.Length > 60
+            ? message.Content.Substring(0, 60) + "..."
+            : message.Content;
+        LastMessageAt = message.CreatedAt;
+        LastMessageSenderId = message.SenderId;
+    }
 
     public void AddMember(UserId userId, bool isOwner = false)
     {
@@ -90,7 +108,6 @@ public sealed class ChatRoom
         var isAdmin = isOwner;
         _members.Add(ChatRoomMember.Create(Id, userId, isOwner, isAdmin));
     }
-
 
     public void Leave(UserId userId)
     {
@@ -109,7 +126,6 @@ public sealed class ChatRoom
         RemoveMember(userId);
     }
 
-
     public void RemoveMember(UserId userId)
     {
         if (Type == RoomType.Private)
@@ -121,8 +137,6 @@ public sealed class ChatRoom
             _members.Remove(member);
     }
 
-  
-
     public void SetOwner(UserId newOwnerId)
     {
         if (Type != RoomType.Group)
@@ -133,21 +147,22 @@ public sealed class ChatRoom
         foreach (var m in _members)
         {
             if (m.UserId.Value == newOwnerId.Value)
-                m.SetOwner(true);   // ✅ دي بتشتغل دلوقتي
+                m.SetOwner(true);
             else
-                m.SetOwner(false);  // ✅ دي برضه
+                m.SetOwner(false);
         }
     }
-    public IReadOnlyList<UserId> GetMemberIds()
-    => _members.Select(m => m.UserId).ToList();
-    public bool IsMember(UserId userId)
-      => _members.Any(m => m.UserId.Value == userId.Value);
 
+    public IReadOnlyList<UserId> GetMemberIds()
+        => _members.Select(m => m.UserId).ToList();
+
+    public bool IsMember(UserId userId)
+        => _members.Any(m => m.UserId.Value == userId.Value);
 
     public bool IsPrivateWith(UserId a, UserId b)
-     => Type == RoomType.Private &&
-        IsMember(a) &&
-        IsMember(b);
+        => Type == RoomType.Private &&
+           IsMember(a) &&
+           IsMember(b);
 
     public void Rename(string name)
     {
@@ -167,7 +182,6 @@ public sealed class ChatRoom
     {
         if (messageId == null)
         {
-            // حالة إلغاء التثبيت (Unpin)
             PinnedMessageId = null;
             PinnedUntilUtc = null;
             return;
@@ -175,17 +189,15 @@ public sealed class ChatRoom
 
         PinnedMessageId = messageId;
 
-        // إذا تم تحديد مدة، نحسب وقت الانتهاء
         if (duration.HasValue)
         {
             PinnedUntilUtc = DateTime.UtcNow.Add(duration.Value);
         }
         else
         {
-            PinnedUntilUtc = null; // تثبيت دائم
+            PinnedUntilUtc = null;
         }
     }
+
     public void UnpinMessage() => PinnedMessageId = null;
-
-
 }

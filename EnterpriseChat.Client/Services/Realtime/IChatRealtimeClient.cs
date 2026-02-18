@@ -8,8 +8,6 @@ public interface IChatRealtimeClient
 {
     ChatRealtimeState State { get; }
 
-    event Action<Guid>? MessageDelivered;
-    event Action<Guid>? MessageRead;
     event Action<MessageModel>? MessageReceived;
 
     event Action<RoomUpdatedModel>? RoomUpdated;
@@ -42,15 +40,17 @@ public interface IChatRealtimeClient
     event Action<Guid>? MessageDeleted;
     // في IChatRealtimeClient.cs أضف:
     event Action<Guid, Guid, int> MessageStatusUpdated; // messageId, userId, status
-    event Action<Guid, Guid> MessageDeliveredToAll; // messageId, senderId
-    event Action<Guid, Guid> MessageReadToAll; // messageId, senderId
+    
     event Action<Guid, Guid, int, bool> MessageReactionUpdated; // messageId, userId, reactionType, isNewReaction
     event Action<Guid, Guid?>? MessagePinned; // (roomId, messageId)
      event Action<List<Guid>>? InitialOnlineUsersReceived;
 
-    event Action<Guid, int, int, int>? MessageReceiptStatsUpdated;
+    event Action<Guid, Guid, int, int, int>? MessageReceiptStatsUpdated;
 
-
+    event Action<Guid, Guid>? MessageDelivered;  // messageId, roomId
+    event Action<Guid, Guid>? MessageRead;       // messageId, roomId
+    event Action<Guid, Guid, Guid>? MessageDeliveredToAll; // messageId, senderId, roomId
+    event Action<Guid, Guid, Guid>? MessageReadToAll;      // messageId, senderId, roomId
 
 
     Task PinMessageAsync(Guid roomId, Guid? messageId);

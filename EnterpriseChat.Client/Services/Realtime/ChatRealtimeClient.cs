@@ -1,8 +1,8 @@
-﻿using EnterpriseChat.Application.DTOs;
-using EnterpriseChat.Client.Authentication.Abstractions;
+﻿using EnterpriseChat.Client.Authentication.Abstractions;
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Ui;
 using Microsoft.AspNetCore.SignalR.Client;
+using EnterpriseChat.Application.DTOs;
 
 namespace EnterpriseChat.Client.Services.Realtime;
 
@@ -11,6 +11,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     private readonly ITokenStore _tokenStore;
     private readonly HttpClient _http;
     private readonly RoomFlagsStore _flags;
+    private readonly ICurrentUser _currentUser;
+    private Guid? _cachedUserId; // Cache للـ UserId
 
     private HubConnection? _connection;
     private CancellationTokenSource? _typingCts;
@@ -32,10 +34,9 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     private bool _heartbeatActive;
     private readonly TimeSpan _heartbeatInterval = TimeSpan.FromSeconds(30);
     private readonly TimeSpan _heartbeatTimeout = TimeSpan.FromSeconds(90);
+
     public ChatRealtimeState State { get; } = new();
 
-    public event Action<Guid>? MessageDelivered;
-    public event Action<Guid>? MessageRead;
     public event Action<MessageModel>? MessageReceived;
     public event Action<Guid, bool>? RoomMuteChanged;
     public event Action<Guid>? UserOnline;
@@ -58,22 +59,54 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     public event Action<Guid, Guid>? OwnerTransferred;
     public event Action<RoomListItemDto>? RoomUpserted;
     public event Action<Guid, Guid, int>? MessageStatusUpdated;
-    public event Action<Guid, Guid>? MessageDeliveredToAll;
-    public event Action<Guid, Guid>? MessageReadToAll;
     public event Action<Guid, Guid, int, bool>? MessageReactionUpdated;
     public event Action<Guid, string>? MessageUpdated;
     public event Action<Guid>? MessageDeleted;
     public event Action<Guid, bool>? UserBlockedByMeChanged;
     public event Action<Guid, bool>? UserBlockedMeChanged;
     public event Action<Guid>? OnDemandOnlineCheckRequested;
-    public event Action<Guid, int, int, int>? MessageReceiptStatsUpdated;
+    public event Action<Guid, Guid, int, int, int>? MessageReceiptStatsUpdated;
     public event Action<List<Guid>>? InitialOnlineUsersReceived;
+    public event Action<Guid, Guid>? MessageDelivered;
+    public event Action<Guid, Guid>? MessageRead;
+    public event Action<Guid, Guid, Guid>? MessageDeliveredToAll;
+    public event Action<Guid, Guid, Guid>? MessageReadToAll;
 
-    public ChatRealtimeClient(ITokenStore tokenStore, HttpClient http, RoomFlagsStore flags)
+    public ChatRealtimeClient(
+        ITokenStore tokenStore,
+        HttpClient http,
+        RoomFlagsStore flags,
+        ICurrentUser currentUser)
     {
         _tokenStore = tokenStore;
         _http = http;
         _flags = flags;
+        _currentUser = currentUser;
+    }
+
+    // دالة مساعدة لجلب الـ UserId الحالي بشكل آمن
+    private async Task<Guid?> GetCurrentUserIdAsync()
+    {
+        try
+        {
+            if (_cachedUserId.HasValue && _cachedUserId.Value != Guid.Empty)
+                return _cachedUserId;
+
+            var userId = await _currentUser.GetUserIdAsync();
+            _cachedUserId = userId;
+            return userId;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GetCurrentUserIdAsync] Error: {ex.Message}");
+            return null;
+        }
+    }
+
+    // دالة مساعدة للتحقق من حالة البلوك
+    private bool IsUserBlocked(Guid userId)
+    {
+        return _flags.GetBlockedByMe(userId) || _flags.GetBlockedMe(userId);
     }
 
     public async Task ConnectAsync()
@@ -87,7 +120,6 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         await _connectionLock.WaitAsync();
         try
         {
-            // ✅ لو متصل بالفعل، ارجع فوراً
             if (_connection != null && _connection.State == HubConnectionState.Connected)
             {
                 Console.WriteLine("[SignalR] Already connected");
@@ -95,7 +127,6 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 return;
             }
 
-            // ✅ لو في حالة توصيل، انتظر
             if (_connection != null && _connection.State == HubConnectionState.Connecting)
             {
                 Console.WriteLine("[SignalR] Already connecting, waiting...");
@@ -113,7 +144,6 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 }
             }
 
-            // ✅ تنظيف الاتصال القديم فقط إذا كان في حالة فاشلة
             if (_connection != null)
             {
                 try
@@ -160,10 +190,10 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 })
                 .WithAutomaticReconnect(new[]
                 {
-                TimeSpan.FromSeconds(1),
-                TimeSpan.FromSeconds(2),
-                TimeSpan.FromSeconds(5),
-                TimeSpan.FromSeconds(10)
+                    TimeSpan.FromSeconds(1),
+                    TimeSpan.FromSeconds(2),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(10)
                 })
                 .Build();
 
@@ -177,14 +207,11 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 State.IsConnected = false;
                 _failedPings = 0;
 
-                try
-                {
-                    Disconnected?.Invoke();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[SignalR] Error invoking Disconnected event: {ex.Message}");
-                }
+                // ✅ NEW: clear presence source of truth فورًا
+                State.OnlineUsers = new List<Guid>();
+
+                try { Disconnected?.Invoke(); }
+                catch (Exception ex) { Console.WriteLine($"[SignalR] Error invoking Disconnected event: {ex.Message}"); }
             };
 
             _connection.Reconnecting += error =>
@@ -195,14 +222,11 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 State.IsConnected = false;
                 _failedPings = 0;
 
-                try
-                {
-                    Disconnected?.Invoke();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[SignalR] Error invoking Disconnected event: {ex.Message}");
-                }
+                // ✅ NEW
+                State.OnlineUsers = new List<Guid>();
+
+                try { Disconnected?.Invoke(); }
+                catch (Exception ex) { Console.WriteLine($"[SignalR] Error invoking Disconnected event: {ex.Message}"); }
 
                 return Task.CompletedTask;
             };
@@ -218,37 +242,32 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
                 try
                 {
-                    try
-                    {
-                        var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers", CancellationToken.None);
-                        State.OnlineUsers = onlineUsers ?? new List<Guid>();
-                        Console.WriteLine($"[SignalR] Online users loaded after reconnect: {State.OnlineUsers.Count}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[SignalR] Failed to get online users after reconnect: {ex.Message}");
-                    }
+                    var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers", CancellationToken.None);
 
-                    if (_currentRoomId.HasValue)
-                    {
-                        try
-                        {
-                            await JoinRoomAsync(_currentRoomId.Value);
-                            Console.WriteLine($"[SignalR] Re-joined room {_currentRoomId.Value}");
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[SignalR] Failed to re-join room: {ex.Message}");
-                        }
-                    }
+                    // ✅ NEW: فلترة blocked
+                    State.OnlineUsers = (onlineUsers ?? new List<Guid>())
+                        .Where(uid => !_flags.GetBlockedByMe(uid) && !_flags.GetBlockedMe(uid))
+                        .ToList();
 
-                    Reconnected?.Invoke();
+                    Console.WriteLine($"[SignalR] Online users loaded after reconnect: {State.OnlineUsers.Count}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[SignalR] Error in Reconnected handler: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Failed to get online users after reconnect: {ex.Message}");
+                    // ✅ لو فشل snapshot، نخليها فاضية بدل stale
+                    State.OnlineUsers = new List<Guid>();
                 }
+
+                if (_currentRoomId.HasValue)
+                {
+                    try { await JoinRoomAsync(_currentRoomId.Value); }
+                    catch (Exception ex) { Console.WriteLine($"[SignalR] Failed to re-join room: {ex.Message}"); }
+                }
+
+                try { Reconnected?.Invoke(); }
+                catch (Exception ex) { Console.WriteLine($"[SignalR] Error in Reconnected handler: {ex.Message}"); }
             };
+
 
             await _connection.StartAsync();
 
@@ -262,119 +281,59 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             {
                 var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers", CancellationToken.None);
                 State.OnlineUsers = onlineUsers ?? new List<Guid>();
-
-                foreach (var userId in State.OnlineUsers)
-                {
-                    try { UserOnline?.Invoke(userId); } catch { }
-                }
-
+                foreach (var userId in State.OnlineUsers) { try { UserOnline?.Invoke(userId); } catch { } }
                 Console.WriteLine($"[SignalR] Online users loaded via GetOnlineUsers: {State.OnlineUsers.Count}");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[SignalR] Failed to get online users: {ex.Message}");
-            }
+            catch (Exception ex) { Console.WriteLine($"[SignalR] Failed to get online users: {ex.Message}"); }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[SignalR] ❌ Connection failed: {ex.Message}");
             State.IsConnected = false;
-
-            if (_connection != null)
-            {
-                try
-                {
-                    await _connection.DisposeAsync();
-                }
-                catch { }
-                _connection = null;
-            }
-
+            if (_connection != null) { try { await _connection.DisposeAsync(); } catch { } _connection = null; }
             throw;
         }
-        finally
-        {
-            _connectionLock.Release();
-        }
+        finally { _connectionLock.Release(); }
     }
+
     private void StartHeartbeat()
     {
         _heartbeatTimer?.Dispose();
-        // ✅ كل 10 ثواني بدل 30
-        _heartbeatTimer = new Timer(async _ => await SendHeartbeat(), null,
-            TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
+        _heartbeatTimer = new Timer(async _ => await SendHeartbeat(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
     }
 
     private async Task SendHeartbeat()
     {
-        if (_isDisposed) return;
-
-        if (_connection == null)
-        {
-            Console.WriteLine("[Heartbeat] Connection is null");
-            return;
-        }
-
+        if (_isDisposed || _connection == null) return;
         if (_connection.State != HubConnectionState.Connected)
         {
-            Console.WriteLine($"[Heartbeat] Not connected, state: {_connection.State}");
-
-            // لو disconnected، حاول تعيد الاتصال
             if (_connection.State == HubConnectionState.Disconnected && !_isDisposed)
-            {
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await ConnectAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[Heartbeat] Reconnect failed: {ex.Message}");
-                    }
-                });
-            }
-
+                _ = Task.Run(async () => { try { await ConnectAsync(); } catch (Exception ex) { Console.WriteLine($"[Heartbeat] Reconnect failed: {ex.Message}"); } });
             return;
         }
-
         try
         {
             await _connection.InvokeAsync("Heartbeat");
             _lastPong = DateTime.UtcNow;
             _failedPings = 0;
-
-            if (!_heartbeatActive)
-            {
-                _heartbeatActive = true;
-                Console.WriteLine("[Heartbeat] Started");
-            }
+            if (!_heartbeatActive) { _heartbeatActive = true; Console.WriteLine("[Heartbeat] Started"); }
         }
         catch (Exception ex)
         {
             _failedPings++;
             Console.WriteLine($"[Heartbeat] Failed ({_failedPings}/3): {ex.Message}");
-
-            if (_failedPings >= 3)
-            {
-                Console.WriteLine("[Heartbeat] Connection lost - will reconnect");
-                _failedPings = 0;
-
-                // مش هنعمل حاجة هنا لأن AutomaticReconnect هيتولى الموضوع
-            }
         }
     }
+
     public async Task<bool> CheckUserOnlineStatus(Guid userId)
     {
         try
         {
             if (_connection?.State != HubConnectionState.Connected)
                 return false;
-
             var result = await _connection.InvokeAsync<object>("GetUserOnlineStatus", userId);
             var isOnline = (bool)result.GetType().GetProperty("IsOnline")?.GetValue(result, null)!;
             var isBlocked = (bool)result.GetType().GetProperty("IsBlocked")?.GetValue(result, null)!;
-
             return isOnline && !isBlocked;
         }
         catch (Exception ex)
@@ -388,45 +347,26 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     {
         try
         {
-            if (_isDisposed) return new List<Guid>();
-
-            if (_connection == null)
-            {
-                Console.WriteLine("[GetOnlineUsersAsync] Connection is null");
+            if (_isDisposed || _connection?.State != HubConnectionState.Connected)
                 return new List<Guid>();
-            }
 
-            if (_connection.State != HubConnectionState.Connected)
-            {
-                Console.WriteLine("[GetOnlineUsersAsync] Not connected, state: " + _connection.State);
-
-                if (_connection.State == HubConnectionState.Disconnected)
-                {
-                    try
-                    {
-                        await ConnectAsync();
-                    }
-                    catch { }
-                }
-
-                return new List<Guid>();
-            }
-
-            // ✅ محاولة جلب القائمة مع timeout
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var result = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers", cts.Token);
 
-            Console.WriteLine($"[GetOnlineUsersAsync] Got {result?.Count ?? 0} online users");
+            var currentUserId = await GetCurrentUserIdAsync();
+            if (currentUserId == null)
+                return result ?? new List<Guid>();
 
-            // تحديث الـ State
-            State.OnlineUsers = result ?? new List<Guid>();
+            var filteredResult = new List<Guid>();
+            foreach (var uid in result ?? new List<Guid>())
+            {
+                if (!_flags.GetBlockedByMe(uid) && !_flags.GetBlockedMe(uid))
+                    filteredResult.Add(uid);
+            }
 
-            return result ?? new List<Guid>();
-        }
-        catch (TimeoutException)
-        {
-            Console.WriteLine("[GetOnlineUsersAsync] Timeout");
-            return new List<Guid>();
+            Console.WriteLine($"[GetOnlineUsersAsync] Got {result?.Count ?? 0} online users, filtered to {filteredResult.Count}");
+            State.OnlineUsers = filteredResult;
+            return filteredResult;
         }
         catch (Exception ex)
         {
@@ -434,25 +374,39 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             return new List<Guid>();
         }
     }
+
     public async Task<object> GetUserOnlineStatus(Guid userId)
     {
         try
         {
-            if (_connection?.State != HubConnectionState.Connected)
+            // ✅ التحقق من الاتصال أولاً
+            if (!await EnsureConnectionReadyAsync())
             {
-                Console.WriteLine("[GetUserOnlineStatus] Not connected");
+                Console.WriteLine("[GetUserOnlineStatus] Connection not ready");
                 return new { IsOnline = false, LastSeen = (DateTime?)null, IsBlocked = false };
             }
 
-            var result = await _connection.InvokeAsync<object>("GetUserOnlineStatus", userId);
-
-            // ✅ التحقق من null
-            if (result == null)
+            try
             {
+                var result = await _connection.InvokeAsync<object>("GetUserOnlineStatus", userId);
+
+                if (result == null)
+                    return new { IsOnline = false, LastSeen = (DateTime?)null, IsBlocked = false };
+
+                var isBlocked = (bool)result.GetType().GetProperty("IsBlocked")?.GetValue(result, null)!;
+
+                if (isBlocked)
+                {
+                    _flags.SetBlockedByMe(userId, true);
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GetUserOnlineStatus] Invoke failed: {ex.Message}");
                 return new { IsOnline = false, LastSeen = (DateTime?)null, IsBlocked = false };
             }
-
-            return result;
         }
         catch (Exception ex)
         {
@@ -465,14 +419,33 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         _currentRoomId = roomId;
 
         if (_connection?.State != HubConnectionState.Connected)
-        {
             await ConnectAsync();
-        }
 
         try
         {
             await _connection!.InvokeAsync("JoinRoom", roomId.ToString());
             Console.WriteLine($"[SignalR] Joined room {roomId}");
+
+            // ✅ NEW: Refresh snapshot after join
+            try
+            {
+                var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers", CancellationToken.None);
+
+                var filtered = (onlineUsers ?? new List<Guid>())
+                    .Where(uid => !_flags.GetBlockedByMe(uid) && !_flags.GetBlockedMe(uid))
+                    .ToList();
+
+                State.OnlineUsers = filtered;
+
+                // ✅ optional: ابعت snapshot event عشان الـ VM يبني presence فورًا
+                InitialOnlineUsersReceived?.Invoke(filtered);
+
+                Console.WriteLine($"[SignalR] Online users snapshot after JoinRoom: {filtered.Count}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] GetOnlineUsers after JoinRoom failed: {ex.Message}");
+            }
         }
         catch (Exception ex)
         {
@@ -483,81 +456,46 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     public async Task GroupRenamedAsync(Guid roomId, string newName)
     {
         if (_connection?.State == HubConnectionState.Connected)
-        {
             await _connection.InvokeAsync("GroupRenamed", roomId, newName);
-        }
     }
 
     public async Task DisconnectAsync(bool force = false)
     {
-        if (!force) return; // متقطعش إلا لو force
-
+        if (!force) return;
         await _connectionLock.WaitAsync();
         try
         {
-            if (_connection == null)
-                return;
-
-            try
-            {
-                await _connection.StopAsync();
-            }
-            finally
-            {
-                await _connection.DisposeAsync();
-                _connection = null;
-                State.IsConnected = false;
-                State.OnlineUsers = Array.Empty<Guid>();
-                _currentRoomId = null;
-                _reconnectAttempts = 0;
-            }
+            if (_connection == null) return;
+            try { await _connection.StopAsync(); } finally { await _connection.DisposeAsync(); _connection = null; State.IsConnected = false; State.OnlineUsers = Array.Empty<Guid>(); _currentRoomId = null; _reconnectAttempts = 0; }
         }
-        finally
-        {
-            _connectionLock.Release();
-        }
+        finally { _connectionLock.Release(); }
     }
-
-
-
 
     public async Task EnsureConnectedAsync()
     {
-        if (_connection?.State == HubConnectionState.Connected)
-            return;
-
-        if (_connection?.State == HubConnectionState.Disconnected)
-        {
-            await ConnectAsync();
-        }
+        if (_connection?.State == HubConnectionState.Connected) return;
+        if (_connection?.State == HubConnectionState.Disconnected) await ConnectAsync();
         else
         {
-            // Reconnecting or something - wait
             var startTime = DateTime.UtcNow;
             while (DateTime.UtcNow - startTime < TimeSpan.FromSeconds(10))
             {
-                if (_connection?.State == HubConnectionState.Connected)
-                    return;
+                if (_connection?.State == HubConnectionState.Connected) return;
                 await Task.Delay(100);
             }
             throw new TimeoutException("Failed to connect to SignalR");
         }
     }
 
-    public Task LeaveRoomAsync(Guid roomId)
-        => _connection!.InvokeAsync("LeaveRoom", roomId.ToString());
-
-    public Task MarkReadAsync(Guid messageId)
-        => _connection!.InvokeAsync("MarkRead", messageId);
+    public Task LeaveRoomAsync(Guid roomId) => _connection!.InvokeAsync("LeaveRoom", roomId.ToString());
+    public Task MarkReadAsync(Guid messageId) => _connection!.InvokeAsync("MarkRead", messageId);
 
     public async Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId)
     {
         try
         {
             if (_connection?.State == HubConnectionState.Connected)
-            {
                 await _connection.InvokeAsync("MarkRoomRead", roomId, lastMessageId);
-            }
         }
         catch (Exception ex)
         {
@@ -568,20 +506,16 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
     public async Task NotifyTypingAsync(Guid roomId)
     {
-        if (_connection is null)
-            return;
-
+        if (_connection is null) return;
         var now = DateTime.UtcNow;
         if (now - _lastTypingSent > _typingDebounce)
         {
             _lastTypingSent = now;
             await _connection.InvokeAsync("TypingStart", roomId.ToString());
         }
-
         _typingCts?.Cancel();
         _typingCts = new CancellationTokenSource();
         var token = _typingCts.Token;
-
         _ = Task.Run(async () =>
         {
             try
@@ -595,10 +529,11 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
     private void RegisterHandlers()
     {
+        // ✅ HANDLER: MessageReceived
         _connection!.On<MessageDto>("MessageReceived", dto =>
         {
             Console.WriteLine($"[SignalR] 🟢 MESSAGE RECEIVED! ID: {dto.Id}");
-
+            var st = (Client.Models.MessageStatus)dto.Status;
             var message = new MessageModel
             {
                 Id = dto.Id,
@@ -606,7 +541,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 SenderId = dto.SenderId,
                 Content = dto.Content,
                 CreatedAt = dto.CreatedAt,
-                Status = (Client.Models.MessageStatus)dto.Status,
+                Status = st,
+                PersonalStatus = st,
                 ReplyToMessageId = dto.ReplyToMessageId,
                 IsEdited = dto.IsEdited,
                 IsDeleted = dto.IsDeleted,
@@ -614,7 +550,6 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 DeliveredCount = dto.DeliveredCount,
                 TotalRecipients = dto.TotalRecipients
             };
-
             if (dto.ReplyInfo != null)
             {
                 message.ReplyInfo = new ReplyInfoModel
@@ -627,228 +562,334 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     IsDeleted = dto.ReplyInfo.IsDeleted
                 };
             }
-
             MessageReceived?.Invoke(message);
         });
 
-        _connection!.On("Pong", () =>
+        // ✅ HANDLER: UserOnline - مع فلترة صارمة
+        // في ChatRealtimeClient.cs - داخل RegisterHandlers()
+        // ✅ HANDLER: UserOnline - مع التحقق المباشر من الـ Server
+        _connection.On<Guid>("UserOnline", async (userId) =>
         {
-            Console.WriteLine("[SignalR] Pong received");
-        });
-
-        _connection.On<Guid>("MessageDelivered", id => MessageDelivered?.Invoke(id));
-        _connection.On<Guid>("MessageRead", id => MessageRead?.Invoke(id));
-        _connection.On<RoomUpdatedModel>("RoomUpdated", upd => RoomUpdated?.Invoke(upd));
-        _connection.On<RoomListItemDto>("RoomUpserted", dto => RoomUpserted?.Invoke(dto));
-        _connection.On<List<Guid>>("InitialOnlineUsers", onlineUsers =>
-        {
-            Console.WriteLine($"[SignalR] 📋 Received initial online users: {onlineUsers?.Count ?? 0}");
-
-            State.OnlineUsers = onlineUsers ?? new List<Guid>();
-
-            // ✅ تحويل آمن
-            var usersList = onlineUsers ?? new List<Guid>();
-
-            InitialOnlineUsersReceived?.Invoke(usersList);
-
-            foreach (var userId in usersList)
-            {
-                try
-                {
-                    UserOnline?.Invoke(userId);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[SignalR] Error invoking UserOnline: {ex.Message}");
-                }
-            }
-        });
-        _connection.On<Guid, bool>("UserBlockedByMeChanged", (uid, blocked) =>
-        {
-            Console.WriteLine($"[SignalR] 🔒 UserBlockedByMeChanged received: {uid}, blocked={blocked}");
-
-            _flags.SetBlockedByMe(uid, blocked);
-            UserBlockedByMeChanged?.Invoke(uid, blocked);
-        });
-        _connection.On<List<Guid>>("InitialOnlineUsers", onlineUsers =>
-        {
-            Console.WriteLine($"[SignalR] 📋 Received initial online users: {onlineUsers.Count}");
-
-            State.OnlineUsers = onlineUsers ?? new List<Guid>();
-
-            // إرسال الأحداث لكل المشتركين
-            foreach (var userId in State.OnlineUsers)
-            {
-                try
-                {
-                    UserOnline?.Invoke(userId);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[SignalR] Error invoking UserOnline: {ex.Message}");
-                }
-            }
-        });
-        _connection!.On<Guid>("CheckUserOnline", async userId =>
-        {
-            Console.WriteLine($"[SignalR] CheckUserOnline requested for user {userId}");
-
             try
             {
-                var result = await _connection.InvokeAsync<object>("GetUserOnlineStatus", userId);
-
-                // ✅ التعامل مع الـ dynamic result
-                var isOnline = (bool)result.GetType().GetProperty("IsOnline")?.GetValue(result, null)!;
-                var isBlocked = (bool)result.GetType().GetProperty("IsBlocked")?.GetValue(result, null)!;
-                var lastSeen = (DateTime?)result.GetType().GetProperty("LastSeen")?.GetValue(result, null);
-
-                var set = State.OnlineUsers.ToHashSet();
-
-                if (isOnline && !isBlocked)
+                var currentUserId = await GetCurrentUserIdAsync();
+                if (currentUserId == null)
                 {
+                    Console.WriteLine($"[SignalR] UserOnline: Cannot verify, current user is null.");
+                    return;
+                }
+
+                // التحقق المحلي من الفلاغ
+                var (blockedByMe, blockedMe) = _flags.GetBlockStatus(userId);
+
+                if (blockedByMe || blockedMe)
+                {
+                    Console.WriteLine($"[SignalR] 🚫 UserOnline BLOCKED (local check): User={userId}");
+                    return;
+                }
+
+                // ✅ التحقق من الاتصال قبل محاولة الاستدعاء
+                if (!await EnsureConnectionReadyAsync())
+                {
+                    Console.WriteLine($"[SignalR] UserOnline: Connection not ready for server check");
+
+                    // إذا كان الاتصال غير جاهز، نعتمد على التحقق المحلي فقط
+                    var set = State.OnlineUsers.ToHashSet();
                     if (!set.Contains(userId))
                     {
                         set.Add(userId);
                         State.OnlineUsers = set.ToList();
-                        UserOnline?.Invoke(userId);
-                        Console.WriteLine($"[SignalR] User {userId} is now ONLINE");
+                    }
+                    UserOnline?.Invoke(userId);
+                    return;
+                }
+
+                // ✅ التحقق من الـ Server بأمان
+                try
+                {
+                    var serverStatus = await _connection.InvokeAsync<object>("GetUserOnlineStatus", userId);
+                    if (serverStatus != null)
+                    {
+                        var isBlockedOnServer = (bool)serverStatus.GetType().GetProperty("IsBlocked")?.GetValue(serverStatus, null)!;
+
+                        if (isBlockedOnServer)
+                        {
+                            Console.WriteLine($"[SignalR] 🚫 UserOnline BLOCKED (server check): User={userId}");
+                            _flags.SetBlockedByMe(userId, true);
+                            return;
+                        }
                     }
                 }
-                else
+                catch (Exception ex)
                 {
+                    Console.WriteLine($"[SignalR] Server check failed (non-critical): {ex.Message}");
+                    // نكمل عادي ونعتمد على التحقق المحلي
+                }
+
+                var now = DateTime.UtcNow;
+                if (now - _lastUserOnlineEvent < _eventThrottle)
+                    return;
+                _lastUserOnlineEvent = now;
+
+                Console.WriteLine($"[SignalR] 🔵 UserOnline ALLOWED: {userId}");
+                var currentSet = State.OnlineUsers.ToHashSet();
+                if (!currentSet.Contains(userId))
+                {
+                    currentSet.Add(userId);
+                    State.OnlineUsers = currentSet.ToList();
+                }
+                UserOnline?.Invoke(userId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Error in UserOnline handler: {ex.Message}");
+            }
+        });
+        _connection.On<Guid>("UserOffline", (userId) =>
+        {
+            try
+            {
+                Console.WriteLine($"[SignalR] 🔴 UserOffline: {userId}");
+                var set = State.OnlineUsers.ToHashSet();
+                if (set.Contains(userId))
+                {
+                    set.Remove(userId);
+                    State.OnlineUsers = set.ToList();
+                }
+                UserOffline?.Invoke(userId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Error in UserOffline handler: {ex.Message}");
+            }
+        });
+
+        // ✅ HANDLER: InitialOnlineUsers
+        _connection.On<List<Guid>>("InitialOnlineUsers", async (onlineUsers) =>
+        {
+            try
+            {
+                Console.WriteLine($"[SignalR] 📋 Received initial online users (raw): {onlineUsers?.Count ?? 0}");
+
+                var currentUserId = await GetCurrentUserIdAsync();
+                if (currentUserId == null)
+                {
+                    Console.WriteLine($"[SignalR] InitialOnlineUsers: Cannot filter, current user is null.");
+                    State.OnlineUsers = onlineUsers ?? new();
+                    InitialOnlineUsersReceived?.Invoke(onlineUsers ?? new());
+                    return;
+                }
+
+                var filteredUsers = new List<Guid>();
+                foreach (var uid in onlineUsers ?? new List<Guid>())
+                {
+                    if (!IsUserBlocked(uid))
+                        filteredUsers.Add(uid);
+                    else
+                        Console.WriteLine($"[SignalR] InitialOnlineUsers: Filtered out blocked user {uid}");
+                }
+
+                Console.WriteLine($"[SignalR] 📋 Initial online users (filtered): {filteredUsers.Count}");
+                State.OnlineUsers = filteredUsers;
+                InitialOnlineUsersReceived?.Invoke(filteredUsers);
+
+                foreach (var userId in filteredUsers)
+                {
+                    try { UserOnline?.Invoke(userId); } catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Error in InitialOnlineUsers: {ex.Message}");
+            }
+        });
+
+        // ✅ HANDLER: CheckUserOnline - الحل الجذري للمشكلة
+        // ✅ HANDLER: CheckUserOnline - مع حماية كاملة
+        _connection.On<Guid>("CheckUserOnline", async (userId) =>
+        {
+            try
+            {
+                Console.WriteLine($"[SignalR] CheckUserOnline requested for user {userId}");
+
+                var currentUserId = await GetCurrentUserIdAsync();
+                if (currentUserId == null)
+                {
+                    Console.WriteLine($"[SignalR] CheckUserOnline: Cannot process, current user is null.");
+                    return;
+                }
+
+                // التحقق من البلوك
+                if (IsUserBlocked(userId))
+                {
+                    Console.WriteLine($"[SignalR] CheckUserOnline: User {userId} is BLOCKED. Ensuring offline state.");
+                    var set = State.OnlineUsers.ToHashSet();
                     if (set.Contains(userId))
                     {
                         set.Remove(userId);
                         State.OnlineUsers = set.ToList();
                         UserOffline?.Invoke(userId);
-
-                        if (lastSeen.HasValue)
-                        {
-                            UserLastSeenUpdated?.Invoke(userId, lastSeen.Value);
-                        }
-
-                        Console.WriteLine($"[SignalR] User {userId} is now OFFLINE");
                     }
+                    return;
+                }
+
+                // ✅ التحقق من الاتصال قبل الاستدعاء
+                if (!await EnsureConnectionReadyAsync())
+                {
+                    Console.WriteLine($"[SignalR] CheckUserOnline: Connection not ready");
+                    return;
+                }
+
+                try
+                {
+                    var result = await _connection.InvokeAsync<object>("GetUserOnlineStatus", userId);
+
+                    if (result == null)
+                    {
+                        Console.WriteLine($"[SignalR] CheckUserOnline: Got null result for user {userId}");
+                        return;
+                    }
+
+                    var isOnline = (bool)result.GetType().GetProperty("IsOnline")?.GetValue(result, null)!;
+                    var lastSeen = (DateTime?)result.GetType().GetProperty("LastSeen")?.GetValue(result, null);
+
+                    var currentSet = State.OnlineUsers.ToHashSet();
+
+                    if (isOnline)
+                    {
+                        if (!currentSet.Contains(userId))
+                        {
+                            currentSet.Add(userId);
+                            State.OnlineUsers = currentSet.ToList();
+                            UserOnline?.Invoke(userId);
+                            Console.WriteLine($"[SignalR] CheckUserOnline: User {userId} is ONLINE");
+                        }
+                    }
+                    else
+                    {
+                        if (currentSet.Contains(userId))
+                        {
+                            currentSet.Remove(userId);
+                            State.OnlineUsers = currentSet.ToList();
+                            UserOffline?.Invoke(userId);
+                            Console.WriteLine($"[SignalR] CheckUserOnline: User {userId} is OFFLINE");
+                        }
+                        if (lastSeen.HasValue)
+                            UserLastSeenUpdated?.Invoke(userId, lastSeen.Value);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[CheckUserOnline] Invoke failed (non-critical): {ex.Message}");
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[CheckUserOnline] Failed: {ex.Message}");
             }
-        });
-        _connection.On<Guid, Guid, int>("MessageStatusUpdated", (mId, uId, stat) =>
-            MessageStatusUpdated?.Invoke(mId, uId, stat));
-
-        _connection.On<Guid, bool>("UserBlockedMeChanged", (uid, blocked) =>
-        {
-            _flags.SetBlockedMe(uid, blocked);
-            UserBlockedMeChanged?.Invoke(uid, blocked);
-        });
-        _connection.On<DateTime>("HeartbeatAck", serverTime =>
-        {
-            _lastPong = DateTime.UtcNow;
-            _failedPings = 0;
-
-            // لو كنا مش متصلين، نحدث الحالة
-            if (!State.IsConnected)
-            {
-                State.IsConnected = true;
-                Reconnected?.Invoke();
-            }
-        });
+        });        // باقي الـ Handlers كما هي...
         _connection.On<Guid, bool>("RoomMuteChanged", (rid, muted) =>
         {
             _flags.SetMuted(rid, muted);
             RoomMuteChanged?.Invoke(rid, muted);
         });
 
-        _connection.On<Guid, int, int, int>("MessageReceiptStatsUpdated",
-            (messageId, totalRecipients, deliveredCount, readCount) =>
+        _connection.On<Guid, Guid>("TypingStarted", (roomId, userId) => TypingStarted?.Invoke(roomId, userId));
+        _connection.On<Guid, Guid>("TypingStopped", (roomId, userId) => TypingStopped?.Invoke(roomId, userId));
+        _connection.On<Guid>("RemovedFromRoom", roomId => RemovedFromRoom?.Invoke(roomId));
+        _connection.On<RoomUpdatedModel>("RoomUpdated", upd => RoomUpdated?.Invoke(upd));
+        _connection.On<RoomListItemDto>("RoomUpserted", dto => RoomUpserted?.Invoke(dto));
+        _connection.On<Guid, int>("RoomPresenceUpdated", (roomId, count) => RoomPresenceUpdated?.Invoke(roomId, count));
+        _connection.On<Guid, bool>("UserBlockedByMeChanged", (uid, blocked) =>
+        {
+            Console.WriteLine($"[SignalR] 🔒 UserBlockedByMeChanged received: {uid}, blocked={blocked}");
+            // تحديث الفلاغ فوراً
+            _flags.SetBlockedByMe(uid, blocked);
+            // إذا كان بلوك جديد، نزيل المستخدم من قائمة المتصلين فوراً
+            if (blocked)
             {
-                MessageReceiptStatsUpdated?.Invoke(messageId, totalRecipients, deliveredCount, readCount);
+                var set = State.OnlineUsers.ToHashSet();
+                if (set.Contains(uid))
+                {
+                    set.Remove(uid);
+                    State.OnlineUsers = set.ToList();
+                    UserOffline?.Invoke(uid);
+                    Console.WriteLine($"[SignalR] 🔴 Removed blocked user {uid} from online list immediately");
+                }
+            }
+            UserBlockedByMeChanged?.Invoke(uid, blocked);
+        });
+
+        _connection.On<Guid, bool>("UserBlockedMeChanged", (uid, blocked) =>
+        {
+            Console.WriteLine($"[SignalR] 🔒 UserBlockedMeChanged received: {uid}, blocked={blocked}");
+            _flags.SetBlockedMe(uid, blocked);
+
+            // NEW: Add symmetric logic for when someone blocks me
+            if (blocked)
+            {
+                var set = State.OnlineUsers.ToHashSet();
+                if (set.Contains(uid))
+                {
+                    set.Remove(uid);
+                    State.OnlineUsers = set.ToList();
+                    UserOffline?.Invoke(uid);
+                    Console.WriteLine($"[SignalR] 🔴 Removed user who blocked me {uid} from online list immediately");
+                }
+
+                // **NEW: Force refresh of online users to sync after flag update**
+                // This re-calls GetOnlineUsersAsync with the new flags, ensuring filtered to 1
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await GetOnlineUsersAsync();
+                        Console.WriteLine($"[UserBlockedMeChanged] Forced online users refresh after block");
+                        // Optional: Re-invoke UserOffline to trigger VM/UI update
+                        UserOffline?.Invoke(uid);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[UserBlockedMeChanged] Refresh failed: {ex.Message}");
+                    }
+                });
+
+                // Remove the GetUserOnlineStatus call to avoid null ref error
+                // If needed later, fix server-side first
+            }
+
+            UserBlockedMeChanged?.Invoke(uid, blocked);
+        });
+        _connection.On<Guid, DateTime>("UserLastSeenUpdated", (id, lastSeen) =>
+        {
+            Console.WriteLine($"[SignalR] ⏱️ UserLastSeenUpdated event received for {id}: {lastSeen}");
+            UserLastSeenUpdated?.Invoke(id, lastSeen);
+        });
+        _connection.On<Guid, Guid, int, int, int>("MessageReceiptStatsUpdated",
+            (messageId, roomId, total, delivered, read) =>
+            {
+                MessageReceiptStatsUpdated?.Invoke(messageId, roomId, total, delivered, read);
             });
-
-        _connection.On<Guid>("UserOnline", id =>
+        _connection.On<Guid, Guid, int>("MessageStatusUpdated", (messageId, userId, statusInt) =>
         {
-            // ✅ منع التحديثات السريعة جداً
-            var now = DateTime.UtcNow;
-            if (now - _lastUserOnlineEvent < _eventThrottle)
-            {
-                Console.WriteLine($"[SignalR] Throttling UserOnline for {id}");
-                return;
-            }
-            _lastUserOnlineEvent = now;
-
-            Console.WriteLine($"[SignalR] 🔵 UserOnline event received for {id}");
-            var set = State.OnlineUsers.ToHashSet();
-            if (!set.Contains(id))
-            {
-                set.Add(id);
-                State.OnlineUsers = set.ToList();
-            }
-            UserOnline?.Invoke(id);
+            MessageStatusUpdated?.Invoke(messageId, userId, statusInt);
         });
-
-        _connection.On<Guid>("UserOffline", id =>
+        _connection.On<Guid, Guid, Guid>("MessageDeliveredToAll", (messageId, senderId, roomId) =>
         {
-            // ✅ منع التحديثات السريعة جداً
-            var now = DateTime.UtcNow;
-            if (now - _lastUserOfflineEvent < _eventThrottle)
-            {
-                Console.WriteLine($"[SignalR] Throttling UserOffline for {id}");
-                return;
-            }
-            _lastUserOfflineEvent = now;
-
-            Console.WriteLine($"[SignalR] 🔴 UserOffline event received for {id}");
-            var set = State.OnlineUsers.ToHashSet();
-            if (set.Contains(id))
-            {
-                set.Remove(id);
-                State.OnlineUsers = set.ToList();
-            }
-            UserOffline?.Invoke(id);
+            MessageDeliveredToAll?.Invoke(messageId, senderId, roomId);
         });
-
-        _connection.On<Guid, int>("RoomPresenceUpdated", (roomId, count) =>
+        _connection.On<Guid, Guid, Guid>("MessageReadToAll", (messageId, senderId, roomId) =>
         {
-            Console.WriteLine($"[SignalR] 👥 RoomPresenceUpdated for room {roomId}: {count}");
-            RoomPresenceUpdated?.Invoke(roomId, count);
+            MessageReadToAll?.Invoke(messageId, senderId, roomId);
         });
-
-        _connection.On<Guid, Guid>("TypingStarted",
-            (roomId, userId) => TypingStarted?.Invoke(roomId, userId));
-
-        _connection.On<Guid, Guid>("TypingStopped",
-            (roomId, userId) => TypingStopped?.Invoke(roomId, userId));
-
-        _connection.On<Guid>("RemovedFromRoom",
-            roomId => RemovedFromRoom?.Invoke(roomId));
-
-        _connection.On<Guid, Guid>("MessageDeliveredToAll",
-            (messageId, senderId) => MessageDeliveredToAll?.Invoke(messageId, senderId));
-
-        _connection.On<DateTime>("Pong", serverTime =>
-        {
-            _lastPong = DateTime.UtcNow;
-            Console.WriteLine($"[Heartbeat] Pong received, server time: {serverTime}");
-        });
-        _connection.On<Guid, Guid>("MessageReadToAll",
-            (messageId, senderId) => MessageReadToAll?.Invoke(messageId, senderId));
-
-        _connection.On<Guid, string>("GroupRenamed",
-            (roomId, newName) => GroupRenamed?.Invoke(roomId, newName));
-
-        _connection.On<Guid, Guid, string>("MemberAdded",
-            (roomId, userId, displayName) => MemberAdded?.Invoke(roomId, userId, displayName));
-
         _connection.On<Guid, Guid, int, bool>("MessageReactionUpdated",
             (messageId, userId, reactionType, isNewReaction) =>
-                MessageReactionUpdated?.Invoke(messageId, userId, reactionType, isNewReaction));
-
-        _connection.On<Guid, Guid, string?>("MemberRemoved",
-            (roomId, userId, removerName) => MemberRemoved?.Invoke(roomId, userId, removerName));
-
+            {
+                MessageReactionUpdated?.Invoke(messageId, userId, reactionType, isNewReaction);
+            });
+        _connection.On<Guid, string>("GroupRenamed", (roomId, newName) => GroupRenamed?.Invoke(roomId, newName));
+        _connection.On<Guid, Guid, string>("MemberAdded", (roomId, userId, displayName) => MemberAdded?.Invoke(roomId, userId, displayName));
+        _connection.On<Guid, Guid, string?>("MemberRemoved", (roomId, userId, removerName) => MemberRemoved?.Invoke(roomId, userId, removerName));
         _connection.On<Guid>("GroupDeleted", roomId => GroupDeleted?.Invoke(roomId));
         _connection.On<Guid, Guid>("AdminPromoted", (roomId, userId) => AdminPromoted?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("AdminDemoted", (roomId, userId) => AdminDemoted?.Invoke(roomId, userId));
@@ -856,28 +897,69 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         _connection.On<Guid, string>("MessageUpdated", (messageId, newContent) => MessageUpdated?.Invoke(messageId, newContent));
         _connection.On<Guid>("MessageDeleted", messageId => MessageDeleted?.Invoke(messageId));
         _connection.On<Guid, Guid?>("MessagePinned", (rid, mid) => MessagePinned?.Invoke(rid, mid));
-        _connection.On<Guid, DateTime>("UserLastSeenUpdated", (id, lastSeen) =>
+        _connection.On<Guid, Guid>("MessageDelivered", (messageId, roomId) => MessageDelivered?.Invoke(messageId, roomId));
+        _connection.On<Guid, Guid>("MessageRead", (messageId, roomId) => MessageRead?.Invoke(messageId, roomId));
+        _connection.On<DateTime>("Pong", serverTime =>
         {
-            Console.WriteLine($"[SignalR] ⏱️ UserLastSeenUpdated event received for {id}: {lastSeen}");
-            UserLastSeenUpdated?.Invoke(id, lastSeen);
+            _lastPong = DateTime.UtcNow;
+            Console.WriteLine($"[Heartbeat] Pong received, server time: {serverTime}");
         });
-
+        _connection.On<DateTime>("HeartbeatAck", serverTime =>
+        {
+            _lastPong = DateTime.UtcNow;
+            _failedPings = 0;
+            if (!State.IsConnected)
+            {
+                State.IsConnected = true;
+                Reconnected?.Invoke();
+            }
+        });
     }
+    private async Task<bool> EnsureConnectionReadyAsync()
+    {
+        try
+        {
+            if (_connection == null)
+            {
+                Console.WriteLine("[EnsureConnectionReady] Connection is null, attempting to connect...");
+                await ConnectAsync();
+                return _connection?.State == HubConnectionState.Connected;
+            }
 
+            if (_connection.State == HubConnectionState.Connected)
+                return true;
+
+            if (_connection.State == HubConnectionState.Disconnected)
+            {
+                Console.WriteLine("[EnsureConnectionReady] Connection is disconnected, attempting to reconnect...");
+                await ConnectAsync();
+                return _connection?.State == HubConnectionState.Connected;
+            }
+
+            Console.WriteLine($"[EnsureConnectionReady] Connection state: {_connection.State}, waiting...");
+
+            // انتظر حتى يكتمل الاتصال
+            for (int i = 0; i < 10; i++)
+            {
+                await Task.Delay(100);
+                if (_connection?.State == HubConnectionState.Connected)
+                    return true;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[EnsureConnectionReady] Error: {ex.Message}");
+            return false;
+        }
+    }
     public async Task SendMessageWithReplyAsync(Guid roomId, MessageModel message)
     {
         try
         {
             if (_connection == null) return;
-
-            var request = new
-            {
-                RoomId = roomId,
-                Content = message.Content,
-                ReplyToMessageId = message.ReplyToMessageId,
-                ReplyInfo = message.ReplyInfo
-            };
-
+            var request = new { RoomId = roomId, Content = message.Content, ReplyToMessageId = message.ReplyToMessageId, ReplyInfo = message.ReplyInfo };
             await _connection.InvokeAsync("SendMessageWithReply", request);
         }
         catch (Exception ex)
@@ -886,19 +968,15 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         }
     }
 
-    public Task PinMessageAsync(Guid roomId, Guid? messageId)
-        => _connection!.InvokeAsync("PinMessage", roomId, messageId);
+    public Task PinMessageAsync(Guid roomId, Guid? messageId) => _connection!.InvokeAsync("PinMessage", roomId, messageId);
 
     public async ValueTask DisposeAsync()
     {
         if (_isDisposed) return;
         _isDisposed = true;
-
-        // await DisconnectAsync(true);  // ❌ منع قطع الاتصال
         _connectionLock.Dispose();
         _heartbeatTimer?.Dispose();
         _typingCts?.Dispose();
-
-        Console.WriteLine("[SignalR] Disposed without disconnecting");
+        Console.WriteLine("[SignalR] Disposed");
     }
 }

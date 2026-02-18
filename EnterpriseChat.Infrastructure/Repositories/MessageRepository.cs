@@ -38,9 +38,9 @@ public sealed class MessageRepository : IMessageRepository
             .CountAsync(ct);
     }
     public async Task<IReadOnlyList<Message>> GetUndeliveredForUserAsync(
-    RoomId roomId,
-    UserId userId,
-    CancellationToken ct = default)
+      RoomId roomId,
+      UserId userId,
+      CancellationToken ct = default)
     {
         // نجيب كل الرسائل اللي:
         // 1. في الروم ده

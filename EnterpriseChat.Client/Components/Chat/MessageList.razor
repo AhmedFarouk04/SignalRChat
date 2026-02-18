@@ -171,13 +171,16 @@
     // ✅ تحسين: منع إعادة الرسم غير الضرورية (بدون async)
     protected override bool ShouldRender()
     {
-        // حساب Hash للرسائل الحالية
-        var currentHash = string.Join("|", Messages.Select(m => $"{m.Id}:{m.Content?.Length}:{m.PersonalStatus}:{m.ReadCount}:{m.DeliveredCount}"));
+        var msgHash = string.Join("|", Messages.Select(m =>
+            $"{m.Id}:{m.Content?.Length}:{m.PersonalStatus}:{m.ReadCount}:{m.DeliveredCount}:{m.IsEdited}:{m.IsDeleted}"
+        ));
 
-        if (_lastMessagesHash == currentHash)
-        {
-            return false;
-        }
+        // ضمّن حاجات UI المهمة عشان التحديثات متتبلعش
+        var uiHash = $"{OpenReactionMessageId}:{showNewDivider}:{isAtBottom}:{newIds.Count}";
+
+        var currentHash = msgHash + "||" + uiHash;
+
+        if (_lastMessagesHash == currentHash) return false;
 
         _lastMessagesHash = currentHash;
         return true;

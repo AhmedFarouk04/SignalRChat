@@ -111,44 +111,29 @@ else
                         @if (IsMine)
                         {
                             <span class="message-status-icon @GetStatusClass()" title="@GetStatusTooltip()">
-                                @if (VM.Room?.Type == "Group" && Message.TotalRecipients > 1)
+                                @if (Message.PersonalStatus == ClientMessageStatus.Read)
                                 {
-                                    @if (total > 1)
+                                    @* ✅ صحين أزرق: الكل شاهدها *@
+                                    <span class="status-icon read">✓✓</span>
+                                }
+                                else if (Message.PersonalStatus == ClientMessageStatus.Delivered)
+                                {
+                                    @* ✅ صحين رمادي: وصلت لواحد أو أكثر *@
+                                    @if (VM.Room?.Type == "Group" && Message.ReadCount > 0)
                                     {
-                                        if (Message.ReadCount >= total)
-                                        {
-                                            <span class="read-count">@Message.ReadCount</span>
-                                            <span class="status-icon read">✓✓</span>
-                                        }
-                                        else if (Message.DeliveredCount >= half)
-                                        {
-                                            <span class="delivered-count">@Message.DeliveredCount</span>
-                                            <span class="status-icon delivered">✓✓</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="status-icon sent">✓</span>
-                                        }
+                                        @* إظهار عدد من قرأوا بجانب الصحين الرمادية في الجروب *@
+                                        <span class="read-count-mini">@Message.ReadCount</span>
                                     }
+                                    <span class="status-icon delivered">✓✓</span>
+                                }
+                                else if (Message.PersonalStatus == ClientMessageStatus.Sent)
+                                {
+                                    @* ✅ صح واحدة رمادي: في السيرفر فقط *@
+                                    <span class="status-icon sent">✓</span>
                                 }
                                 else
                                 {
-                                    @if (Message.PersonalStatus == ClientMessageStatus.Read)
-                                    {
-                                        <span class="status-icon read">✓✓</span>
-                                    }
-                                    else if (Message.PersonalStatus == ClientMessageStatus.Delivered)
-                                    {
-                                        <span class="status-icon delivered">✓✓</span>
-                                    }
-                                    else if (Message.PersonalStatus == ClientMessageStatus.Sent)
-                                    {
-                                        <span class="status-icon sent">✓</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="status-icon pending">⌛</span>
-                                    }
+                                    <span class="status-icon pending">⌛</span>
                                 }
                             </span>
                         }
@@ -238,17 +223,16 @@ else
         }
         MenuState.PropertyChanged += OnMenuStateChanged;
     }
+    
 
     private void OnMessagePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // أضفنا DeliveredCount هنا لضمان أن الفقاعة تحس بأول "صحيين"
         if (e.PropertyName == nameof(MessageModel.PersonalStatus) ||
-            e.PropertyName == nameof(MessageModel.ReadCount) ||
             e.PropertyName == nameof(MessageModel.DeliveredCount) ||
-            e.PropertyName == nameof(MessageModel.IsEdited) ||
-            e.PropertyName == nameof(MessageModel.IsDeleted) ||
-            e.PropertyName == nameof(MessageModel.Reactions))
+            e.PropertyName == nameof(MessageModel.ReadCount))
         {
-            InvokeAsync(StateHasChanged);
+            _ = InvokeAsync(StateHasChanged);
         }
     }
 
@@ -273,7 +257,9 @@ else
     {
         if (Message == null) return true;
 
+        // إضافة DeliveredCount و ReadCount للشرط لضمان الرسم عند تغير الأرقام
         var currentStatus = $"{Message.PersonalStatus}|{Message.ReadCount}|{Message.DeliveredCount}|{Message.IsEdited}|{Message.IsDeleted}";
+
         if (_lastRenderedStatus == currentStatus && !IsMenuOpen && !IsReactionOpen)
         {
             return false;
@@ -282,7 +268,6 @@ else
         _lastRenderedStatus = currentStatus;
         return true;
     }
-
     private async Task ToggleMenu()
     {
         if (IsReactionOpen)
@@ -362,18 +347,18 @@ else
     {
         if (Message == null) return "";
 
-        if (VM.Room?.Type != "Group" || Message.TotalRecipients <= 1)
-            return StatusTooltip(Message.PersonalStatus);
+        if (VM.Room?.Type == "Group")
+        {
+            // استخدام القيم المباشرة من الكائن لضمان عدم وجود تضارب
+            var r = Message.ReadCount;
+            var t = Message.TotalRecipients;
 
-        if (Message.ReadCount > 0)
-            return $"{Message.ReadCount} read";
-
-        if (Message.DeliveredCount > 0)
-            return $"{Message.DeliveredCount} delivered";
+            if (r >= t && t > 0) return "Read by everyone";
+            return $"{r} of {t} read, {Message.DeliveredCount} delivered";
+        }
 
         return StatusTooltip(Message.PersonalStatus);
     }
-
     private string StatusIcon(ClientMessageStatus status) => status switch
     {
         ClientMessageStatus.Pending => "⌛",

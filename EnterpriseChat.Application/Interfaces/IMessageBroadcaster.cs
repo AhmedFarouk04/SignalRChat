@@ -17,10 +17,7 @@ public interface IMessageBroadcaster
     // Group membership realtime
     Task MemberAddedAsync(RoomId roomId, UserId memberId, string displayName, IEnumerable<UserId> users);
     Task MemberRemovedAsync(RoomId roomId, UserId memberId, UserId? removerId, string? removerName, IEnumerable<UserId> users);
-    // ✅ NEW: leave semantics
-
-    // حط بجانب Method القديمة
-    Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users); // keep old
+    Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users);
     Task MemberLeftAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users);
 
     // ✅ NEW: remove room from someone’s rooms list
@@ -35,16 +32,18 @@ public interface IMessageBroadcaster
     Task AdminDemotedAsync(RoomId roomId, UserId userId, IEnumerable<UserId> users);
     Task OwnerTransferredAsync(RoomId roomId, UserId newOwnerId, IEnumerable<UserId> users);
 
+    // ✅ تعديل: نرسل roomId بدلاً من targetUserId (للبث للغرفة)
     Task MessageReceiptStatsUpdatedAsync(
-        Guid messageId,
-        Guid targetUserId,           // ← المرسل
-        int totalRecipients,
-        int deliveredCount,
-        int readCount);
+    Guid messageId,
+    Guid roomId,
+    int totalRecipients,
+    int deliveredCount,
+    int readCount);
+
+
     Task MessageUpdatedAsync(MessageId messageId, string newContent, IEnumerable<UserId> recipients);
     Task MessageDeletedAsync(MessageId messageId, IEnumerable<UserId> recipients);
 
-    // في IMessageBroadcaster.cs
     Task MessageStatusUpdatedAsync(
         MessageId messageId,
         UserId userId,
@@ -61,14 +60,12 @@ public interface IMessageBroadcaster
         UserId senderId,
         IEnumerable<UserId> roomMembers);
 
-    // في IMessageBroadcaster.cs أضف:
     Task MessageReactionUpdatedAsync(
         MessageId messageId,
         UserId userId,
         ReactionType reactionType,
         bool isNewReaction,
         IEnumerable<UserId> roomMembers);
-    Task NotifyMessagePinned(Guid roomId, Guid? messageId);
 
-   
+    Task NotifyMessagePinned(Guid roomId, Guid? messageId);
 }
