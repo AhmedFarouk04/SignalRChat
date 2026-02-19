@@ -1,0 +1,112 @@
+﻿@using EnterpriseChat.Client.Models
+@using EnterpriseChat.Client.Services.Realtime
+@using System.Collections.ObjectModel
+
+@implements IDisposable
+
+@if (TypingUsers.Any())
+{
+    <div class="typing-indicator">
+        @if (IsGroup)
+        {
+            <span class="typing-names">@GetTypingText()</span>
+        }
+        <span class="dots">
+            <span></span><span></span><span></span>
+        </span>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid RoomId { get; set; }
+    [Parameter] public bool IsGroup { get; set; }
+    [Parameter] public IReadOnlyList<UserModel> AllUsers { get; set; } = [];
+
+    private ObservableCollection<UserModel> TypingUsers { get; set; } = new();
+
+    [Inject] private IChatRealtimeClient RealtimeClient { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        RealtimeClient.TypingStarted += OnTypingStarted;
+        RealtimeClient.TypingStopped += OnTypingStopped;
+        RealtimeClient.InitialTypingUsersReceived += OnInitialTypingUsers;
+        _ = LoadInitialTypingUsers();
+    }
+
+    private Task LoadInitialTypingUsers()
+    {
+        var typingIds = RealtimeClient.GetTypingUsersInRoom(RoomId);
+        UpdateTypingUsers(typingIds);
+        return Task.CompletedTask;
+    }
+
+    private string GetTypingText()
+    {
+        var names = TypingUsers
+            .Select(u => GetFirstName(u.DisplayName))
+            .ToList();
+
+        return names.Count switch
+        {
+            1 => names[0],
+            2 => $"{names[0]}, {names[1]}",
+            _ => $"{names[0]} +{names.Count - 1} others"
+        };
+    }
+
+    private static string GetFirstName(string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName)) return "Someone";
+        return displayName.Split(' ')[0];
+    }
+
+    private void OnTypingStarted(Guid roomId, Guid userId)
+    {
+        if (roomId != RoomId) return;
+
+        var user = AllUsers.FirstOrDefault(u => u.Id == userId);
+        if (user != null && !TypingUsers.Any(u => u.Id == userId))
+        {
+            TypingUsers.Add(user);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnTypingStopped(Guid roomId, Guid userId)
+    {
+        if (roomId != RoomId) return;
+
+        var userToRemove = TypingUsers.FirstOrDefault(u => u.Id == userId);
+        if (userToRemove != null)
+        {
+            TypingUsers.Remove(userToRemove);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnInitialTypingUsers(Guid roomId, List<Guid> userIds)
+    {
+        if (roomId != RoomId) return;
+        UpdateTypingUsers(userIds);
+    }
+
+    private void UpdateTypingUsers(IReadOnlyList<Guid> userIds)
+    {
+        TypingUsers.Clear();
+        foreach (var uid in userIds)
+        {
+            var user = AllUsers.FirstOrDefault(u => u.Id == uid);
+            if (user != null)
+                TypingUsers.Add(user);
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        RealtimeClient.TypingStarted -= OnTypingStarted;
+        RealtimeClient.TypingStopped -= OnTypingStopped;
+        RealtimeClient.InitialTypingUsersReceived -= OnInitialTypingUsers;
+    }
+}

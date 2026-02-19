@@ -859,3 +859,96 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     color: #ffffff !important; /* لون أبيض واضح للصحيين */
     opacity: 1;
 }
+
+/* ===== Typing Dots (خاص وجروب) ===== */
+.typing-dots-only {
+    display: inline-flex;
+    gap: 3px;
+    margin-left: 4px;
+}
+
+    .typing-dots-only span {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background-color: #60a5fa;
+        animation: typingBounce 1.4s infinite ease-in-out both;
+    }
+
+        .typing-dots-only span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dots-only span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+/* ===== Typing Indicator Container (جوا الشات) ===== */
+.typing-indicator-container {
+    min-height: 28px;
+    padding: 4px 16px;
+    background-color: var(--bg-primary);
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 5;
+}
+
+/* ===== Typing Indicator (جوا الشات) ===== */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* اسم المستخدم في الجروب */
+.typing-names {
+    font-size: 0.78rem;
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* النقط في الجروب جوا الشات */
+.dots {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+}
+
+    .dots span {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background-color: #60a5fa;
+        animation: typingBounce 1.4s infinite ease-in-out both;
+    }
+
+        .dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+/* ===== Typing Text (برا في Rooms) ===== */
+.typing-group-text {
+    font-size: 0.78rem;
+    color: #60a5fa;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ===== Animation ===== */
+@keyframes typingBounce {
+    0%, 80%, 100% {
+        transform: scale(0.6);
+        opacity: 0.5;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

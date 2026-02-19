@@ -7,7 +7,7 @@ public sealed class RoomListItemModel
     public string Type { get; init; } = string.Empty;
     public Guid? LastMessageSenderId { get; set; }
     public MessageStatus? LastMessageStatus { get; set; }
-
+    public bool IsTyping { get; set; }
     public Guid? OtherUserId { get; init; }
     public string? OtherDisplayName { get; init; }
 
@@ -18,4 +18,5 @@ public sealed class RoomListItemModel
     public DateTime? LastMessageAt { get; set; }
     public string? LastMessagePreview { get; set; }
     public Guid? LastMessageId { get; set; }
+    public Dictionary<Guid, string> MemberNames { get; init; } = new();
 }

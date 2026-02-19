@@ -13,7 +13,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     private readonly RoomFlagsStore _flags;
     private readonly ICurrentUser _currentUser;
     private Guid? _cachedUserId; // Cache للـ UserId
-
+    public event Action<Guid, Guid>? TypingStarted;
+    public event Action<Guid, Guid>? TypingStopped;
     private HubConnection? _connection;
     private CancellationTokenSource? _typingCts;
     private readonly TimeSpan _typingDebounce = TimeSpan.FromMilliseconds(300);
@@ -36,6 +37,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     private readonly TimeSpan _heartbeatTimeout = TimeSpan.FromSeconds(90);
 
     public ChatRealtimeState State { get; } = new();
+    public event Action<Guid, List<Guid>>? InitialTypingUsersReceived;
 
     public event Action<MessageModel>? MessageReceived;
     public event Action<Guid, bool>? RoomMuteChanged;
@@ -43,8 +45,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     public event Action<Guid>? UserOffline;
     public event Action<Guid, DateTime>? UserLastSeenUpdated;
     public event Action<Guid, int>? RoomPresenceUpdated;
-    public event Action<Guid, Guid>? TypingStarted;
-    public event Action<Guid, Guid>? TypingStopped;
+    private readonly Dictionary<Guid, HashSet<Guid>> _typingUsersByRoom = new();
     public event Action<Guid>? RemovedFromRoom;
     public event Action<Guid, Guid?>? MessagePinned;
     public event Action? Disconnected;
@@ -425,7 +426,11 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         {
             await _connection!.InvokeAsync("JoinRoom", roomId.ToString());
             Console.WriteLine($"[SignalR] Joined room {roomId}");
-
+            lock (_typingUsersByRoom)
+            {
+                if (_typingUsersByRoom.ContainsKey(roomId))
+                    _typingUsersByRoom.Remove(roomId);
+            }
             // ✅ NEW: Refresh snapshot after join
             try
             {
@@ -487,9 +492,47 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         }
     }
 
-    public Task LeaveRoomAsync(Guid roomId) => _connection!.InvokeAsync("LeaveRoom", roomId.ToString());
-    public Task MarkReadAsync(Guid messageId) => _connection!.InvokeAsync("MarkRead", messageId);
+    public async Task LeaveRoomAsync(Guid roomId)
+    {
+        try
+        {
+            if (_connection?.State == HubConnectionState.Connected)
+            {
+                await _connection.InvokeAsync("LeaveRoom", roomId.ToString());
+            }
 
+            // ✅ تنظيف الـ typing users لهذه الغرفة
+            lock (_typingUsersByRoom)
+            {
+                if (_typingUsersByRoom.ContainsKey(roomId))
+                    _typingUsersByRoom.Remove(roomId);
+            }
+
+            Console.WriteLine($"[SignalR] Left room {roomId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SignalR] Error leaving room {roomId}: {ex.Message}");
+        }
+    }
+    public Task MarkReadAsync(Guid messageId) => _connection!.InvokeAsync("MarkRead", messageId);
+    public async Task StopTypingImmediatelyAsync(Guid roomId)
+    {
+        try
+        {
+            _typingCts?.Cancel();
+            _typingCts = null;
+
+            if (_connection?.State == HubConnectionState.Connected)
+            {
+                await _connection.InvokeAsync("TypingStop", roomId.ToString());
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[StopTyping] Error: {ex.Message}");
+        }
+    }
     public async Task MarkRoomReadAsync(Guid roomId, Guid lastMessageId)
     {
         try
@@ -503,30 +546,61 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             throw;
         }
     }
-
+    public IReadOnlyList<Guid> GetTypingUsersInRoom(Guid roomId)
+    {
+        lock (_typingUsersByRoom)
+        {
+            if (_typingUsersByRoom.TryGetValue(roomId, out var users))
+                return users.ToList();
+            return Array.Empty<Guid>();
+        }
+    }
     public async Task NotifyTypingAsync(Guid roomId)
     {
-        if (_connection is null) return;
-        var now = DateTime.UtcNow;
-        if (now - _lastTypingSent > _typingDebounce)
-        {
-            _lastTypingSent = now;
-            await _connection.InvokeAsync("TypingStart", roomId.ToString());
-        }
-        _typingCts?.Cancel();
-        _typingCts = new CancellationTokenSource();
-        var token = _typingCts.Token;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(_typingStopTimeout, token);
-                await _connection.InvokeAsync("TypingStop", roomId.ToString());
-            }
-            catch (TaskCanceledException) { }
-        }, token);
-    }
+        if (_connection is null || _connection.State != HubConnectionState.Connected)
+            return;
 
+        try
+        {
+            // ✅ التحقق من أن الـ roomId صالح
+            if (roomId == Guid.Empty) return;
+
+            var now = DateTime.UtcNow;
+
+            // ✅ Throttling: مرة كل 300ms
+            if (now - _lastTypingSent > _typingDebounce)
+            {
+                _lastTypingSent = now;
+                await _connection.InvokeAsync("TypingStart", roomId.ToString());
+            }
+
+            // ✅ Auto-stop بعد 1.2 ثانية
+            _typingCts?.Cancel();
+            _typingCts = new CancellationTokenSource();
+            var token = _typingCts.Token;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(_typingStopTimeout, token);
+                    if (_connection?.State == HubConnectionState.Connected)
+                    {
+                        await _connection.InvokeAsync("TypingStop", roomId.ToString());
+                    }
+                }
+                catch (TaskCanceledException) { }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Typing] Auto-stop error: {ex.Message}");
+                }
+            }, token);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[NotifyTypingAsync] Error: {ex.Message}");
+        }
+    }
     private void RegisterHandlers()
     {
         // ✅ HANDLER: MessageReceived
@@ -793,10 +867,84 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             _flags.SetMuted(rid, muted);
             RoomMuteChanged?.Invoke(rid, muted);
         });
+        _connection.On<Guid, List<Guid>>("InitialTypingUsers", (roomId, userIds) =>
+        {
+            try
+            {
+                Console.WriteLine($"[SignalR] 📋 InitialTypingUsers: Room={roomId}, Count={userIds.Count}");
 
-        _connection.On<Guid, Guid>("TypingStarted", (roomId, userId) => TypingStarted?.Invoke(roomId, userId));
-        _connection.On<Guid, Guid>("TypingStopped", (roomId, userId) => TypingStopped?.Invoke(roomId, userId));
-        _connection.On<Guid>("RemovedFromRoom", roomId => RemovedFromRoom?.Invoke(roomId));
+                // فلترة البلوك
+                var filtered = userIds.Where(uid => !IsUserBlocked(uid)).ToList();
+
+                lock (_typingUsersByRoom)
+                {
+                    _typingUsersByRoom[roomId] = new HashSet<Guid>(filtered);
+                }
+
+                InitialTypingUsersReceived?.Invoke(roomId, filtered);
+
+                // إرسال الأحداث بشكل فردي
+                foreach (var uid in filtered)
+                {
+                    TypingStarted?.Invoke(roomId, uid);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Error in InitialTypingUsers: {ex.Message}");
+            }
+        });
+        _connection.On<Guid, Guid>("TypingStarted", (roomId, userId) =>
+        {
+            try
+            {
+                // ✅ التحقق من البلوك
+                if (IsUserBlocked(userId))
+                {
+                    Console.WriteLine($"[SignalR] 🚫 TypingStarted BLOCKED: User={userId}");
+                    return;
+                }
+
+                // ✅ تخزين الـ typing user
+                lock (_typingUsersByRoom)
+                {
+                    if (!_typingUsersByRoom.ContainsKey(roomId))
+                        _typingUsersByRoom[roomId] = new HashSet<Guid>();
+
+                    _typingUsersByRoom[roomId].Add(userId);
+                }
+
+                Console.WriteLine($"[SignalR] ✍️ TypingStarted: Room={roomId}, User={userId}");
+                TypingStarted?.Invoke(roomId, userId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Error in TypingStarted: {ex.Message}");
+            }
+        });
+        _connection.On<Guid, Guid>("TypingStopped", (roomId, userId) =>
+        {
+            try
+            {
+                // ✅ إزالة من التخزين
+                lock (_typingUsersByRoom)
+                {
+                    if (_typingUsersByRoom.ContainsKey(roomId))
+                    {
+                        _typingUsersByRoom[roomId].Remove(userId);
+                        if (_typingUsersByRoom[roomId].Count == 0)
+                            _typingUsersByRoom.Remove(roomId);
+                    }
+                }
+
+                Console.WriteLine($"[SignalR] ✋ TypingStopped: Room={roomId}, User={userId}");
+                TypingStopped?.Invoke(roomId, userId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Error in TypingStopped: {ex.Message}");
+            }
+        }); _connection.On<Guid>("RemovedFromRoom", roomId => RemovedFromRoom?.Invoke(roomId));
         _connection.On<RoomUpdatedModel>("RoomUpdated", upd => RoomUpdated?.Invoke(upd));
         _connection.On<RoomListItemDto>("RoomUpserted", dto => RoomUpserted?.Invoke(dto));
         _connection.On<Guid, int>("RoomPresenceUpdated", (roomId, count) => RoomPresenceUpdated?.Invoke(roomId, count));

@@ -32,10 +32,7 @@
                 <div class="room-title">@Room.Name</div>
 
                 <div class="room-meta">
-                    @if (IsTyping)
-                    {
-                        <span class="typing-dot" title="Typing…" aria-label="Typing"></span>
-                    }
+                    @* ❌ تم إزالة الـ Typing من هنا *@
 
                     @if (Room.IsMuted)
                     {
@@ -57,25 +54,29 @@
             @if (!string.IsNullOrWhiteSpace(Room.LastMessagePreview))
             {
                 <div class="room-preview" title="@Room.LastMessagePreview">
-                    @if (Room.LastMessageStatus.HasValue && IsMyLastMessage)
-                    {
-                        <span class="room-last-status @GetStatusClass(Room.LastMessageStatus.Value)"
-                              title="@StatusTooltip(Room.LastMessageStatus.Value)">
-                            @StatusIcon(Room.LastMessageStatus.Value)
-                        </span>
-                        <span>&nbsp;</span>
-                    }
                     @if (IsTyping)
                     {
-                        <span class="typing-indicator-room">
-                            <span class="typing-dots">
+                        @if (Room.Type == "Group" && !string.IsNullOrEmpty(TypingText))
+                        {
+                            <span class="typing-group-text">@TypingText</span>
+                        }
+                        else
+                        {
+                            <span class="typing-dots-only">
                                 <span></span><span></span><span></span>
                             </span>
-                            typing...
-                        </span>
+                        }
                     }
                     else
                     {
+                        @if (Room.LastMessageStatus.HasValue && IsMyLastMessage)
+                        {
+                            <span class="room-last-status @GetStatusClass(Room.LastMessageStatus.Value)"
+                                  title="@StatusTooltip(Room.LastMessageStatus.Value)">
+                                @StatusIcon(Room.LastMessageStatus.Value)
+                            </span>
+                            <span>&nbsp;</span>
+                        }
                         @Truncate(Room.LastMessagePreview, 60)
                     }
                 </div>
@@ -90,8 +91,8 @@
     [Parameter] public string? LastSeenText { get; set; }
     [Parameter] public bool IsTyping { get; set; }
     [Parameter] public Guid CurrentUserId { get; set; }
+    [Parameter] public string? TypingText { get; set; }
     private bool IsMyLastMessage => Room.LastMessageSenderId == CurrentUserId;
-    
     private static string GetStatusClass(MessageStatus status) => status switch
     {
         MessageStatus.Pending => "pending",
@@ -146,23 +147,15 @@
         if (text.Length <= max) return text;
         return text.Substring(0, max - 1) + "…";
     }
+
     protected override void OnParametersSet()
     {
-        Console.WriteLine($"[RoomListItem] 🏠 Rendering: {Room.Name}, Status={Room.LastMessageStatus}, IsMyLastMessage={IsMyLastMessage}");
-
-        if (Room.Type == "Private" && IsOnline == true)
-        {
-            Console.WriteLine($"[RoomListItem] ⚠️ Should show green dot for {Room.Name}");
-        }
-
+        Console.WriteLine($"[RoomListItem] 🏠 Rendering: {Room.Name}");
         base.OnParametersSet();
     }
 
-    // ✅ أضف هذه الدالة لتحديث الأيقونة فوراً
     protected override bool ShouldRender()
     {
-        // دايمًا نعيد الرسم عشان نضمن ظهور التحديثات
         return true;
     }
-   
 }

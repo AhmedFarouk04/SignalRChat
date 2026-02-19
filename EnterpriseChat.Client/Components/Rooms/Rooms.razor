@@ -91,7 +91,8 @@
                                                                                          ? IsUserOnline(room.OtherUserId.Value)
                                                                                          : (bool?)null))"
                       LastSeenText="@(IsRoomBlocked(room) ? null : GetLastSeenText(room.OtherUserId))"
-                      IsTyping="@(IsRoomBlocked(room) ? false : IsTyping(room.OtherUserId))" />
+                      IsTyping="@(IsRoomBlocked(room) ? false : IsRoomTyping(room))"
+                      TypingText="@(IsRoomBlocked(room) ? null : GetRoomTypingText(room))" />
                 }
         </ul>
     }
@@ -106,7 +107,7 @@
     private Timer? _presenceRefreshTimer;
     private bool _isDisposed = false;
     private bool _forceRefresh = false;
-
+    private readonly Dictionary<Guid, HashSet<Guid>> _typingByRoom = new(); // roomId -> userIds
     // ✅ متغيرات للـ Cache لتقليل الاستعلامات
     private DateTime? _lastOnlineUsersRefresh;
     private List<Guid>? _cachedOnlineUsers;
@@ -114,7 +115,7 @@
     private DateTime _lastRoomPresenceUpdate = DateTime.UtcNow;
     private readonly TimeSpan _roomPresenceThrottle = TimeSpan.FromSeconds(3);
     private readonly HashSet<Guid> _recentlyUpdatedRooms = new();
-
+    private readonly Dictionary<Guid, string> _memberNames = new();
     private async void OnRoomPresenceUpdated(Guid roomId, int count)
     {
         // ✅ تجاهل التحديثات المتكررة لنفس الغرفة
@@ -147,7 +148,68 @@
             _recentlyUpdatedRooms.Remove(roomId);
         });
     }
-    private async void OnUserBlockedByMeChanged(Guid userId, bool blocked)
+    private bool IsRoomTyping(RoomListItemModel room)
+    {
+        if (room.Type == "Private")
+        {
+            // ✅ تحقق من الـ roomId بالظبط مش من الـ userId في أي غرفة
+            return room.OtherUserId.HasValue
+                && _typingByRoom.TryGetValue(room.Id, out var privateUsers)
+                && privateUsers.Contains(room.OtherUserId.Value);
+        }
+
+        return _typingByRoom.TryGetValue(room.Id, out var users) && users.Any();
+    }
+
+    private string? GetRoomTypingText(RoomListItemModel room)
+    {
+        if (room.Type == "Private") return null;
+
+        if (!_typingByRoom.TryGetValue(room.Id, out var userIds) || !userIds.Any())
+            return null;
+
+        var names = userIds
+            .Select(uid => VM.Rooms.Any() ? GetDisplayName(uid) : "Someone")
+            .ToList();
+
+        return names.Count switch
+        {
+            1 => $"{names[0]} is typing...",
+            2 => $"{names[0]}, {names[1]} are typing...",
+            _ => $"{names[0]} and {names.Count - 1} others are typing..."
+        };
+    }
+
+    private string GetDisplayName(Guid userId)
+    {
+        // 1. من الكاش
+        if (_memberNames.TryGetValue(userId, out var cached))
+            return cached.Split(' ')[0];
+
+        // 2. من أسماء أعضاء الجروب في الـ Rooms
+        foreach (var room in VM.Rooms.Where(r => r.Type == "Group"))
+        {
+            if (room.MemberNames.TryGetValue(userId, out var name))
+            {
+                _memberNames[userId] = name;
+                return name.Split(' ')[0];
+            }
+        }
+
+        // 3. من الشات الخاص
+        var privateRoom = VM.Rooms.FirstOrDefault(r => r.OtherUserId == userId);
+        if (privateRoom?.OtherDisplayName != null)
+        {
+            var firstName = privateRoom.OtherDisplayName.Split(' ')[0];
+            _memberNames[userId] = firstName;
+            return firstName;
+        }
+
+        return "Someone";
+    }
+
+
+private async void OnUserBlockedByMeChanged(Guid userId, bool blocked)
     {
         Console.WriteLine($"[Rooms] OnUserBlockedByMeChanged: userId={userId}, blocked={blocked}");
 
@@ -398,6 +460,7 @@
         Realtime.MessageReceiptStatsUpdated += OnMessageReceiptStatsUpdated;
         Realtime.Disconnected += OnRealtimeDisconnected;
         Realtime.Reconnected += OnRealtimeReconnected;
+        Realtime.MemberAdded += OnMemberAddedForNames;
 
         if (Realtime.State.IsConnected)
         {
@@ -424,9 +487,14 @@
         Realtime.Reconnected -= OnRealtimeReconnected;
         Realtime.UserBlockedByMeChanged -= OnUserBlockedByMeChanged;
         Realtime.RoomPresenceUpdated -= OnRoomPresenceUpdated;
+        Realtime.MemberAdded -= OnMemberAddedForNames;
         Realtime.MessageReceiptStatsUpdated -= OnMessageReceiptStatsUpdated; // ✅ مهم جداً
     }
-   
+    private void OnMemberAddedForNames(Guid roomId, Guid userId, string displayName)
+    {
+        if (!string.IsNullOrWhiteSpace(displayName))
+            _memberNames[userId] = displayName.Split(' ')[0];
+    }
     private void OnMessageReceiptStatsUpdated(Guid messageId, Guid roomId, int total, int delivered, int read)
     {
         Console.WriteLine($"[Rooms PAGE] 🔔🔔🔔 EVENT FIRED! msg={messageId}, room={roomId}, d={delivered}, r={read}");
@@ -490,19 +558,22 @@ private async void OnUserOnline(Guid userId)
 
     private void OnTypingStarted(Guid roomId, Guid userId)
     {
-        if (Flags.GetBlocked(userId))
-            return;
-
-        _typingUsers.Add(userId);
+        if (Flags.GetBlocked(userId)) return;
+        if (!_typingByRoom.ContainsKey(roomId))
+            _typingByRoom[roomId] = new HashSet<Guid>();
+        _typingByRoom[roomId].Add(userId);
         _ = InvokeAsync(StateHasChanged);
     }
-
     private void OnTypingStopped(Guid roomId, Guid userId)
     {
-        _typingUsers.Remove(userId);
+        if (_typingByRoom.TryGetValue(roomId, out var users))
+        {
+            users.Remove(userId);
+            if (users.Count == 0)
+                _typingByRoom.Remove(roomId);
+        }
         _ = InvokeAsync(StateHasChanged);
     }
-
     private async void OnRealtimeDisconnected()
     {
         Console.WriteLine("[Rooms] Realtime disconnected - but keeping local status");
@@ -599,9 +670,9 @@ private async void OnUserOnline(Guid userId)
 
     private bool IsTyping(Guid? userId)
     {
-        return userId.HasValue && _typingUsers.Contains(userId.Value) && !Flags.GetBlocked(userId.Value);
+        if (!userId.HasValue || Flags.GetBlocked(userId.Value)) return false;
+        return _typingByRoom.Values.Any(users => users.Contains(userId.Value));
     }
-
     private void OnSearch(ChangeEventArgs e)
     {
         var q = e.Value?.ToString() ?? "";
@@ -674,7 +745,8 @@ private async void OnUserOnline(Guid userId)
 
             _onlineStatus.Clear();
             _lastSeenMap.Clear();
-            _typingUsers.Clear();
+            _typingByRoom.Clear();
+            _memberNames.Clear();
             _cachedOnlineUsers = null;
             _lastOnlineUsersRefresh = null;
             _cachedCurrentUserId = null;
@@ -686,4 +758,5 @@ private async void OnUserOnline(Guid userId)
             Console.WriteLine($"[Rooms] Error in DisposeAsync: {ex.Message}");
         }
     }
+    // في RoomsViewModel.cs - داخل SetFilter أو ApplyFilter أو بعد LoadAsync
 }

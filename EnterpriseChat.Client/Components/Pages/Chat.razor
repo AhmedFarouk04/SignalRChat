@@ -7,6 +7,8 @@
 @using EnterpriseChat.Client.ViewModels
 @using EnterpriseChat.Client.Models
 @using EnterpriseChat.Domain.Enums
+@using TypingIndicator = EnterpriseChat.Client.Components.Pages.TypingIndicator
+
 @using Microsoft.JSInterop
 @using EnterpriseChat.Application.DTOs
 @using EnterpriseChat.Client.Services.Http
@@ -90,8 +92,8 @@
 
                 <div id="messages-end"></div>
 
-                <TypingIndicator TypingUsers="@VM.TypingUsers" />
-
+                
+               
                 @if (_reactionModalOpen && _reactionDetails != null)
                 {
                     <ReactionDetailsModal Data="_reactionDetails"
@@ -99,7 +101,22 @@
                                           OnClose="CloseReactionDetails" />
                 }
             </div>
-
+            <div class="typing-indicator-container" style="overflow: hidden;">
+                <TypingIndicator RoomId="@RoomId"
+                                 IsGroup="@(VM.Room?.Type == "Group")"
+                                 AllUsers="@VM.GetAllUsers()" />
+            </div>
+            @{
+                var allUsers = new List<UserModel>();
+                if (VM.GroupMembers?.Members != null)
+                {
+                    allUsers.AddRange(VM.GroupMembers.Members);
+                }
+                if (VM.OtherUser != null && !allUsers.Any(u => u.Id == VM.OtherUser.Id))
+                {
+                    allUsers.Add(VM.OtherUser);
+                }
+            }
             @if (_attachmentsOpen)
             {
                 <div class="drawer-backdrop" @onclick="CloseAttachments"></div>
@@ -578,6 +595,24 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
     private async Task SendMessage()
     {
         if (string.IsNullOrWhiteSpace(currentMessage)) return;
+
+        // ✅ وقف الـ Typing فوراً قبل الإرسال
+        try
+        {
+            if (Realtime.State.IsConnected)
+                await Realtime.NotifyTypingAsync(RoomId);
+
+            // ✅ Cancel الـ typing CTS عشان يبعت TypingStop فوراً
+            await Task.Run(async () =>
+            {
+                if (Realtime is ChatRealtimeClient rc)
+                {
+                    await rc.StopTypingImmediatelyAsync(RoomId);
+                }
+            });
+        }
+        catch { }
+
         await HandleSendMessage(currentMessage.Trim());
         currentMessage = string.Empty;
         await ScrollToBottom();

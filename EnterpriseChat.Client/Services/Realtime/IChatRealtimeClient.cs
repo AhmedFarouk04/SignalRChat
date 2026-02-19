@@ -52,10 +52,14 @@ public interface IChatRealtimeClient
     event Action<Guid, Guid, Guid>? MessageDeliveredToAll; // messageId, senderId, roomId
     event Action<Guid, Guid, Guid>? MessageReadToAll;      // messageId, senderId, roomId
 
+    // ➕ حدث جديد
+    event Action<Guid, List<Guid>>? InitialTypingUsersReceived;
 
+    // ➕ دالة جديدة
+    IReadOnlyList<Guid> GetTypingUsersInRoom(Guid roomId);
     Task PinMessageAsync(Guid roomId, Guid? messageId);
     Task SendMessageWithReplyAsync(Guid roomId, MessageModel message);
-
+    Task StopTypingImmediatelyAsync(Guid roomId);
     Task ConnectAsync();
     Task DisconnectAsync(bool force = false);
 

@@ -705,38 +705,133 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             NotifyChanged();
         }
     }
+    // في ChatViewModel.cs - عدل دالة OnTypingStarted كده
+    // في ChatViewModel.cs - دالة OnTypingStarted
     private void OnTypingStarted(Guid rid, Guid uid)
     {
         if (_eventsRoomId != rid || uid == CurrentUserId) return;
 
+        Console.WriteLine($"[VM] 🔍 OnTypingStarted received - Room: {rid}, User: {uid}");
+
+        // لو المستخدم موجود بالفعل، متضفهوش تاني
         var existing = TypingUsers.FirstOrDefault(u => u.Id == uid);
-        if (existing != null) return;
-
-        // ابحث عن الـ user (من members أو online أو other)
-        var user = FindMember(uid)
-                   ?? OnlineUsers.FirstOrDefault(u => u.Id == uid)
-                   ?? (OtherUser?.Id == uid ? OtherUser : null);
-
-        if (user != null)
+        if (existing != null)
         {
-            var typingUser = new UserModel
+            Console.WriteLine($"[VM] User {uid} already typing, skipping");
+            return;
+        }
+
+        // محاولة إيجاد المستخدم
+        UserModel? user = null;
+
+        // 1. في الجروب: من قائمة الأعضاء
+        if (Room?.Type == "Group" && GroupMembers != null)
+        {
+            var member = GroupMembers.Members.FirstOrDefault(m => m.Id == uid);
+            if (member != null)
+            {
+                user = new UserModel
+                {
+                    Id = member.Id,
+                    DisplayName = member.DisplayName ?? "User",
+                    IsOnline = true
+                };
+                Console.WriteLine($"[VM] Found user in GroupMembers: {member.DisplayName}");
+            }
+        }
+        // 2. في الشات الخاص: المستخدم الآخر
+        else if (Room?.Type == "Private" && OtherUser != null && OtherUser.Id == uid)
+        {
+            user = new UserModel
+            {
+                Id = OtherUser.Id,
+                DisplayName = OtherUser.DisplayName ?? "User",
+                IsOnline = OtherUser.IsOnline
+            };
+            Console.WriteLine($"[VM] Found user in OtherUser: {OtherUser.DisplayName}");
+        }
+
+        // 3. لو لسه ملقتوش، استخدم الاسم الافتراضي
+        if (user == null)
+        {
+            var name = GetSenderName(uid);
+            user = new UserModel
             {
                 Id = uid,
-                DisplayName = GetSenderName(uid), // استخدم الـ method اللي عندك
+                DisplayName = name,
                 IsOnline = true
             };
-            TypingUsers.Add(typingUser);
-            NotifyChanged();
+            Console.WriteLine($"[VM] Using GetSenderName: {name}");
         }
-    }
 
+        // إضافة المستخدم لقائمة الـ typing
+        TypingUsers.Add(user);
+        Console.WriteLine($"[VM] ✅ Added {user.DisplayName} to TypingUsers. Total: {TypingUsers.Count}");
+
+        // Force UI update
+        NotifyChanged();
+    }
+    // في ChatViewModel.cs - عدل دالة OnTypingStopped كده
+
+    // في ChatViewModel.cs - أضف هذه الدالة
+    // في ChatViewModel.cs - أضف هذه الدالة
+    public IReadOnlyList<UserModel> GetAllUsers()
+    {
+        var users = new List<UserModel>();
+
+        // في الجروب: أضف كل الأعضاء
+        if (GroupMembers?.Members != null)
+        {
+            foreach (var member in GroupMembers.Members)
+            {
+                if (!users.Any(u => u.Id == member.Id))
+                {
+                    users.Add(new UserModel
+                    {
+                        Id = member.Id,
+                        DisplayName = member.DisplayName ?? "User",
+                        IsOnline = OnlineUsers.Any(u => u.Id == member.Id)
+                    });
+                }
+            }
+        }
+
+        // في الشات الخاص: أضف المستخدم الآخر
+        if (OtherUser != null && !users.Any(u => u.Id == OtherUser.Id))
+        {
+            users.Add(OtherUser);
+        }
+
+        // أضف نفسك كمان لو مش موجود (اختياري)
+        if (!users.Any(u => u.Id == CurrentUserId))
+        {
+            users.Add(new UserModel
+            {
+                Id = CurrentUserId,
+                DisplayName = "You",
+                IsOnline = true
+            });
+        }
+
+        return users;
+    }
     private void OnTypingStopped(Guid rid, Guid uid)
     {
         if (_eventsRoomId != rid) return;
-        TypingUsers.RemoveAll(u => u.Id == uid);
-        NotifyChanged();
-    }
 
+        var removed = false;
+        var userToRemove = TypingUsers.FirstOrDefault(u => u.Id == uid);
+        if (userToRemove != null)
+        {
+            removed = TypingUsers.Remove(userToRemove);
+        }
+
+        if (removed)
+        {
+            Console.WriteLine($"[VM] ✋ TypingStopped: User {uid} removed. Total typing: {TypingUsers.Count}");
+            NotifyChanged();
+        }
+    }
     private void OnDisconnected()
     {
         IsDisconnected = true;

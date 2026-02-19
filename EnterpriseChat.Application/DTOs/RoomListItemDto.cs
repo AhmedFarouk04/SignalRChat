@@ -26,4 +26,6 @@ public sealed class RoomListItemDto
     public int? LastMessageDeliveredCount { get; init; }
     public int? LastMessageReadCount { get; init; }
     public DateTime? LastSeenAt { get; set; } // ➕ أضف هذا
+
+    public Dictionary<Guid, string> MemberNames { get; init; } = new();
 }

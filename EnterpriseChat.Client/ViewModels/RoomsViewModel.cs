@@ -21,6 +21,8 @@ public sealed class RoomsViewModel
     private readonly ICurrentUser _currentUser;
     private Guid _cachedUserId;
     public Guid CurrentUserId;
+    private readonly Dictionary<Guid, bool> _typingStatus = new();
+
     public RoomsViewModel(
         IRoomService roomService,
         ToastService toasts,
@@ -40,7 +42,8 @@ public sealed class RoomsViewModel
 
         _flags.RoomUnreadChanged += OnRoomUnreadChanged;
         _flags.ActiveRoomChanged += OnActiveRoomChanged;
-
+        _rt.TypingStarted += OnTypingStarted;
+        _rt.TypingStopped += OnTypingStopped;
         _rt.GroupRenamed += OnGroupRenamed;
         _rt.RoomUpserted += OnRoomUpserted;
         _rt.MemberAdded += OnMemberAddedRealtime;
@@ -360,7 +363,8 @@ public sealed class RoomsViewModel
             LastMessagePreview = dto.LastMessagePreview,
             LastMessageId = dto.LastMessageId,
             LastMessageSenderId = dto.LastMessageSenderId,
-            LastMessageStatus = dto.LastMessageStatus is null ? null : (MessageStatus?)(int)dto.LastMessageStatus.Value
+            LastMessageStatus = dto.LastMessageStatus is null ? null : (MessageStatus?)(int)dto.LastMessageStatus.Value,
+            MemberNames = dto.MemberNames ?? new()
         };
 
         if (idx >= 0)
@@ -544,6 +548,7 @@ public sealed class RoomsViewModel
         ApplyFilter();
         NotifyChanged();
     }
+
     private void ApplyFilter()
     {
         IEnumerable<RoomListItemModel> q = Rooms;
@@ -651,4 +656,89 @@ public sealed class RoomsViewModel
             }
         }
     }
+    // في RoomsViewModel.cs - أضف هذه الدوال
+
+    private void OnTypingStarted(Guid roomId, Guid userId)
+    {
+        Console.WriteLine($"[RoomsVM] ✍️ TypingStarted for room {roomId}, user {userId}");
+
+        lock (_typingStatus)
+        {
+            _typingStatus[roomId] = true;
+        }
+
+        // تحديث الغرفة المحددة فقط
+        UpdateRoomTypingStatus(roomId, true);
+
+    }
+   
+    private void OnTypingStopped(Guid roomId, Guid userId)
+    {
+        Console.WriteLine($"[RoomsVM] ✋ TypingStopped for room {roomId}, user {userId}");
+
+        lock (_typingStatus)
+        {
+            _typingStatus[roomId] = false;
+        }
+
+        // تحديث الغرفة المحددة فقط
+        UpdateRoomTypingStatus(roomId, false);
+
+    }
+
+    private void UpdateRoomTypingStatus(Guid roomId, bool isTyping)
+    {
+        Console.WriteLine($"[RoomsVM] 🔄 UpdateRoomTypingStatus: room={roomId}, isTyping={isTyping}");
+
+        var list = Rooms.ToList();
+        var idx = list.FindIndex(r => r.Id == roomId);
+
+        if (idx >= 0)
+        {
+            var room = list[idx];
+            Console.WriteLine($"[RoomsVM] Found room {room.Name}, current IsTyping={room.IsTyping}");
+
+            if (room.IsTyping != isTyping)
+            {
+                list[idx] = new RoomListItemModel
+                {
+                    Id = room.Id,
+                    Name = room.Name,
+                    Type = room.Type,
+                    OtherUserId = room.OtherUserId,
+                    OtherDisplayName = room.OtherDisplayName,
+                    IsMuted = room.IsMuted,
+                    UnreadCount = room.UnreadCount,
+                    LastMessageAt = room.LastMessageAt,
+                    LastMessagePreview = room.LastMessagePreview,
+                    LastMessageId = room.LastMessageId,
+                    LastMessageSenderId = room.LastMessageSenderId,
+                    LastMessageStatus = room.LastMessageStatus,
+                    IsTyping = isTyping
+                };
+
+                Rooms = list;
+                ApplyFilter();
+                NotifyChanged();
+                Console.WriteLine($"[RoomsVM] ✅ Updated room {room.Name} IsTyping to {isTyping}");
+            }
+            else
+            {
+                Console.WriteLine($"[RoomsVM] No change needed for {room.Name}");
+            }
+        }
+        else
+        {
+            Console.WriteLine($"[RoomsVM] Room {roomId} not found in list");
+        }
+    }    // دالة مساعدة لجلب حالة الـ Typing لغرفة معينة
+    public bool IsRoomTyping(Guid roomId)
+    {
+        lock (_typingStatus)
+        {
+            return _typingStatus.TryGetValue(roomId, out var isTyping) && isTyping;
+        }
+    }
+
+    // دالة لتحديث أو إضافة غرفة في القائمة
 }

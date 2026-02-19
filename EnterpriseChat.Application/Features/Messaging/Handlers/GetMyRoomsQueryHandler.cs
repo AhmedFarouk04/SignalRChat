@@ -104,7 +104,21 @@ public sealed class GetMyRoomsQueryHandler
             var member = room.Members.FirstOrDefault(m => m.UserId.Value == query.CurrentUserId.Value);
             Guid? lastReadMessageId = member?.LastReadMessageId?.Value;
             DateTime? lastReadAt = member?.LastReadAt;
-
+            var memberNames = new Dictionary<Guid, string>();
+            if (room.Type == RoomType.Group)
+            {
+                foreach (var m in room.Members)
+                {
+                    if (m.UserId.Value == query.CurrentUserId.Value) continue;
+                    if (!nameCache.TryGetValue(m.UserId.Value, out var mName))
+                    {
+                        mName = await _users.GetDisplayNameAsync(m.UserId.Value, ct);
+                        nameCache[m.UserId.Value] = mName;
+                    }
+                    if (!string.IsNullOrWhiteSpace(mName))
+                        memberNames[m.UserId.Value] = mName;
+                }
+            }
             result.Add(new RoomListItemDto
             {
                 Id = room.Id.Value,
@@ -122,7 +136,8 @@ public sealed class GetMyRoomsQueryHandler
 
                 // ✅ NEW - إرسال LastReadMessageId للـ Client
                 LastReadMessageId = lastReadMessageId,
-                LastReadAt = lastReadAt
+                LastReadAt = lastReadAt,
+                MemberNames = memberNames
             });
         }
 

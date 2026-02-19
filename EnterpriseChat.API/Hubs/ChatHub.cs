@@ -1,6 +1,7 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Interfaces;
+using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Repositories;
@@ -26,6 +27,7 @@ public sealed class ChatHub : Hub
     private static readonly ConcurrentDictionary<string, byte> _joinedRooms = new();
     private readonly IServiceScopeFactory _scopeFactory;
 
+
     public ChatHub(
         IPresenceService presence,
         IMediator mediator,
@@ -47,7 +49,6 @@ public sealed class ChatHub : Hub
     }
 
     // ✅ ChatHub.cs - الجزء المُصلح من OnConnectedAsync
-
     public override async Task OnConnectedAsync()
     {
         var userId = GetUserId();
@@ -350,31 +351,47 @@ public sealed class ChatHub : Hub
         await Clients.Group(roomId.ToString())
             .SendAsync("MemberRemoved", roomId, userId, removerName);
     }
-    public async Task JoinRoom(string roomId)
+    public async Task JoinRoom(string roomIdStr)
     {
-        var userId = GetUserId();
-        var rid = new RoomId(Guid.Parse(roomId));
-
-        var room = await _roomRepository.GetByIdAsync(rid);
-        if (room == null) throw new HubException("Room not found");
-
-        await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
-
-        // ✅ مهم: منع إرسال UserOffline للمستخدم نفسه
-        var isFirstJoin = await _roomPresence.IsUserInRoomAsync(rid, userId);
-        if (!isFirstJoin)
+        try
         {
-            await _roomPresence.JoinRoomAsync(rid, userId);
+            var userId = GetUserId();
+            var roomId = new RoomId(Guid.Parse(roomIdStr));
+
+            var room = await _roomRepository.GetByIdAsync(roomId);
+            if (room == null) throw new HubException("Room not found");
+
+            // ✅ انضمام للـ SignalR group
+            await Groups.AddToGroupAsync(Context.ConnectionId, roomIdStr);
+
+            // ✅ تسجيل الحضور في Redis
+            var isFirstJoin = await _roomPresence.IsUserInRoomAsync(roomId, userId);
+            if (!isFirstJoin)
+            {
+                await _roomPresence.JoinRoomAsync(roomId, userId);
+            }
+
+            // ✅ إرسال count محدث للآخرين
+            var count = await _roomPresence.GetOnlineCountAsync(roomId);
+            await Clients.OthersInGroup(roomIdStr).SendAsync("RoomPresenceUpdated", roomId.Value, count);
+
+            // ✅ 🔥 NEW: إرسال قائمة المستخدمين اللي بيكتبوا حالياً للمستخدم الجديد
+            var typingUsers = await _typing.GetTypingUsersAsync(roomId);
+            if (typingUsers.Any())
+            {
+                var typingUserIds = typingUsers.Select(u => u.Value).ToList();
+                await Clients.Caller.SendAsync("InitialTypingUsers", roomId.Value, typingUserIds);
+                Console.WriteLine($"[JoinRoom] 📋 Sent {typingUsers.Count} typing users to new joiner in room {roomId.Value}");
+            }
+
+            // ✅ تأكيد أن المستخدم أونلاين
+            await Clients.Caller.SendAsync("UserOnline", userId.Value);
         }
-
-        // ✅ إبلاغ الآخرين فقط (مش الشخص نفسه)
-        var count = await _roomPresence.GetOnlineCountAsync(rid);
-        await Clients.OthersInGroup(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
-
-        // ✅ تأكيد أن المستخدم لسه أونلاين
-        await Clients.Caller.SendAsync("UserOnline", userId.Value);
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[JoinRoom] Error: {ex.Message}");
+        }
     }
-
 
     public async Task LeaveRoom(string roomId)
     {
@@ -390,43 +407,153 @@ public sealed class ChatHub : Hub
         await Clients.OthersInGroup(roomId).SendAsync("RoomPresenceUpdated", rid.Value, count);
     }
 
-    public async Task TypingStart(string roomId)
+    public async Task TypingStart(string roomIdStr)
     {
-        var userId = GetUserId();
-        var rid = new RoomId(Guid.Parse(roomId));
-        var room = await _roomRepository.GetByIdAsync(rid);
+        try
+        {
+            if (!Guid.TryParse(roomIdStr, out var roomGuid))
+                return;
 
-        if (room is null) return;
+            var userId = GetUserId();
+            var roomId = new RoomId(roomGuid);
 
-        var isOwner = room.OwnerId?.Value == userId.Value;
-        if (!isOwner && !room.IsMember(userId)) return;
+            // ✅ 1. التحقق من وجود الغرفة
+            var room = await _roomRepository.GetByIdAsync(roomId);
+            if (room is null) return;
 
-        await _typing.StartTypingAsync(rid, userId, TimeSpan.FromSeconds(4));
+            // ✅ 2. التحقق من عضوية المستخدم في الغرفة
+            var isMember = room.IsMember(userId);
+            if (!isMember) return;
 
-        // throttle: مرة كل 1 ثانية لكل (room,user)
-        var gateKey = $"{roomId}:{userId.Value}";
-        var now = DateTime.UtcNow;
+            // ✅ 3. لو الغرفة خاصة، تحقق من البلوك
+            if (room.Type == RoomType.Private)
+            {
+                var otherUserId = room.GetMemberIds().FirstOrDefault(id => id != userId);
+                if (otherUserId != null)
+                {
+                    var isBlocked = await _blockRepository.IsBlockedAsync(userId, otherUserId) ||
+                                   await _blockRepository.IsBlockedAsync(otherUserId, userId);
 
-        if (_typingBroadcastGate.TryGetValue(gateKey, out var last) &&
-            (now - last).TotalMilliseconds < 1000)
-            return;
+                    // ✅ لو في بلوك، منرسلش حدث Typing خالص
+                    if (isBlocked)
+                    {
+                        Console.WriteLine($"[Typing] 🚫 Blocked private room {roomId.Value}, not sending typing event");
+                        return;
+                    }
+                }
+            }
 
-        _typingBroadcastGate[gateKey] = now;
+            // ✅ 4. Throttling: منع الإرسال المتكرر
+            var gateKey = $"{roomIdStr}:{userId.Value}";
+            var now = DateTime.UtcNow;
 
-        await Clients.OthersInGroup(roomId)
-            .SendAsync("TypingStarted", rid.Value, userId.Value);
+            if (_typingBroadcastGate.TryGetValue(gateKey, out var last) &&
+                (now - last).TotalMilliseconds < 1000)
+            {
+                // ✅ بس لسه بنحدث TTL في Redis حتى لو منبعتهوش للآخرين
+                await _typing.StartTypingAsync(roomId, userId, TimeSpan.FromSeconds(4));
+                return;
+            }
+
+            // ✅ 5. تحديث الـ Redis
+            var isFirst = await _typing.StartTypingAsync(roomId, userId, TimeSpan.FromSeconds(4));
+
+            // ✅ 6. تحديث الـ gate
+            _typingBroadcastGate[gateKey] = now;
+
+            // ✅ 7. إرسال للآخرين فقط (مش لنفس المستخدم)
+            await Clients.OthersInGroup(roomIdStr).SendAsync("TypingStarted", roomId.Value, userId.Value);
+            // ✅ بعت للـ User مباشرة لو Private (حتى لو مش في الـ Group)
+            if (room.Type == RoomType.Private)
+            {
+                var otherUserId = room.GetMemberIds().FirstOrDefault(id => id != userId);
+                if (otherUserId != null)
+                {
+                    await Clients.User(otherUserId.Value.ToString())
+                        .SendAsync("TypingStarted", roomId.Value, userId.Value);
+                }
+            }
+            else if (room.Type == RoomType.Group)
+            {
+                // ✅ بعت لكل أعضاء الجروب مباشرةً (حتى اللي مش في الـ Group)
+                foreach (var memberId in room.GetMemberIds())
+                {
+                    if (memberId == userId) continue;
+                    await Clients.User(memberId.Value.ToString())
+                        .SendAsync("TypingStarted", roomId.Value, userId.Value);
+                }
+            }
+            Console.WriteLine($"[Typing] ✍️ User {userId.Value} typing in room {roomId.Value}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TypingStart] Error: {ex.Message}");
+        }
     }
 
-
-    public async Task TypingStop(string roomId)
+    // ========== دالة TypingStop المعدلة ==========
+    public async Task TypingStop(string roomIdStr)
     {
-        var userId = GetUserId();
-        var rid = new RoomId(Guid.Parse(roomId));
+        try
+        {
+            if (!Guid.TryParse(roomIdStr, out var roomGuid))
+                return;
 
-        await _typing.StopTypingAsync(rid, userId);
+            var userId = GetUserId();
+            var roomId = new RoomId(roomGuid);
 
-        await Clients.OthersInGroup(roomId)
-            .SendAsync("TypingStopped", rid.Value, userId.Value);
+            await _typing.StopTypingAsync(roomId, userId);
+
+            // ✅ إرسال للآخرين فقط
+           
+            await Clients.OthersInGroup(roomIdStr).SendAsync("TypingStopped", roomId.Value, userId.Value);
+            // ✅ بعت للـ User مباشرة لو Private
+            var roomForStop = await _roomRepository.GetByIdAsync(roomId);
+            if (roomForStop?.Type == RoomType.Private)
+            {
+                var otherUserId = roomForStop.GetMemberIds().FirstOrDefault(id => id != userId);
+                if (otherUserId != null)
+                {
+                    await Clients.User(otherUserId.Value.ToString())
+                        .SendAsync("TypingStopped", roomId.Value, userId.Value);
+                }
+            }
+            else if (roomForStop?.Type == RoomType.Group)
+            {
+                // ✅ بعت لكل أعضاء الجروب مباشرةً
+                foreach (var memberId in roomForStop.GetMemberIds())
+                {
+                    if (memberId == userId) continue;
+                    await Clients.User(memberId.Value.ToString())
+                        .SendAsync("TypingStopped", roomId.Value, userId.Value);
+                }
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TypingStop] Error: {ex.Message}");
+        }
+    }
+
+    // ========== دالة جديدة: جلب كل المستخدمين اللي بيكتبوا في Room ==========
+    public async Task<IReadOnlyList<Guid>> GetTypingUsers(string roomIdStr)
+    {
+        try
+        {
+            if (!Guid.TryParse(roomIdStr, out var roomGuid))
+                return Array.Empty<Guid>();
+
+            var roomId = new RoomId(roomGuid);
+            var typingUsers = await _typing.GetTypingUsersAsync(roomId);
+
+            return typingUsers.Select(u => u.Value).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GetTypingUsers] Error: {ex.Message}");
+            return Array.Empty<Guid>();
+        }
     }
 
     public async Task MarkRead(Guid messageId)
@@ -546,60 +673,7 @@ public sealed class ChatHub : Hub
         // ✅ ممنوع تبعت MessageReceived هنا (ولا Group ولا Users)
     }
 
-    //public async Task SendMessageWithReply(SendMessageWithReplyRequest request)
-    //{
-    //    var userId = GetUserId();
-
-    //    var command = new SendMessageCommand(
-    //        new RoomId(request.RoomId),
-    //        userId,
-    //        request.Content,
-    //        request.ReplyToMessageId.HasValue ?
-    //            new MessageId(request.ReplyToMessageId.Value) : null);
-
-    //    var result = await _mediator.Send(command);
-
-    //    // ✅ حول الـ result لـ MessageDto
-    //    var messageDto = new MessageDto
-    //    {
-    //        Id = result.Id,
-    //        RoomId = result.RoomId,
-    //        SenderId = result.SenderId,
-    //        Content = result.Content,
-    //        CreatedAt = result.CreatedAt,
-    //        Status = result.Status,
-    //        ReplyToMessageId = result.ReplyToMessageId,
-    //        ReplyInfo = result.ReplyInfo != null ? new ReplyInfoDto
-    //        {
-    //            MessageId = result.ReplyInfo.MessageId,
-    //            SenderId = result.ReplyInfo.SenderId,
-    //            SenderName = result.ReplyInfo.SenderName,
-    //            ContentPreview = result.ReplyInfo.ContentPreview,
-    //            CreatedAt = result.ReplyInfo.CreatedAt,
-    //            IsDeleted = result.ReplyInfo.IsDeleted
-    //        } : null,
-    //        IsEdited = result.IsEdited,
-    //        IsDeleted = result.IsDeleted,
-    //        ReadCount = result.ReadCount,
-    //        DeliveredCount = result.DeliveredCount,
-    //        TotalRecipients = result.TotalRecipients
-    //    };
-
-    //    // 🔥 فك التعليق عن السطر ده!
-    //    await Clients.Group(request.RoomId.ToString())
-    //    .SendAsync("MessageReceived", messageDto);
-
-    //    // 2. ابعت مباشرة لكل عضو (Fallback)
-    //    //var room = await _roomRepository.GetByIdWithMembersAsync(new RoomId(request.RoomId));
-    //    //if (room != null)
-    //    //{
-    //    //    foreach (var member in room.Members)
-    //    //    {
-    //    //        await Clients.User(member.UserId.Value.ToString())
-    //    //            .SendAsync("MessageReceived", messageDto);
-    //    //    }
-    //    //}
-    //}
+    
     private UserId GetUserId()
 {
     var raw =
