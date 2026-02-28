@@ -197,12 +197,12 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
                 .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName));
         }
 
-        await _hub.Clients.Group(roomId.Value.ToString())
-            .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName);
+        // ✅ احذف السطرين دول — هما سبب الـ duplicate
+        // ❌ await _hub.Clients.Group(roomId.Value.ToString())
+        //     .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName);
 
         await Task.WhenAll(tasks);
     }
-
     public async Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
         => await MemberRemovedAsync(roomId, memberId, null, null, users);
 

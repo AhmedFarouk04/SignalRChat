@@ -6,4 +6,6 @@ namespace EnterpriseChat.Application.Features.Messaging.Commands;
 public sealed record PinMessageCommand(
     RoomId RoomId,
     MessageId? MessageId,
-    TimeSpan? Duration = null) : IRequest;
+    UserId PinnedBy,
+    TimeSpan? Duration = null,
+    Guid? UnpinMessageId = null) : IRequest;

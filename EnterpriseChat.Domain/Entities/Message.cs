@@ -21,8 +21,8 @@ public class Message
     public MessageId? ReplyToMessageId { get; private set; }
     public Message? ReplyToMessage { get; private set; }
     public DateTime CreatedAt { get; private set; }
-    private readonly List<Reaction> _reactions = new();
-    public IReadOnlyCollection<Reaction> Reactions => _reactions.AsReadOnly();
+    private List<Reaction> _reactions = new();
+    public IReadOnlyCollection<Reaction> Reactions => _reactions.AsReadOnly(); 
     public bool IsEdited { get; private set; }
     public bool IsDeleted { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
@@ -31,7 +31,10 @@ public class Message
     // ✅ الخصائص المحسوبة الجديدة
     public int DeliveredCount => _receipts.Count(r => r.Status >= MessageStatus.Delivered);
     public int ReadCount => _receipts.Count(r => r.Status >= MessageStatus.Read);
+    public bool IsBlocked { get; private set; } // ✅ ضيف السطر ده
 
+    public bool IsSystemMessage { get; private set; }
+    public SystemMessageType? SystemMessageType { get; private set; }
     private Message() { }
 
     public Message(
@@ -39,7 +42,8 @@ public class Message
         UserId senderId,
         string content,
         IEnumerable<UserId> recipients,
-         MessageId? replyToMessageId = null)
+         MessageId? replyToMessageId = null,
+         bool isBlocked = false)
     {
         Id = MessageId.New();
         RoomId = roomId;
@@ -47,6 +51,9 @@ public class Message
         Content = content;
         CreatedAt = DateTime.UtcNow;
         ReplyToMessageId = replyToMessageId;
+        IsBlocked = isBlocked;
+        IsSystemMessage = false;                    // ← جديد
+        SystemMessageType = null;
 
         // ✅ تعديل هنا: نضيف RoomId للـ Receipt
         foreach (var userId in recipients)
@@ -62,8 +69,31 @@ public class Message
             CreatedAt,
             replyToMessageId
         ));
+       
     }
+    public static Message CreateSystemMessage(
+        RoomId roomId,
+        string content,
+        SystemMessageType systemType,
+        IEnumerable<UserId> recipients)   // recipients مهم عشان الـ receipts
+    {
+        var msg = new Message
+        {
+            Id = MessageId.New(),
+            RoomId = roomId,
+            SenderId = UserId.System,          // لو عندك UserId.System وإلا استخدم Guid خاص
+            Content = content,
+            CreatedAt = DateTime.UtcNow,
+            IsSystemMessage = true,
+            SystemMessageType = systemType
+        };
 
+        foreach (var userId in recipients)
+            msg._receipts.Add(new MessageReceipt(msg.Id, roomId, userId));
+
+        // مش هنضيف MessageSentEvent عشان مش رسالة عادية
+        return msg;
+    }
     public void MarkDelivered(UserId userId)
     {
         var receipt = _receipts.FirstOrDefault(r => r.UserId == userId);

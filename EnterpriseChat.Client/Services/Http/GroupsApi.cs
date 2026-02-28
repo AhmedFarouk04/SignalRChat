@@ -11,8 +11,7 @@ public sealed class GroupsApi
         _api = api;
     }
 
-    // ✅ matches swagger body:
-    // { "name": "...", "members": ["guid", ...] }
+    
     public sealed class CreateGroupRequest
     {
         public string Name { get; set; } = "";
@@ -69,4 +68,17 @@ public sealed class GroupsApi
 
     public Task TransferOwnerAsync(Guid roomId, Guid userId, CancellationToken ct = default)
         => _api.PostAsync(ApiEndpoints.TransferOwner(roomId, userId), ct);
+
+    public async Task AddMembersBulkAsync(Guid roomId, List<Guid> userIds, CancellationToken ct = default)
+    {
+        // فحص أمني لمنع إرسال طلب بـ ID فارغ
+        if (roomId == Guid.Empty)
+        {
+            throw new Exception("RoomId is missing from the request context.");
+        }
+
+        var url = $"api/groups/{roomId}/members/bulk";
+        await _api.PostAsync<List<Guid>, object>(url, userIds, ct);
+    }
 }
+

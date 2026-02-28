@@ -87,12 +87,12 @@ public sealed class ReactionsService
         foreach (var reaction in reactions)
         {
             var user = await _userDirectory.GetUserSummaryAsync(reaction.UserId, ct);
-
             dto.Entries.Add(new ReactionEntryDto
             {
                 UserId = reaction.UserId.Value,
                 DisplayName = user?.DisplayName ?? "Unknown",
                 Type = reaction.Type,
+                CreatedAt = reaction.CreatedAt,
                 IsMe = reaction.UserId == currentUserId
             });
         }

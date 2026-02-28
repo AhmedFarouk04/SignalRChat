@@ -24,8 +24,8 @@ public sealed class GetMessagesQueryHandler
     }
 
     public async Task<IReadOnlyList<MessageReadDto>> Handle(
-     GetMessagesQuery query,
-     CancellationToken ct)
+    GetMessagesQuery query,
+    CancellationToken ct)
     {
         var room = await _roomRepository.GetByIdWithMembersAsync(query.RoomId, ct)
             ?? throw new InvalidOperationException("Room not found.");
@@ -35,31 +35,39 @@ public sealed class GetMessagesQueryHandler
 
         var messages = await _repository.GetMessagesAsync(
             query.RoomId,
-            query.UserId,  // ← لازم تكون مررته
+            query.UserId,
             query.Skip,
             query.Take,
             ct);
 
-        // ← الفلتر المهم جدًا: أظهر بس الرسائل اللي المستخدم sender فيها أو ليه receipt
-        var filtered = messages.Where(m =>
-            m.SenderId == query.UserId.Value ||                  // أنا اللي بعتها
-            m.Receipts.Any(r => r.UserId == query.UserId.Value)  // ليا receipt (يعني مش كنت blocked وقت الإرسال)
-        ).ToList();
+        // ✅ شيل الفلتر ده نهائياً - هو اللي بيسبب اختفاء الرسائل والـ Reactions
+        // ❌ var filtered = messages.Where(m =>
+        //     m.SenderId == query.UserId.Value ||
+        //     m.Receipts.Any(r => r.UserId == query.UserId.Value)
+        // ).ToList();
 
-        // لو private وأنا بلوكته حاليًا → اخفي رسائله كلها
+        // ✅ فلتر البلوك بس - ده المنطقي
         if (room.Type == RoomType.Private)
         {
-            var otherUser = room.Members.FirstOrDefault(m => m.UserId != query.UserId)?.UserId;
+            var otherUser = room.Members
+                .FirstOrDefault(m => m.UserId != query.UserId)?.UserId;
+
             if (otherUser != null)
             {
-                var isBlockedByMe = await _blockRepository.IsBlockedAsync(query.UserId, otherUser, ct);
+                var isBlockedByMe = await _blockRepository
+                    .IsBlockedAsync(query.UserId, otherUser, ct);
+
                 if (isBlockedByMe)
                 {
-                    filtered = filtered.Where(m => m.SenderId != otherUser.Value).ToList();
+                    // ✅ لو blocked، رجع الرسائل بتاعتي بس
+                    return messages
+                        .Where(m => m.SenderId == query.UserId.Value)
+                        .ToList();
                 }
             }
         }
 
-        return filtered;
+        // ✅ رجع كل الرسائل بدون فلتر
+        return messages;
     }
 }

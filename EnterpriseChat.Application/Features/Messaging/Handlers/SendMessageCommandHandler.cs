@@ -96,10 +96,14 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
             command.SenderId,
             command.Content,
             recipients,
-            command.ReplyToMessageId);
+            command.ReplyToMessageId,
+            isBlocked); // ✅ مرر متغير isBlocked اللي إنت حسبته فوق
 
         await _messageRepository.AddAsync(message, ct);
-        room.UpdateLastMessage(message);
+        if (!isBlocked)
+        {
+            room.UpdateLastMessage(message);
+        }
 
         // 🔥 الخطوة 1: حفظ الرسالة والـ Receipts وتحديث LastMessage
         await _unitOfWork.CommitAsync(ct);

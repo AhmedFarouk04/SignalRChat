@@ -1,12 +1,13 @@
-﻿using EnterpriseChat.Application.Interfaces;
-using EnterpriseChat.Application.DTOs;
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Application.Features.Messaging.Commands;
+using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
 
-namespace EnterpriseChat.Application.Features.Messaging.Commands;
+namespace EnterpriseChat.Application.Features.Messaging.Handlers;
 
 public sealed class LeaveGroupCommandHandler : IRequestHandler<LeaveGroupCommand, Unit>
 {
@@ -49,24 +50,22 @@ public sealed class LeaveGroupCommandHandler : IRequestHandler<LeaveGroupCommand
         if (room.Members.Count == 1)
             throw new InvalidOperationException("Cannot remove the last member of the group.");
 
-        // ✅ خروج العضو
         room.RemoveMember(command.RequesterId);
         await _uow.CommitAsync(ct);
 
-        // ✅ recipients بعد الخروج = باقي الأعضاء
         var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
         var leaverName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
 
-        // ✅ استخدم الموجود عندك بدل MemberLeftAsync/RemovedFromRoomAsync
-        // هيوصل event "MemberRemoved" للباقي + "RemovedFromRoom" للي خرج (من SignalRMessageBroadcaster)
-        await _broadcaster.MemberRemovedAsync(room.Id, command.RequesterId, command.RequesterId, leaverName, recipients);        // ✅ WhatsApp-style: System message persisted + realtime
-                                                                                                                                 // ==========================================================
+        await _broadcaster.MemberRemovedAsync(room.Id, command.RequesterId, command.RequesterId, leaverName, recipients);
 
-
-        var systemSender = new UserId(Guid.NewGuid()); // أو command.RequesterId
         var systemText = $"{leaverName} left the group";
 
-        var sysMsg = new Message(room.Id, systemSender, systemText, recipients);
+        var sysMsg = Message.CreateSystemMessage(
+            room.Id,
+            systemText,
+            SystemMessageType.MemberRemoved,
+            recipients);
+
         await _messages.AddAsync(sysMsg, ct);
         await _uow.CommitAsync(ct);
 
@@ -74,25 +73,29 @@ public sealed class LeaveGroupCommandHandler : IRequestHandler<LeaveGroupCommand
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = command.RequesterId.Value,
+            SenderId = Guid.Empty,  // System ID
             Content = sysMsg.Content,
-            CreatedAt = sysMsg.CreatedAt
+            CreatedAt = sysMsg.CreatedAt,
+            IsSystemMessage = true
         };
 
-        // 1) الرسالة تظهر داخل الشات عند باقي الأعضاء
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        // 2) تحديث ترتيب الغرف + preview بدون unread
         var preview = msgDto.Content.Length > 80 ? msgDto.Content[..80] + "…" : msgDto.Content;
-        await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
+        await _broadcaster.RoomUpsertedAsync(new RoomListItemDto
         {
-            RoomId = msgDto.RoomId,
-            MessageId = msgDto.Id,
-            SenderId = msgDto.SenderId,
-            Preview = preview,
-            CreatedAt = msgDto.CreatedAt,
-            UnreadDelta = 0
+            Id = room.Id.Value,
+            Name = room.Name,
+            Type = room.Type.ToString(),
+            UnreadCount = 0,
+            IsMuted = false,
+            LastMessageAt = sysMsg.CreatedAt,
+            LastMessagePreview = null,  // ✅ من غير Preview
+            LastMessageId = sysMsg.Id.Value,
+            LastMessageSenderId = Guid.Empty,  // ✅ System ID
+            LastMessageStatus = null
         }, recipients);
+
 
         return Unit.Value;
     }

@@ -1,22 +1,56 @@
 ﻿@using EnterpriseChat.Application.DTOs
 @using EnterpriseChat.Domain.Enums
 
-@if (Data != null)
+@if (Data != null && Data.Entries.Any())
 {
-    <div class="reaction-modal-backdrop" @onclick="Close">
+    <div class="reaction-modal-overlay" @onclick="Close">
         <div class="reaction-modal" @onclick:stopPropagation="true">
 
-            <div class="reaction-list">
-                @foreach (var r in Data.Entries)
-                {
-                    <div class="reaction-row"
-                         @onclick="() => OnRowClicked(r)">
-                        <span class="name">@r.DisplayName</span>
-                        <span class="emoji">@GetEmoji(r.Type)</span>
+            <div class="reaction-modal-header">
+                <div class="reaction-modal-title-row">
+                    <h3>Reactions</h3>
+                    <span class="reactions-panel__count">@Data.Entries.Count</span>
+                </div>
+                <button class="reaction-modal-close" @onclick="Close" type="button">✕</button>
+            </div>
 
-                        @if (r.IsMe)
+            <div class="reactions-panel__tabs">
+                <button class="reactions-tab @(ActiveTab == "All" ? "reactions-tab--active" : "")"
+                        @onclick='() => ActiveTab = "All"'>
+                    All <span class="reactions-tab__count">@Data.Entries.Count</span>
+                </button>
+                @foreach (var tab in Data.Tabs.Where(t => t.Type != null))
+                {
+                    <button class="reactions-tab @(ActiveTab == tab.Type.ToString() ? "reactions-tab--active" : "")"
+                            @onclick="() => ActiveTab = tab.Type!.Value.ToString()">
+                        @GetEmoji(tab.Type!.Value)
+                        <span class="reactions-tab__count">@tab.Count</span>
+                    </button>
+                }
+            </div>
+
+            <div class="reaction-modal-body">
+                @foreach (var r in FilteredEntries)
+                {
+                    var isMe = Data.CurrentUserId == r.UserId;
+                    <div class="reaction-entry">
+                        <div class="reaction-entry-content">
+                            <span class="reaction-emoji">@GetEmoji(r.Type)</span>
+                            <div class="reaction-entry-info">
+                                <span class="reaction-user-name @(isMe ? "current-user" : "")">
+                                    @(isMe ? "You" : r.DisplayName)
+                                </span>
+                                <span class="reaction-time">@r.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
+                            </div>
+                        </div>
+                        @if (isMe)
                         {
-                            <small class="me">Click to remove</small>
+                            <button class="reaction-remove-btn"
+                                    @onclick="() => OnRowClicked(r)"
+                                    type="button"
+                                    title="Remove your reaction">
+                                ✕
+                            </button>
                         }
                     </div>
                 }
@@ -31,12 +65,19 @@
     [Parameter] public EventCallback<Guid> OnRemoveMyReaction { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
 
+    private string ActiveTab { get; set; } = "All";
+
+    private IEnumerable<ReactionEntryDto> FilteredEntries =>
+        ActiveTab == "All"
+            ? Data?.Entries ?? Enumerable.Empty<ReactionEntryDto>()
+            : Data?.Entries.Where(e => e.Type.ToString() == ActiveTab) ?? Enumerable.Empty<ReactionEntryDto>();
+
+    protected override void OnParametersSet() => ActiveTab = "All";
+
     private async Task OnRowClicked(ReactionEntryDto entry)
     {
-        if (!entry.IsMe) return;
-
         await OnRemoveMyReaction.InvokeAsync(entry.UserId);
-        await OnClose.InvokeAsync(); // ✅ close after remove
+        await Close();
     }
 
     private Task Close() => OnClose.InvokeAsync();
@@ -49,6 +90,7 @@
         ReactionType.Wow => "😮",
         ReactionType.Sad => "😢",
         ReactionType.Angry => "😠",
+        ReactionType.ThumbsDown => "👎",
         ReactionType.Fire => "🔥",
         ReactionType.Party => "🎉",
         ReactionType.Clap => "👏",

@@ -40,5 +40,25 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         builder.HasIndex(x => x.RoomId);
         builder.HasIndex(x => x.CreatedAt);
+
+        builder.Property(x => x.IsSystemMessage)
+        .IsRequired()
+        .HasDefaultValue(false);
+
+        builder.Property(x => x.SystemMessageType)
+            .HasConversion<string>();   // عشان يتحفظ string في الـ DB
+
+        // Index عشان الـ queries تكون سريعة
+        builder.HasIndex(x => new { x.RoomId, x.IsSystemMessage, x.CreatedAt });
+
+        builder.Property(x => x.ReplyToMessageId)
+    .IsRequired(false);
+
+        // Self-referencing relationship
+        builder.HasOne(x => x.ReplyToMessage)
+            .WithMany()
+            .HasForeignKey(x => x.ReplyToMessageId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
     }
 }

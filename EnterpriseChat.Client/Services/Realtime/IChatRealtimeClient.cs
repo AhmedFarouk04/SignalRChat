@@ -40,13 +40,12 @@ public interface IChatRealtimeClient
     event Action<Guid>? MessageDeleted;
     // في IChatRealtimeClient.cs أضف:
     event Action<Guid, Guid, int> MessageStatusUpdated; // messageId, userId, status
-    
+    event Action<Guid, Guid, bool>? MemberRoleChanged;
     event Action<Guid, Guid, int, bool> MessageReactionUpdated; // messageId, userId, reactionType, isNewReaction
     event Action<Guid, Guid?>? MessagePinned; // (roomId, messageId)
      event Action<List<Guid>>? InitialOnlineUsersReceived;
 
     event Action<Guid, Guid, int, int, int>? MessageReceiptStatsUpdated;
-
     event Action<Guid, Guid>? MessageDelivered;  // messageId, roomId
     event Action<Guid, Guid>? MessageRead;       // messageId, roomId
     event Action<Guid, Guid, Guid>? MessageDeliveredToAll; // messageId, senderId, roomId
@@ -62,7 +61,8 @@ public interface IChatRealtimeClient
     Task StopTypingImmediatelyAsync(Guid roomId);
     Task ConnectAsync();
     Task DisconnectAsync(bool force = false);
-
+    // ضيف السطر ده في نهاية الـ Interface قبل القوس الأخير
+    Task NotifyMemberRoleChangedAsync(Guid roomId, Guid userId, bool isAdmin);
     Task JoinRoomAsync(Guid roomId);
     Task LeaveRoomAsync(Guid roomId);
 

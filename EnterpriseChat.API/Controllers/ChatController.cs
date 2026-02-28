@@ -48,11 +48,14 @@ public sealed class ChatController : BaseController
             return BadRequest("Message too long.");
 
         var result = await _mediator.Send(
-            new SendMessageCommand(
-                new RoomId(request.RoomId),
-                GetCurrentUserId(),
-                request.Content),
-            ct);
+    new SendMessageCommand(
+        new RoomId(request.RoomId),
+        GetCurrentUserId(),
+        request.Content,
+        request.ReplyToMessageId.HasValue
+            ? new MessageId(request.ReplyToMessageId.Value)
+            : null),
+    ct);
 
         return Ok(result);
     }
@@ -450,36 +453,54 @@ public async Task<IActionResult> UploadAttachment(
     }
 
     [HttpGet("messages/{messageId:guid}/reactions/details")]
-    [ProducesResponseType(typeof(MessageReactionsDetailsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReactionDetails(
     Guid messageId,
     [FromServices] IReactionRepository reactionRepo,
     [FromServices] IUserDirectoryService users,
     CancellationToken ct)
     {
+        var currentUserId = GetCurrentUserId();
         var reactions = await reactionRepo.GetForMessageAsync(MessageId.From(messageId), ct);
 
-        var dto = new MessageReactionsDetailsDto
-        {
-            MessageId = messageId,
-            Entries = new List<ReactionEntryDto>()
-        };
-
+        var entries = new List<ReactionEntryDto>();
         foreach (var r in reactions)
         {
             var user = await users.GetUserSummaryAsync(r.UserId, ct);
-
-            dto.Entries.Add(new ReactionEntryDto
+            entries.Add(new ReactionEntryDto
             {
                 UserId = r.UserId.Value,
                 DisplayName = user?.DisplayName ?? "User",
                 Type = r.Type,
-                IsMe = false // يتظبط في service لو حابب
+                CreatedAt = r.CreatedAt,
+                IsMe = r.UserId == currentUserId
             });
         }
 
-        return Ok(dto);
+        // ✅ "You" أول واحد
+        entries = entries
+            .OrderByDescending(e => e.IsMe)
+            .ThenByDescending(e => e.CreatedAt)
+            .ToList();
+
+        // ✅ بناء الـ Tabs
+        var tabs = new List<ReactionTabDto> { new() { Type = null, Count = entries.Count } };
+        tabs.AddRange(
+            reactions
+                .GroupBy(r => r.Type)
+                .Select(g => new ReactionTabDto { Type = g.Key, Count = g.Count() })
+                .OrderByDescending(t => t.Count)
+        );
+
+        return Ok(new MessageReactionsDetailsDto
+        {
+            MessageId = messageId,
+            CurrentUserId = currentUserId.Value,
+            Tabs = tabs,
+            Entries = entries
+        });
     }
+
+
 
     [HttpDelete("messages/{messageId:guid}/reactions/me")]
     public async Task<IActionResult> RemoveMyReaction(

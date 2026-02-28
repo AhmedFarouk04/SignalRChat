@@ -25,7 +25,8 @@ public sealed class MessageRepository : IMessageRepository
             .Where(m => m.RoomId == roomId
                         && m.CreatedAt > lastReadAt
                         && m.SenderId != userId
-                        && !m.IsDeleted)
+                        && !m.IsDeleted
+                        && !m.IsBlocked)
             .CountAsync(ct);
     }
 
@@ -34,7 +35,10 @@ public sealed class MessageRepository : IMessageRepository
         return await _context.Messages
             .Where(m => m.RoomId == roomId
                         && m.SenderId != userId
-                        && !m.IsDeleted)
+                        && !m.IsDeleted
+                        && (!m.IsSystemMessage ||
+                            m.SystemMessageType == SystemMessageType.MemberAdded ||
+                            m.SystemMessageType == SystemMessageType.MemberRemoved))
             .CountAsync(ct);
     }
     public async Task<IReadOnlyList<Message>> GetUndeliveredForUserAsync(
@@ -255,9 +259,10 @@ GROUP BY m.RoomId";
     
     return messages.Select(m => (m.MessageId, m.SenderId));
 }
+    // داخل class MessageRepository
     public async Task<Dictionary<Guid, LastMessageInfo>> GetLastMessagesAsync(
-    IReadOnlyList<Guid> roomIds,
-    CancellationToken ct)
+        IReadOnlyList<Guid> roomIds,
+        CancellationToken ct)
     {
         var ids = roomIds?.Distinct().ToList() ?? new();
         if (ids.Count == 0) return new Dictionary<Guid, LastMessageInfo>();
@@ -272,38 +277,38 @@ GROUP BY m.RoomId";
         m.SenderId,
         m.Content,
         m.CreatedAt,
+        m.IsSystemMessage,
+        m.SystemMessageType,
         ROW_NUMBER() OVER (PARTITION BY m.RoomId ORDER BY m.CreatedAt DESC, m.Id DESC) AS rn
     FROM Messages m
-    INNER JOIN OPENJSON(@json) WITH (RoomId UNIQUEIDENTIFIER '$') j
-        ON m.RoomId = j.RoomId
+    INNER JOIN OPENJSON(@json) WITH (RoomId UNIQUEIDENTIFIER '$') j ON m.RoomId = j.RoomId
+    WHERE m.IsBlocked = 0
 )
 SELECT
     r.RoomId,
-    r.Id        AS MessageId,
+    r.Id AS MessageId,
     r.SenderId,
     r.Content,
     r.CreatedAt,
+    r.IsSystemMessage,
+    r.SystemMessageType,
     ISNULL(x.TotalRecipients, 0) AS TotalRecipients,
-    ISNULL(x.DeliveredCount, 0)  AS DeliveredCount,
-    ISNULL(x.ReadCount, 0)       AS ReadCount,
-    ISNULL(x.MaxStatus, 1)       AS MaxStatus
+    ISNULL(x.DeliveredCount, 0) AS DeliveredCount,
+    ISNULL(x.ReadCount, 0) AS ReadCount
 FROM Ranked r
 OUTER APPLY (
     SELECT
         COUNT(*) AS TotalRecipients,
         SUM(CASE WHEN CAST(rr.Status AS int) >= 2 THEN 1 ELSE 0 END) AS DeliveredCount,
-        SUM(CASE WHEN CAST(rr.Status AS int) >= 3 THEN 1 ELSE 0 END) AS ReadCount,
-        MAX(CAST(rr.Status AS int)) AS MaxStatus
+        SUM(CASE WHEN CAST(rr.Status AS int) >= 3 THEN 1 ELSE 0 END) AS ReadCount
     FROM MessageReceipts rr
     WHERE rr.MessageId = r.Id
 ) x
 WHERE r.rn = 1
 ";
 
-
         var paramJson = new SqlParameter("@json", json);
 
-        // ✅ نقرأ النتيجة كـ DTO بسيط
         var rows = await _context.Database
             .SqlQueryRaw<LastMessageRow>(sql, paramJson)
             .ToListAsync(ct);
@@ -317,22 +322,23 @@ WHERE r.rn = 1
                 RoomId = new RoomId(r.RoomId),
                 Id = MessageId.From(r.MessageId),
                 SenderId = new UserId(r.SenderId),
-                Content = r.Content,
+                Content = r.Content ?? "",
                 CreatedAt = r.CreatedAt,
                 TotalRecipients = r.TotalRecipients,
                 DeliveredCount = r.DeliveredCount,
-                ReadCount = r.ReadCount
+                ReadCount = r.ReadCount,
+                IsSystemMessage = r.IsSystemMessage,
+                SystemMessageType = !string.IsNullOrEmpty(r.SystemMessageType)
+                    ? Enum.Parse<SystemMessageType>(r.SystemMessageType, true)
+                    : null
             };
-
         }
 
         return dict;
     }
 
-    // في MessageRepository.cs
-
+    // ✅ الـ DTO المعدل (حذفنا MaxStatus نهائيًا)
    
-
     public async Task<Message?> GetByIdWithReceiptsAsync(MessageId messageId, CancellationToken ct = default)
     {
         return await _context.Messages
@@ -359,9 +365,12 @@ public sealed class LastMessageRow
     public Guid SenderId { get; set; }
     public string Content { get; set; } = "";
     public DateTime CreatedAt { get; set; }
-
+    public bool IsSystemMessage { get; set; }
+    public string? SystemMessageType { get; set; }
     public int TotalRecipients { get; set; }
     public int DeliveredCount { get; set; }
     public int ReadCount { get; set; }
-    public int MaxStatus { get; set; }
 }
+// في MessageRepository.cs
+
+

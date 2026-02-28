@@ -12,27 +12,8 @@
     overflow-x: hidden;
 }
 
-/* ------- Wrapper لكل رسالة (مسؤول عن التحديد والمحاذاة) ------- */
-.msg-selection-wrapper {
-    display: flex;
-    align-items: flex-start;
-    width: 100%;
-    padding: 2px 12px;
-    gap: 10px;
-    transition: background 0.2s ease;
-    cursor: pointer;
-    min-height: 40px;
-    position: relative;
-}
 
-    .msg-selection-wrapper.mine-wrapper {
-        flex-direction: row-reverse;
-    }
-
-    .msg-selection-wrapper.theirs-wrapper {
-        flex-direction: row;
-    }
-
+    
 /* ------- الـ Checkbox (يظهر فقط في وضع التحديد) ------- */
 .selection-active .custom-checkbox {
     display: flex !important;
@@ -62,43 +43,9 @@
         border-color: var(--accent-main, #3b82f6);
     }
 
-/* ------- حاوية الرسالة نفسها ------- */
-.msg {
-    max-width: 75%;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    margin: 0;
-    position: relative;
-    z-index: 1;
-    word-break: break-word;
-}
 
-.msg-selection-wrapper.mine-wrapper .msg {
-    margin-left: auto;
-    align-items: flex-end;
-}
-
-.msg-selection-wrapper.theirs-wrapper .msg {
-    margin-right: auto;
-    align-items: flex-start;
-}
 
 /* ------- جسم الفقاعة (Bubble) ------- */
-.msg-body {
-    position: relative;
-    display: inline-block;
-    width: fit-content;
-    max-width: 100%;
-    min-width: 42px;
-    padding: 8px 12px;
-    font-size: 14px;
-    line-height: 1.4;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-    z-index: 5;
-}
 
 /* ألوان الرسائل */
 .msg.mine .msg-body {
@@ -128,7 +75,7 @@
     gap: 3px;
     margin-left: 8px;
     margin-top: 4px;
-    font-size: 10.5px;
+    font-size: 10px;
     opacity: 0.8;
     white-space: nowrap;
     line-height: 1;
@@ -622,9 +569,7 @@
         margin: 0 8px;
     }
 
-    .msg-selection-wrapper {
-        padding: 2px 8px;
-    }
+   
 }
 
 @media (max-width: 480px) {
@@ -717,9 +662,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 }
 
 /* ضمان مساحة كافية لظهور الزر بشكل مناسب */
-.msg-body {
-    min-height: 36px; /* يضمن عدم التصاق الزر بحافة الفقاعة الصغيرة */
-}
+
 /* عندما تكون القائمة مفتوحة، نرفع الرسالة بالكامل فوق أي رسالة تانية */
 .msg.menu-active {
     z-index: 1000 !important; /* رقم عالي يضمن ظهورها فوق الكل */
@@ -747,15 +690,13 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 .msg.theirs .msg-context-menu {
     left: 0;
 }
-/* 1. ضبط الحاوية الكبيرة للرسايل */
 .chat-messages {
     display: flex;
     flex-direction: column;
-    /* زيادة المسافة الأفقية لـ 20px عشان ندي مساحة للديل */
-    padding: 15px 20px;
-    gap: 4px;
+    padding: 15px 20px; /* TECH LEAD: زيادة padding لمساحة أفضل */
+    gap: 7px; /* TECH LEAD: 7px أنظف وأحدث */
     width: 100%;
-    overflow-x: hidden; /* ضروري جداً عشان الديل ما يعملش سكرول بالعرض */
+    overflow-x: hidden;
 }
 
 /* 2. التأكد من هوامش الرسايل */
@@ -767,7 +708,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 
 .msg.theirs {
     align-self: flex-start;
-    margin-right: 15%;
+    margin-right: 25%;
 }
 
 /* 3. لمسة احترافية لوضع الاختيار (Selection Mode) */
@@ -951,4 +892,1020 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         transform: scale(1);
         opacity: 1;
     }
+}
+
+/* أنماط نافذة تأكيد الإزالة (Confirm Popup) */
+.confirm-remove-popup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1e293b; /* نفس لون خلفية الـ Drawer */
+    border: 1px solid rgba(239, 68, 68, 0.5); /* حد أحمر خفيف */
+    border-radius: 20px;
+    padding: 4px 12px 4px 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    animation: fadeInScale 0.2s ease-out;
+    transform-origin: right center; /* يظهر من ناحية الزر */
+    white-space: nowrap;
+}
+
+    .confirm-remove-popup span {
+        font-size: 13px;
+        font-weight: 500;
+        color: #fca5a5; /* أحمر فاتح للنص */
+        margin-right: 4px;
+    }
+
+.mini-btn.confirm-yes,
+.mini-btn.confirm-no {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    line-height: 1;
+}
+
+.mini-btn.confirm-yes {
+    background: #ef4444; /* أحمر غامق */
+    color: white;
+}
+
+    .mini-btn.confirm-yes:hover {
+        background: #dc2626;
+        transform: scale(1.05);
+    }
+
+.mini-btn.confirm-no {
+    background: rgba(255, 255, 255, 0.1);
+    color: #9ca3af;
+}
+
+    .mini-btn.confirm-no:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: #e5e7eb;
+    }
+
+/* أنيميشن بسيط للظهور */
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* للتأكد من أن الأزرار في الـ Actions لا تسبب التصاق */
+.member-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap; /* يسمح للنافذة بالنزول لسطر جديد إذا كانت المساحة ضيقة */
+    justify-content: flex-end;
+}
+
+/* تحسين موضع نافذة التأكيد */
+.member-actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap; /* منع الالتفاف */
+}
+
+.confirm-remove-popup {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    z-index: 1000;
+    background: #1e293b;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 20px;
+    padding: 4px 12px 4px 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    animation: slideInFromRight 0.2s ease-out;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@keyframes slideInFromRight {
+    from {
+        opacity: 0;
+        transform: translateY(-50%) scale(0.8);
+        right: -10px;
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(-50%) scale(1);
+        right: 0;
+    }
+}
+
+/* تحسين شكل الأزرار المصغرة */
+.mini-btn.confirm-yes,
+.mini-btn.confirm-no {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mini-btn.confirm-yes {
+    background: #ef4444;
+    color: white;
+}
+
+    .mini-btn.confirm-yes:hover {
+        background: #dc2626;
+        transform: scale(1.1);
+    }
+
+.mini-btn.confirm-no {
+    background: rgba(255, 255, 255, 0.1);
+    color: #9ca3af;
+}
+
+    .mini-btn.confirm-no:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: #e5e7eb;
+        transform: scale(1.1);
+    }
+
+/* إضافة تأثيرات حركية للزر الأصلي */
+.action-icon-btn.danger {
+    transition: all 0.2s ease;
+}
+
+    .action-icon-btn.danger:hover {
+        transform: scale(1.1);
+        background: rgba(239, 68, 68, 0.2);
+    }
+
+.member-item:has(.confirm-remove-popup) {
+    background: rgba(239, 68, 68, 0.05);
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+/* تحسين موضع نافذة التأكيد */
+.member-actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+.confirm-remove-popup {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    z-index: 1000;
+    background: #1e293b;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 20px;
+    padding: 4px 12px 4px 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(239, 68, 68, 0.1);
+    animation: slideInFromRight 0.2s ease-out;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    backdrop-filter: blur(4px);
+}
+
+@keyframes slideInFromRight {
+    from {
+        opacity: 0;
+        transform: translateY(-50%) translateX(10px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0) scale(1);
+    }
+}
+
+/* تحسين شكل الأزرار المصغرة */
+.mini-btn.confirm-yes,
+.mini-btn.confirm-no {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.mini-btn.confirm-yes {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+
+    .mini-btn.confirm-yes:hover {
+        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        transform: scale(1.15);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+
+.mini-btn.confirm-no {
+    background: rgba(255, 255, 255, 0.1);
+    color: #9ca3af;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+    .mini-btn.confirm-no:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: #e5e7eb;
+        transform: scale(1.15);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+/* تأثير خلفية للعنصر الذي في حالة التأكيد */
+.member-item:has(.confirm-remove-popup) {
+    background: rgba(239, 68, 68, 0.05);
+    border-radius: 8px;
+    transition: background 0.2s ease;
+    padding: 4px 8px;
+    margin: -4px -8px;
+}
+
+/* تحسين الزر الأصلي */
+.action-icon-btn.danger {
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+    .action-icon-btn.danger:hover {
+        transform: scale(1.1);
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    .action-icon-btn.danger:active {
+        transform: scale(0.95);
+    }
+
+/* إضافة عد تنازلي بصري بسيط (اختياري) */
+.confirm-remove-popup::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 16px;
+    right: 16px;
+    height: 2px;
+    background: linear-gradient(90deg, #ef4444, #fca5a5);
+    border-radius: 2px;
+    animation: countdown 5s linear forwards;
+    opacity: 0.5;
+}
+
+@keyframes countdown {
+    from {
+        width: calc(100% - 32px);
+    }
+
+    to {
+        width: 0;
+    }
+}
+
+/* منع تأثير العد التنازلي إذا أردت */
+.confirm-remove-popup.no-timer::after {
+    display: none;
+}
+/* ========== Admin Badge ========== */
+.badge.admin {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #000;
+    font-weight: 700;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ========== Admin Star Buttons ========== */
+.action-icon-btn.admin-active {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+    transition: all 0.2s ease;
+}
+
+    .action-icon-btn.admin-active:hover {
+        background: rgba(251, 191, 36, 0.2);
+        transform: scale(1.1);
+        color: #f59e0b;
+    }
+
+.action-icon-btn.admin-inactive {
+    color: #6b7280;
+    background: rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+}
+
+    .action-icon-btn.admin-inactive:hover {
+        background: rgba(251, 191, 36, 0.15);
+        color: #fbbf24;
+        transform: scale(1.1);
+    }
+
+/* تحسين شكل النجمة */
+.star-icon {
+    font-size: 16px;
+    line-height: 1;
+    display: inline-block;
+}
+
+/* تأثير نبض خفيف عند تغيير الحالة */
+@keyframes adminPulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.2);
+        box-shadow: 0 0 15px currentColor;
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.admin-pulse {
+    animation: adminPulse 0.5s ease;
+}
+
+/* تحسين شكل الأزرار بشكل عام */
+.action-icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s ease;
+}
+
+    .action-icon-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .action-icon-btn.transfer {
+        color: #8b5cf6;
+    }
+
+        .action-icon-btn.transfer:hover {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+        }
+
+/* تحسين spacing بين العناصر */
+.member-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+/* تحسين شكل النجمة */
+.action-icon-btn.admin-active {
+    color: #fbbf24 !important;
+    background: rgba(251, 191, 36, 0.15) !important;
+}
+
+.action-icon-btn.admin-inactive {
+    color: #6b7280 !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Badge Admin */
+.badge.admin {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #000;
+    font-weight: 700;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    /* نافذة تأكيد نقل الملكية */
+}
+
+/* ===== Transfer Ownership (Nice Popover) ===== */
+
+.transfer-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* click trap لإغلاق البوب اوفر عند الضغط برا */
+.confirm-click-trap {
+    position: fixed;
+    inset: 0;
+    background: transparent;
+    z-index: 3000;
+}
+
+/* highlight للتاج وقت الفتح */
+.action-icon-btn.transfer.is-active {
+    background: rgba(139, 92, 246, 0.18);
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25) inset;
+    transform: translateY(-1px);
+}
+
+/* البوب اوفر نفسه */
+.transfer-popover {
+    position: absolute;
+    right: 0;
+    top: -52px;
+    min-width: 150px;
+    padding: 10px 10px 8px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 14px 35px rgba(0,0,0,0.55);
+    z-index: 3001;
+    animation: tpPop .14s ease-out;
+}
+
+    /* سهم صغير */
+    .transfer-popover::after {
+        content: "";
+        position: absolute;
+        right: 14px;
+        bottom: -6px;
+        width: 12px;
+        height: 12px;
+        background: rgba(15, 23, 42, 0.92);
+        border-right: 1px solid rgba(139, 92, 246, 0.25);
+        border-bottom: 1px solid rgba(139, 92, 246, 0.25);
+        transform: rotate(45deg);
+    }
+
+.transfer-popover-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #e9d5ff;
+    margin-bottom: 8px;
+}
+
+.transfer-popover-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.tp-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    border: 0;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    transition: transform .15s ease, filter .15s ease, background .15s ease;
+}
+
+    .tp-btn:hover {
+        transform: translateY(-1px) scale(1.05);
+        filter: brightness(1.1);
+    }
+
+    .tp-btn.yes {
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        color: #fff;
+    }
+
+    .tp-btn.no {
+        background: rgba(255,255,255,0.08);
+        color: #cbd5e1;
+    }
+
+        .tp-btn.no:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fecaca;
+        }
+
+@keyframes tpPop {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ===========================
+   LEAVE GROUP MODALS
+   =========================== */
+
+/* Overlay */
+.leave-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
+    animation: lmFade 160ms ease-out;
+}
+
+/* Modal Card */
+.leave-modal {
+    width: min(420px, 92vw);
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+    overflow: hidden;
+    animation: lmPop 180ms ease-out;
+}
+
+/* Header */
+.leave-modal-header {
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.leave-modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #e5e7eb;
+    letter-spacing: 0.2px;
+}
+
+.leave-modal-close {
+    border: 0;
+    background: rgba(255,255,255,0.06);
+    color: #cbd5e1;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: .15s ease;
+}
+
+    .leave-modal-close:hover {
+        background: rgba(255,255,255,0.12);
+        transform: translateY(-1px);
+    }
+
+/* Body */
+.leave-modal-body {
+    padding: 16px 18px 8px;
+    color: #cbd5e1;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+    .leave-modal-body .hint {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #94a3b8;
+    }
+
+/* Footer Buttons */
+.leave-modal-footer {
+    padding: 14px 18px 16px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.leave-btn2 {
+    border: 0;
+    cursor: pointer;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-weight: 700;
+    font-size: 13px;
+    transition: transform .15s ease, filter .15s ease, background .15s ease;
+}
+
+    /* Cancel */
+    .leave-btn2.cancel {
+        background: rgba(255,255,255,0.06);
+        color: #cbd5e1;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+
+        .leave-btn2.cancel:hover {
+            background: rgba(255,255,255,0.10);
+            transform: translateY(-1px);
+        }
+
+    /* Confirm (normal leave) */
+    .leave-btn2.confirm {
+        background: linear-gradient(135deg, #38bdf8, #2563eb);
+        color: #fff;
+    }
+
+        .leave-btn2.confirm:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.08);
+        }
+
+/* Owner variant */
+.leave-modal.owner {
+    border-color: rgba(139, 92, 246, 0.25);
+}
+
+    .leave-modal.owner .leave-modal-title {
+        color: #e9d5ff;
+    }
+
+/* Owner action button */
+.leave-btn2.owner-action {
+    background: rgba(139, 92, 246, 0.16);
+    color: #e9d5ff;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+    .leave-btn2.owner-action:hover {
+        background: rgba(139, 92, 246, 0.24);
+        transform: translateY(-1px);
+    }
+
+/* Delete action */
+.leave-btn2.danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fecaca;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+    .leave-btn2.danger:hover {
+        background: rgba(239, 68, 68, 0.18);
+        transform: translateY(-1px);
+    }
+
+/* Animations */
+@keyframes lmFade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes lmPop {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* الحاوية الأساسية */
+.system-message-container {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 12px 0 !important; /* مسافة كافية عشان العين ترتاح */
+}
+
+.system-message {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+    display: inline-flex !important;
+    align-items: center !important; /* سنترة هندسية دقيقة */
+    justify-content: center;
+    /* تثبيت الارتفاع هو الضمان الوحيد للتماثل */
+    height: 22px !important;
+    padding: 0 14px !important; /* بادينج أفقي فقط */
+
+    border-radius: 11px !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(4px);
+    box-sizing: border-box !important;
+}
+
+.system-text {
+    font-size: 10px !important; /* صغر الخط شوية للفخامة */
+    color: rgba(148, 163, 184, 0.6) !important;
+    font-weight: 600;
+    /* السحر هنا: توحيد حالة الأحرف بيخلي المسافات متساوية دايماً */
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px;
+    line-height: normal !important; /* سيب المتصفح يوزع المساحة براحته جوه الـ Flex */
+    display: block !important;
+    /* شيلنا الـ transform عشان الـ flex center كفاية */
+}
+
+/* امسح الـ first-letter خالص لأنه هو اللي بيبوظ التماثل */
+    /* تعديل بسيط: أول حرف بس كابيتال */
+    .system-text::first-letter {
+        text-transform: uppercase;
+    }
+
+
+
+
+
+
+
+
+
+
+/* مسافة بين الرسائل + الـ reaction */
+.chat-messages {
+    gap: 6px !important;
+}
+
+.msg:has(.msg-reaction-chip) {
+    margin-bottom: 26px !important;
+}
+
+/* ضمان إن الـ mine والـ theirs ياخدوا نفس الـ max-width */
+.msg.mine,
+.msg.theirs {
+    max-width: 72% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* ============= TECH LEAD - COMPACT BUBBLES FIX v1.2 (Short Arabic) ============= */
+
+
+
+
+
+
+
+/* مسافات أفضل */
+.chat-messages {
+    gap: 7px !important;
+}
+
+/* ضمان إن الـ meta مش بتأثر على العرض */
+.message-meta {
+    margin-top: 4px !important;
+}
+/* ============= TECH LEAD - FINAL COMPACT BUBBLES v1.3 (Arabic RTL Fix) ============= */
+
+.msg {
+    max-width: 65% !important;
+    width: fit-content !important;
+    align-self: flex-end !important; /* مهم جدًا للـ mine في RTL */
+}
+
+    .msg.theirs {
+        align-self: flex-start !important;
+    }
+
+
+/* Tail خفيف (يخلي الشكل أكثر طبيعية) */
+t-radius: 6px !important; /* للـ gray */
+}
+
+/* مسافة نهائية */
+.chat-messages {
+    gap: 8px !important;
+}
+/* TECH LEAD - Simple Curved Tail v1 (WhatsApp-like) */
+
+
+
+
+
+
+
+.msg.mine .msg-body {
+    border-bottom-right-radius: 4px !important; /* يساعد الtail */
+}
+
+.msg.theirs .msg-body {
+    border-bottom-left-radius: 4px !important;
+}
+/* داخل MessageBubble.razor.css أو App.razor.css */
+
+/* عرض أقل في الجروب، خاصة للرسائل الواردة */
+.group-chat .msg.theirs {
+    max-width: 68% !important; /* أو 65% لو عايز أضيق أكتر */
+}
+
+.group-chat .msg.mine {
+    max-width: 72% !important; /* الرسائل اللي منك ممكن تبقى أوسع شوية */
+}
+
+/* لو مش عندك class="group-chat" على الحاوية، ممكن تعتمد على وجود GroupMembers */
+.msg:has(+ .message-sender-name) { /* رسالة ليها اسم فوقها = جروب */
+    max-width: 68% !important;
+}
+/* ============== FIX FINAL: Message Bubbles + Sender Name ============== */
+
+/* 1. Wrapper للرسائل */
+.msg-selection-wrapper {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    padding: 2px 12px;
+    gap: 10px;
+    transition: background 0.2s ease;
+    cursor: pointer;
+    min-height: 40px;
+    position: relative;
+}
+
+    .msg-selection-wrapper.mine-wrapper {
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+    }
+
+    .msg-selection-wrapper.theirs-wrapper {
+        flex-direction: row;
+        justify-content: flex-start;
+    }
+
+/* 2. الـ Message Container */
+.msg {
+    max-width: 65%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    position: relative;
+    z-index: 1;
+    word-break: break-word;
+}
+
+    .msg.mine {
+        align-items: flex-end;
+    }
+
+    .msg.theirs {
+        align-items: flex-start;
+    }
+
+/* 3. الـ Bubble Body */
+.msg-body {
+    position: relative;
+    display: inline-block;
+    width: fit-content;
+    max-width: 100%;
+    min-width: 42px;
+    padding: 10px 16px !important;
+    font-size: 14.7px;
+    line-height: 1.5;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    z-index: 5;
+    border-radius: 18px;
+}
+
+/* 4. ألوان البابل */
+.msg.mine .msg-body {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+}
+
+.msg.theirs .msg-body {
+    background: rgba(55, 65, 81, 0.95);
+    color: #e5e7eb;
+    border: 1px solid rgba(75, 85, 99, 0.4);
+}
+
+/* 5. اسم المرسل جوا البابل */
+.message-sender-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin: 0 0 5px 0;
+    padding: 0;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    opacity: 0.95;
+    line-height: 1.3;
+    letter-spacing: 0.2px;
+}
+
+/* 6. Padding مخصوص لما يكون فيه اسم */
+.msg.theirs .msg-body:has(.message-sender-name) {
+    padding-top: 8px !important;
+}
+
+/* 7. إخفاء الاسم في الرسائل المتتالية */
+.msg.theirs.g-mid .message-sender-name,
+.msg.theirs.g-end .message-sender-name {
+    display: none !important;
+}
+
+.msg.theirs.g-mid .msg-body,
+.msg.theirs.g-end .msg-body {
+    padding-top: 10px !important;
+}
+
+/* 8. Tail (ذيل الرسالة) */
+.msg.mine .msg-body::after,
+.msg.theirs .msg-body::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    width: 20px;
+    height: 20px;
+    background: inherit;
+    z-index: -1;
+}
+
+.msg.mine .msg-body::after {
+    right: -8px;
+    border-bottom-left-radius: 16px;
+    transform: translateY(2px) rotate(135deg);
+    box-shadow: -2px 2px 3px rgba(0,0,0,0.15);
+}
+
+.msg.theirs .msg-body::after {
+    left: -8px;
+    border-bottom-right-radius: 16px;
+    transform: translateY(2px) rotate(-135deg);
+    box-shadow: 2px 2px 3px rgba(0,0,0,0.15);
+}
+
+.msg.mine .msg-body {
+    border-bottom-right-radius: 4px !important;
+}
+
+.msg.theirs .msg-body {
+    border-bottom-left-radius: 4px !important;
+}
+
+/* 9. المسافات */
+.chat-messages {
+    display: flex;
+    flex-direction: column;
+    padding: 15px 20px;
+    gap: 8px;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+.msg:has(.msg-reaction-chip) {
+    margin-bottom: 20px;
+}
+/* تعديل اتجاه النص عشان الاسم يبقى على الشمال */
+.msg.theirs .msg-body {
+    text-align: left; /* مهم جداً */
+    direction: ltr; /* عشان الاسم يبقى يسار */
+}
+
+.message-sender-name {
+    text-align: left !important;
+    direction: ltr !important;
+}
+
+/* النص العربي يرجع RTL */
+.msg-text {
+    direction: rtl;
+    text-align: right;
 }

@@ -42,7 +42,10 @@ public sealed class GetGroupMembersQueryHandler
             var displayName = await _users.GetDisplayNameAsync(id, ct)
                 ?? $"User {id.ToString("N")[..6]}";
 
-            members.Add(new GroupMemberDto(id, displayName));
+            // ✅ هنا نجيب قيمة IsAdmin من الـ Member entity
+            var isAdmin = m.IsAdmin; // 👈 هذا هو المفتاح
+
+            members.Add(new GroupMemberDto(id, displayName, isAdmin));
         }
 
         return new GroupMembersDto(room.OwnerId.Value, members);

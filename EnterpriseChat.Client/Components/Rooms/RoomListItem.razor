@@ -30,20 +30,15 @@
         <div class="room-main">
             <div class="room-top">
                 <div class="room-title">@Room.Name</div>
-
                 <div class="room-meta">
-                    @* ❌ تم إزالة الـ Typing من هنا *@
-
                     @if (Room.IsMuted)
                     {
-                        <span class="mute" title="Muted" aria-label="Muted">🔕</span>
+                        <span class="mute">🔕</span>
                     }
-
                     @if (Room.UnreadCount > 0)
                     {
-                        <span class="badge" aria-label="@($"{Room.UnreadCount} unread")">@Room.UnreadCount</span>
+                        <span class="badge">@Room.UnreadCount</span>
                     }
-
                     @if (Room.LastMessageAt != null)
                     {
                         <span class="room-time">@FormatTime(Room.LastMessageAt.Value)</span>
@@ -51,36 +46,45 @@
                 </div>
             </div>
 
-            @if (!string.IsNullOrWhiteSpace(Room.LastMessagePreview))
-            {
-                <div class="room-preview" title="@Room.LastMessagePreview">
-                    @if (IsTyping)
+            <div class="room-preview" title="@Room.LastMessagePreview">
+                @if (IsTyping)
+                {
+                    <span class="typing-group-text">
+                        <span class="typing-dots-room">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </span>
+                        @if (!string.IsNullOrEmpty(TypingText))
+                        {
+                            <span>@TypingText</span>
+                        }
+                    </span>
+                }
+                else if (!string.IsNullOrWhiteSpace(Room.LastMessagePreview))
+                {
+                    var sender = GetSenderInfo();
+
+                    @* 1. عرض علامة الصح (Status) لو أنا المرسل *@
+                    @if (IsMyLastMessage && Room.LastMessageStatus.HasValue && Room.LastMessageSenderId != Guid.Empty)
                     {
-                        @if (Room.Type == "Group" && !string.IsNullOrEmpty(TypingText))
-                        {
-                            <span class="typing-group-text">@TypingText</span>
-                        }
-                        else
-                        {
-                            <span class="typing-dots-only">
-                                <span></span><span></span><span></span>
-                            </span>
-                        }
+                        <span class="room-last-status @GetStatusClass(Room.LastMessageStatus.Value)">
+                            @StatusIcon(Room.LastMessageStatus.Value)
+                        </span>
+                        <span>&nbsp;</span>
                     }
-                    else
+
+                    @* 2. عرض اسم المرسل *@
+                    @if (!string.IsNullOrEmpty(sender.name))
                     {
-                        @if (Room.LastMessageStatus.HasValue && IsMyLastMessage)
-                        {
-                            <span class="room-last-status @GetStatusClass(Room.LastMessageStatus.Value)"
-                                  title="@StatusTooltip(Room.LastMessageStatus.Value)">
-                                @StatusIcon(Room.LastMessageStatus.Value)
-                            </span>
-                            <span>&nbsp;</span>
-                        }
+                        <span class="message-sender" style="font-weight: bold; color: #aaa;">@sender.name: </span>
+                    }
+
+                    <span class="@(Room.LastMessageSenderId == Guid.Empty ? "system-message-preview" : "")">
                         @Truncate(Room.LastMessagePreview, 60)
-                    }
-                </div>
-            }
+                    </span>
+                }
+            </div>
         </div>
     </NavLink>
 </li>
@@ -138,6 +142,24 @@
             return Room.OtherDisplayName.Substring(0, 1).ToUpper();
 
         return Room.Name.Substring(0, 1).ToUpper();
+    }
+
+
+    private (string? name, string? color) GetSenderInfo()
+    {
+        if (Room.LastMessageSenderId == null || Room.LastMessageSenderId == Guid.Empty)
+            return (null, null);
+
+        if (Room.Type == "Private")
+            return (null, null); // ✅ الخاص: مفيش اسم خالص
+
+        if (Room.LastMessageSenderId == CurrentUserId)
+            return ("You", null);
+
+        if (Room.MemberNames != null && Room.MemberNames.TryGetValue(Room.LastMessageSenderId.Value, out var name))
+            return (name.Split(' ')[0], null);
+
+        return ("Unknown", null);
     }
 
     private static string Truncate(string? text, int max)

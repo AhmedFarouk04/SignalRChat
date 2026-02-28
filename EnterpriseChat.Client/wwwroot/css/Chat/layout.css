@@ -55,8 +55,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    border-left: 3px solid var(--accent-main, #38bdf8);
-    padding-left: 10px;
+   
     min-width: fit-content;
 }
 
@@ -169,23 +168,6 @@
     cursor: pointer;
 }
 
-/* System Messages - Clean Style (No timestamp) */
-.system-message-container {
-    display: flex;
-    justify-content: center;
-    margin: 15px 0;
-    width: 100%;
-}
-
-.system-content {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-secondary, #8696a0);
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-size: 12.5px;
-    border: 1px solid rgba(255,255,255,0.05);
-    box-shadow: 0 1px 1px rgba(0,0,0,0.2);
-}
 .pinned-presets-container {
     position: sticky; /* أو fixed حسب تصميمك */
     top: 0;

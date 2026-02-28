@@ -35,10 +35,11 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     private bool _heartbeatActive;
     private readonly TimeSpan _heartbeatInterval = TimeSpan.FromSeconds(30);
     private readonly TimeSpan _heartbeatTimeout = TimeSpan.FromSeconds(90);
+    public event Action<Guid, Guid, bool>? MemberRoleChanged;
 
     public ChatRealtimeState State { get; } = new();
     public event Action<Guid, List<Guid>>? InitialTypingUsersReceived;
-
+   
     public event Action<MessageModel>? MessageReceived;
     public event Action<Guid, bool>? RoomMuteChanged;
     public event Action<Guid>? UserOnline;
@@ -86,6 +87,27 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     }
 
     // دالة مساعدة لجلب الـ UserId الحالي بشكل آمن
+
+    public async Task NotifyMemberRoleChangedAsync(Guid roomId, Guid userId, bool isAdmin)
+    {
+        if (_connection is null || _connection.State != HubConnectionState.Connected)
+        {
+            Console.WriteLine("[SignalR] Cannot notify role change: Not connected.");
+            return;
+        }
+
+        try
+        {
+            // السيرفر لازم يكون عنده ميثود بنفس الاسم ده: UpdateMemberRole
+            // أو غير الاسم لـ NotifyMemberRoleChanged حسب ما هو مكتوب عندك في الـ Hub على السيرفر
+            await _connection.InvokeAsync("UpdateMemberRole", roomId, userId, isAdmin);
+            Console.WriteLine($"[SignalR] Role change notification sent for user {userId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SignalR] Error notifying role change: {ex.Message}");
+        }
+    }
     private async Task<Guid?> GetCurrentUserIdAsync()
     {
         try
@@ -967,8 +989,22 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             }
             UserBlockedByMeChanged?.Invoke(uid, blocked);
         });
+        _connection.On<Guid, Guid, bool>("MemberRoleChanged", (roomId, userId, isAdmin) =>
+        {
+            try
+            {
+                Console.WriteLine($"[SignalR] 👑 MemberRoleChanged: Room={roomId}, User={userId}, IsAdmin={isAdmin}");
 
-        _connection.On<Guid, bool>("UserBlockedMeChanged", (uid, blocked) =>
+                // تحديث الفلاغ في الـ RoomFlagsStore (اختياري)
+                // _flags.SetUserAdminStatus(userId, isAdmin);
+
+                MemberRoleChanged?.Invoke(roomId, userId, isAdmin);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Error in MemberRoleChanged: {ex.Message}");
+            }
+        }); _connection.On<Guid, bool>("UserBlockedMeChanged", (uid, blocked) =>
         {
             Console.WriteLine($"[SignalR] 🔒 UserBlockedMeChanged received: {uid}, blocked={blocked}");
             _flags.SetBlockedMe(uid, blocked);
@@ -1061,6 +1097,18 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 State.IsConnected = true;
                 Reconnected?.Invoke();
             }
+        });
+
+        _connection.On<Guid, Guid>("AdminPromoted", (roomId, userId) =>
+        {
+            Console.WriteLine($"[SignalR] 👑 AdminPromoted: Room={roomId}, User={userId}");
+            AdminPromoted?.Invoke(roomId, userId);
+        });
+
+        _connection.On<Guid, Guid>("AdminDemoted", (roomId, userId) =>
+        {
+            Console.WriteLine($"[SignalR] 👑 AdminDemoted: Room={roomId}, User={userId}");
+            AdminDemoted?.Invoke(roomId, userId);
         });
     }
     private async Task<bool> EnsureConnectionReadyAsync()

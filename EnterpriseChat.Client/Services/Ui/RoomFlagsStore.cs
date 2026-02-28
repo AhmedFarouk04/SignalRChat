@@ -11,7 +11,16 @@ public sealed class RoomFlagsStore
     private readonly Dictionary<Guid, bool> _blockedMe = new();
     private readonly Dictionary<Guid, int> _unreadByRoom = new();
     private readonly Dictionary<Guid, MessageStatus> _lastMessageStatus = new();
+    private readonly Dictionary<Guid, string> _reactionPreviews = new();
 
+    public void SetLastReactionPreview(Guid roomId, string preview)
+        => _reactionPreviews[roomId] = preview;
+
+    public string? GetLastReactionPreview(Guid roomId)
+        => _reactionPreviews.TryGetValue(roomId, out var p) ? p : null;
+
+    public void ClearLastReactionPreview(Guid roomId)
+        => _reactionPreviews.Remove(roomId);
     private Guid? _activeRoomId;
     public Guid? ActiveRoomId => _activeRoomId;
 
@@ -26,7 +35,26 @@ public sealed class RoomFlagsStore
     public event Action<Guid>? BlockedMeChanged;
     public event Action<Guid?>? ActiveRoomChanged;
     public event Action<Guid>? RoomUnreadChanged;
+    private readonly Dictionary<Guid, string?> _lastNonSystemPreviews = new();
 
+    public string? GetLastNonSystemPreview(Guid roomId)
+    {
+        lock (_lastNonSystemPreviews)
+        {
+            return _lastNonSystemPreviews.TryGetValue(roomId, out var preview) ? preview : null;
+        }
+    }
+
+    public void SetLastNonSystemPreview(Guid roomId, string? preview)
+    {
+        lock (_lastNonSystemPreviews)
+        {
+            if (preview == null)
+                _lastNonSystemPreviews.Remove(roomId);
+            else
+                _lastNonSystemPreviews[roomId] = preview;
+        }
+    }
     public bool GetMuted(Guid roomId)
     {
         lock (_mutedLock)
@@ -187,8 +215,10 @@ public sealed class RoomFlagsStore
     {
         if (count < 0) count = 0;
 
+        // ✅ لا تجبر unread=0 للغرف النشطة إذا كانت رسالة نظام
         if (_activeRoomId.HasValue && _activeRoomId.Value == roomId)
         {
+            // للرسائل العادية بس اللي بنخليها 0
             if (count > 0)
             {
                 Console.WriteLine($"[Flags] Forcing unread=0 for active room {roomId}");
@@ -204,7 +234,6 @@ public sealed class RoomFlagsStore
 
         RoomUnreadChanged?.Invoke(roomId);
     }
-
     public void AddUnread(Guid roomId, int delta)
     {
         if (delta == 0) return;

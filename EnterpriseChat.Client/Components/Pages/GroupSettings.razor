@@ -37,17 +37,38 @@ else
     <div class="rooms-page">
         @if (isAdmin)
         {
-            <div class="rooms-toolbar" style="display:flex; gap:12px; flex-wrap:wrap;">
-                <input class="rooms-search" placeholder="Rename group…" @bind="newName" />
-                <button type="button" class="mini-btn" disabled="@busy" @onclick="RenameAsync">Save</button>
+            <div class="group-setting-section">
+                <label class="section-label">RENAME GROUP</label>
+
+                @if (!isEditingName)
+                {
+                    @* الحالة 1: عرض الاسم فقط مع أيقونة التعديل *@
+                    <div class="display-name-row">
+                        <span class="current-group-name">@group.Name</span>
+                        <button type="button" class="edit-icon-btn" title="Click to rename" @onclick="EnableEditName">
+                            ✏️
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    @* الحالة 2: عرض الـ Input عند الضغط على القلم *@
+                    <div class="rooms-toolbar edit-mode-active" style="display:flex; gap:10px; align-items:center;">
+                        <input class="rooms-search"
+                               placeholder="Enter new name…"
+                               @bind="newName"
+                               @onkeyup="@(e => { if (e.Key == "Escape") isEditingName = false; })"
+                               style="margin-bottom:0;" />
+
+                        <div class="edit-actions">
+                            <button type="button" class="mini-btn save" disabled="@busy" @onclick="RenameAsync">Save</button>
+                            <button type="button" class="mini-btn cancel" @onclick="() => isEditingName = false">Cancel</button>
+                        </div>
+                    </div>
+                }
             </div>
         }
-        else
-        {
-            <h3 style="margin-top:16px;">@group.Name</h3>
-        }
-
-        @if (isAdmin)
+            @if (isAdmin)
         {
             <div style="margin-top:16px;">
                 <h3 style="margin:0 0 8px 0;">Add members</h3>
@@ -154,6 +175,7 @@ else
     private Action<Guid, Guid, string>? _memberAddedHandler;
     private Action<Guid, Guid, string?>? _memberRemovedHandler;
     private string _search = "";
+    private bool isEditingName = false;
     private string search
     {
         get => _search;
@@ -165,7 +187,12 @@ else
         }
     }
     private Guid CurrentUserId { get; set; }
-
+    private void EnableEditName()
+    {
+        newName = group?.Name ?? ""; // تعبئة الـ input بالاسم الحالي
+        isEditingName = true;
+        StateHasChanged();
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -234,9 +261,20 @@ else
         }
     }
 
-    private async Task RenameAsync() => await ExecuteWithToast(async () => await GroupsApi.UpdateGroupAsync(RoomId, newName.Trim()), "Group renamed");
-    
+    private async Task RenameAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newName) || newName == group?.Name)
+        {
+            isEditingName = false;
+            return;
+        }
 
+        await ExecuteWithToast(async () =>
+        {
+            await GroupsApi.UpdateGroupAsync(RoomId, newName.Trim());
+            isEditingName = false; // رجوع للشكل الطبيعي بعد النجاح
+        }, "Group renamed");
+    }
     private async Task AddMemberAsync(Guid userId) => await ExecuteWithToast(async () =>
    {
        if (group?.Members.Any(m => m.UserId == userId) == true)
@@ -329,7 +367,6 @@ else
             Console.WriteLine($"[DEBUG] Loading updated members...");
             await LoadAsync();
             StateHasChanged();
-            Toasts.Info("Member joined", $"{displayName} joined the group");
         });
     }
     private async void OnMemberRemovedRealtime(Guid roomId, Guid userId, string? removerName)

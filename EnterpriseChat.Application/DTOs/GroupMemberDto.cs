@@ -2,5 +2,6 @@
 
 public sealed record GroupMemberDto(
     Guid Id,
-    string DisplayName
+    string DisplayName,
+    bool IsAdmin = false
 );

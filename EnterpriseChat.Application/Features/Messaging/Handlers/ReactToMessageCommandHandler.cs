@@ -18,19 +18,22 @@ public sealed class ReactToMessageCommandHandler
     private readonly IUnitOfWork _uow;
     private readonly IUserDirectoryService _userDirectory;
     private readonly IMessageBroadcaster _broadcaster;
+    private readonly IChatRoomRepository _roomRepository;
 
     public ReactToMessageCommandHandler(
-        IReactionRepository reactionRepo,
-        IMessageRepository messageRepo,
-        IUnitOfWork uow,
-        IUserDirectoryService userDirectory,
-        IMessageBroadcaster broadcaster)
+    IReactionRepository reactionRepo,
+    IMessageRepository messageRepo,
+    IUnitOfWork uow,
+    IUserDirectoryService userDirectory,
+    IMessageBroadcaster broadcaster,
+    IChatRoomRepository roomRepository) // ← أضف ده
     {
         _reactionRepo = reactionRepo;
         _messageRepo = messageRepo;
         _uow = uow;
         _userDirectory = userDirectory;
         _broadcaster = broadcaster;
+        _roomRepository = roomRepository; // ← أضف ده
     }
 
     public async Task<MessageReactionsDto> Handle(ReactToMessageCommand request, CancellationToken ct)
@@ -73,13 +76,65 @@ public sealed class ReactToMessageCommandHandler
         var dto = await CreateReactionsDto(request.MessageId, reactions, request.UserId, ct);
 
         // أرسل تحديث real-time
+        bool isNewReaction;
+        if (existingReaction is null)
+            isNewReaction = true;  // reaction جديد
+        else if (existingReaction.Type == request.ReactionType)
+            isNewReaction = false; // حذف (toggle off)
+        else
+            isNewReaction = true;  // تغيير النوع = new reaction من نوع تاني
+
         await _broadcaster.MessageReactionUpdatedAsync(
             request.MessageId,
             request.UserId,
             request.ReactionType,
-            existingReaction is null,
+            isNewReaction,
             await GetRoomMemberIds(message.RoomId, ct));
+        // ابعت RoomUpdated للـ members بـ preview خاص بالـ reaction
+        var memberIds = await GetRoomMemberIds(message.RoomId, ct);
+        var senderOfMessage = message.SenderId;
 
+        // الـ preview بيظهر بس لصاحب الرسالة
+        var reactor = await _userDirectory.GetUserSummaryAsync(request.UserId, ct);
+        var emoji = GetEmoji(request.ReactionType);
+        var preview = isNewReaction
+            ? $"{reactor?.DisplayName ?? "Someone"} reacted {emoji} to your message"
+            : null;
+
+        if (preview != null)
+        {
+            var roomUpdate = new RoomUpdatedDto
+            {
+                RoomId = message.RoomId.Value,
+                MessageId = message.Id.Value,
+                SenderId = request.UserId.Value,
+                Preview = preview,
+                CreatedAt = DateTime.UtcNow,
+                UnreadDelta = 0
+            };
+
+            // ابعت بس لصاحب الرسالة مش للكل
+            await _broadcaster.RoomUpdatedAsync(
+                roomUpdate,
+                new List<UserId> { senderOfMessage });
+        }
+        // ✅ احفظ الـ reaction preview في الداتابيز عشان يظهر بعد الـ refresh
+        var room = await _roomRepository.GetByIdWithMembersAsync(message.RoomId, ct);
+        if (room != null)
+        {
+            if (isNewReaction && preview != null)
+            {
+                // ✅ احفظ الـ reaction preview
+                room.SetLastReactionPreview(preview, DateTime.UtcNow, senderOfMessage);
+            }
+            else if (!isNewReaction)
+            {
+                // ✅ امسح الـ reaction preview لما بيتحذف
+                room.ClearLastReactionPreview();
+            }
+
+            await _uow.CommitAsync(ct);
+        }
         return dto;
     }
 
@@ -120,11 +175,30 @@ public sealed class ReactToMessageCommandHandler
 
         return dto;
     }
+    private static string GetEmoji(ReactionType type) => type switch
+    {
+        ReactionType.Like => "👍",
+        ReactionType.Love => "❤️",
+        ReactionType.Laugh => "😂",
+        ReactionType.Wow => "😮",
+        ReactionType.Sad => "😢",
+        ReactionType.Angry => "😠",
+        ReactionType.ThumbsDown => "👎",
+        ReactionType.Fire => "🔥",
+        ReactionType.Party => "🎉",
+        ReactionType.Clap => "👏",
+        ReactionType.Pray => "🙏",
+        _ => "❓"
+    };
 
+    
     private async Task<IReadOnlyList<UserId>> GetRoomMemberIds(RoomId roomId, CancellationToken ct)
     {
-        // هنا تحتاج لـ method للحصول على أعضاء الغرفة
-        // سنضيفها لاحقاً أو يمكن استخدام ChatRoomRepository
-        return new List<UserId>();
+        var room = await _roomRepository.GetByIdWithMembersAsync(roomId, ct);
+        if (room is null) return new List<UserId>();
+
+        return room.Members
+            .Select(m => m.UserId)
+            .ToList();
     }
 }

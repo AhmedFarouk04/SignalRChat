@@ -99,10 +99,18 @@ namespace EnterpriseChat.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("LastMessagePreview")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid?>("LastMessageSenderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("LastReactionAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastReactionPreview")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("LastReactionTargetUserId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Name")
@@ -244,11 +252,19 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsBlocked")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsEdited")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("IsSystemMessage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<Guid?>("ReplyToMessageId")
                         .HasColumnType("uniqueidentifier");
@@ -258,6 +274,9 @@ namespace EnterpriseChat.Infrastructure.Migrations
 
                     b.Property<Guid>("SenderId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SystemMessageType")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -272,6 +291,8 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.HasIndex("ReplyToMessageId");
 
                     b.HasIndex("RoomId");
+
+                    b.HasIndex("RoomId", "IsSystemMessage", "CreatedAt");
 
                     b.ToTable("Messages", (string)null);
                 });
@@ -324,6 +345,40 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.ToTable("MutedRooms", (string)null);
                 });
 
+            modelBuilder.Entity("EnterpriseChat.Domain.Entities.PinnedMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("PinnedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PinnedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PinnedUntilUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("PinnedAt");
+
+                    b.HasIndex("RoomId");
+
+                    b.HasIndex("RoomId", "MessageId")
+                        .IsUnique();
+
+                    b.ToTable("PinnedMessages", (string)null);
+                });
+
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.Reaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -373,12 +428,6 @@ namespace EnterpriseChat.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("ReplyToMessageId");
 
-                    b.HasOne("EnterpriseChat.Domain.Entities.ChatRoom", null)
-                        .WithMany()
-                        .HasForeignKey("RoomId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("ReplyToMessage");
                 });
 
@@ -387,6 +436,21 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.HasOne("EnterpriseChat.Domain.Entities.Message", null)
                         .WithMany("Receipts")
                         .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EnterpriseChat.Domain.Entities.PinnedMessage", b =>
+                {
+                    b.HasOne("EnterpriseChat.Domain.Entities.Message", null)
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("EnterpriseChat.Domain.Entities.ChatRoom", null)
+                        .WithMany("PinnedMessages")
+                        .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -403,6 +467,8 @@ namespace EnterpriseChat.Infrastructure.Migrations
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.ChatRoom", b =>
                 {
                     b.Navigation("Members");
+
+                    b.Navigation("PinnedMessages");
                 });
 
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.Message", b =>

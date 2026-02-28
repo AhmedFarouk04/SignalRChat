@@ -1,6 +1,6 @@
-﻿using EnterpriseChat.Application.Features.Messaging.Commands;
+﻿using EnterpriseChat.Application.DTOs;
+using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Interfaces;
-using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.Interfaces;
@@ -65,12 +65,10 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
         }
         catch (DbUpdateException)
         {
-            return Unit.Value; // duplicate race => success
+            return Unit.Value;
         }
 
-        // ✅ realtime: العضو الجديد يشوف الجروب فورًا
-        var now = DateTime.UtcNow;
-
+        // 1. إرسال الغرفة للعضو الجديد فقط
         var roomDtoForNewMember = new RoomListItemDto
         {
             Id = room.Id.Value,
@@ -78,57 +76,62 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
             Type = room.Type.ToString(),
             UnreadCount = 0,
             IsMuted = false,
-            LastMessageAt = now,
+            LastMessageAt = DateTime.UtcNow,
             LastMessagePreview = null,
             LastMessageId = null,
             LastMessageSenderId = null,
             LastMessageStatus = null
         };
-
         await _broadcaster.RoomUpsertedAsync(roomDtoForNewMember, new[] { command.MemberId });
-
-        // ✅ الاسم
-        var displayName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct);
-
-
-        // realtime for new member room upsert
-        // بعد Commit الأول (add member)
-        var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
 
         var addedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
         var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
-
-        var systemSender = command.RequesterId; // الأفضل
         var systemText = $"{addedName} was added by {requesterName}";
 
-        var sysMsg = new Message(room.Id, systemSender, systemText, recipients);
+        var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+
+        var sysMsg = Message.CreateSystemMessage(
+            room.Id,
+            systemText,
+            SystemMessageType.MemberAdded,
+            recipients);
+
         await _messages.AddAsync(sysMsg, ct);
         await _uow.CommitAsync(ct);
 
+        // 2. بث الرسالة داخل الشات (بتظهر جوه المحادثة)
         var msgDto = new MessageDto
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = command.RequesterId.Value,
+            SenderId = Guid.Empty,  // ✅ System ID
             Content = systemText,
-            CreatedAt = sysMsg.CreatedAt
+            CreatedAt = sysMsg.CreatedAt,
+            IsSystemMessage = true
         };
-
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        var preview = systemText.Length > 80 ? systemText[..80] + "…" : systemText;
-        await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
+        // 3. تحديث القائمة بدون Preview (مثل الـ Bulk Handler)
+        await _broadcaster.RoomUpsertedAsync(new RoomListItemDto
         {
-            RoomId = msgDto.RoomId,
-            MessageId = msgDto.Id,
-            SenderId = command.RequesterId.Value,
-            Preview = preview,
-            CreatedAt = msgDto.CreatedAt,
-            UnreadDelta = 0
+            Id = room.Id.Value,
+            Name = room.Name,
+            Type = room.Type.ToString(),
+            UnreadCount = 0,
+            IsMuted = false,
+            LastMessageAt = sysMsg.CreatedAt,
+            LastMessagePreview = null,  // ✅ صح
+            LastMessageId = sysMsg.Id.Value,
+            LastMessageSenderId = Guid.Empty,  // ✅ صح
+            LastMessageStatus = null
         }, recipients);
 
-        // optional event
-        await _broadcaster.MemberAddedAsync(room.Id, command.MemberId, addedName, recipients);
+        // 4. إشعار للأعضاء الحاليين بعضو جديد
+        var existingMembers = recipients
+            .Where(r => r.Value != command.MemberId.Value)
+            .ToList();
+
+        await _broadcaster.MemberAddedAsync(room.Id, command.MemberId, addedName, existingMembers);
 
         return Unit.Value;
     }

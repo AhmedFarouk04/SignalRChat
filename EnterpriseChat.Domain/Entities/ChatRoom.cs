@@ -13,7 +13,7 @@ public sealed class ChatRoom
 
     // Group owner (for Group rooms only)
     public UserId? OwnerId { get; private set; }
-    public Guid? PinnedMessageId { get; private set; }
+    public MessageId? PinnedMessageId { get; private set; }
     public DateTime? PinnedUntilUtc { get; private set; }
 
     // ✅ Last Message Info
@@ -23,7 +23,16 @@ public sealed class ChatRoom
     public UserId? LastMessageSenderId { get; private set; }
 
     private readonly List<ChatRoomMember> _members = new();
+    public string? LastReactionPreview { get; private set; }
+    public DateTime? LastReactionAt { get; private set; }
+    public UserId? LastReactionTargetUserId { get; private set; }
     public IReadOnlyCollection<ChatRoomMember> Members => _members.AsReadOnly();
+  
+
+    // ✅ الـ list الجديدة
+    private readonly List<PinnedMessage> _pinnedMessages = new();
+    public IReadOnlyCollection<PinnedMessage> PinnedMessages => _pinnedMessages.AsReadOnly();
+
 
     private ChatRoom() { }
 
@@ -42,7 +51,12 @@ public sealed class ChatRoom
 
         AddMember(creatorId, isOwner: type == RoomType.Group);
     }
-
+    public void SetLastReactionPreview(string preview, DateTime at, UserId targetUserId)
+    {
+        LastReactionPreview = preview;
+        LastReactionAt = at;
+        LastReactionTargetUserId = targetUserId;
+    }
     public static ChatRoom CreatePrivate(UserId a, UserId b)
     {
         var room = new ChatRoom
@@ -57,6 +71,12 @@ public sealed class ChatRoom
         room.AddMember(a);
         room.AddMember(b);
         return room;
+    }
+    public void ClearLastReactionPreview()
+    {
+        LastReactionPreview = null;
+        LastReactionAt = null;
+        LastReactionTargetUserId = null;
     }
 
     public static ChatRoom CreateGroup(
@@ -178,26 +198,54 @@ public sealed class ChatRoom
         Name = name.Trim();
     }
 
-    public void PinMessage(Guid? messageId, TimeSpan? duration)
+    public void PinMessage(Guid? messageId, TimeSpan? duration, UserId pinnedBy)
     {
         if (messageId == null)
         {
+            _pinnedMessages.Clear();
             PinnedMessageId = null;
             PinnedUntilUtc = null;
             return;
         }
 
-        PinnedMessageId = messageId;
+        if (_pinnedMessages.Any(p => p.MessageId.Value == messageId))
+            return;
 
-        if (duration.HasValue)
+        if (_pinnedMessages.Count >= 3)
         {
-            PinnedUntilUtc = DateTime.UtcNow.Add(duration.Value);
+            var oldest = _pinnedMessages.OrderBy(p => p.PinnedAt).First();
+            _pinnedMessages.Remove(oldest);
         }
-        else
-        {
-            PinnedUntilUtc = null;
-        }
+
+        var pinned = PinnedMessage.Create(
+            Id,
+            new MessageId(messageId.Value),
+            pinnedBy,
+            duration);
+
+        _pinnedMessages.Add(pinned);
+
+        // ✅ تحديث باستخدام الـ Value Object
+        PinnedMessageId = new MessageId(messageId.Value);
+        PinnedUntilUtc = pinned.PinnedUntilUtc;
+    }
+    public void UnpinMessage(Guid messageId)
+    {
+        var pin = _pinnedMessages.FirstOrDefault(p => p.MessageId.Value == messageId);
+        if (pin != null)
+            _pinnedMessages.Remove(pin);
+
+        var last = _pinnedMessages.OrderByDescending(p => p.PinnedAt).FirstOrDefault();
+
+        // ✅ تحديث باستخدام الـ Value Object
+        PinnedMessageId = last?.MessageId;
+        PinnedUntilUtc = last?.PinnedUntilUtc;
     }
 
-    public void UnpinMessage() => PinnedMessageId = null;
+    public void UnpinAll()
+    {
+        _pinnedMessages.Clear();
+        PinnedMessageId = null;
+        PinnedUntilUtc = null;
+    }
 }

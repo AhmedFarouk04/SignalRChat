@@ -14,4 +14,6 @@ public sealed class LastMessageInfo
     public int DeliveredCount { get; init; }
     public int ReadCount { get; init; }
     public MessageStatus? PersonalStatus { get; init; }
+    public bool IsSystemMessage { get; init; }           // ← جديد
+    public SystemMessageType? SystemMessageType { get; init; }  // ← جديد
 }

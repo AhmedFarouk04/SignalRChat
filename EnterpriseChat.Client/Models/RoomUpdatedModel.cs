@@ -12,4 +12,6 @@ public sealed class RoomUpdatedModel
     // ✅ add these
     public string? RoomName { get; set; }
     public string? RoomType { get; set; }
+    public bool IsSystemMessage { get; set; } = false;
+    public string? SystemEventType { get; set; }   // "MemberAdded", "MemberRemoved", "UserJoined", "NameChanged", etc.
 }

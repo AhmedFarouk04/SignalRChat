@@ -12,22 +12,32 @@
         }
 
         @{
-            var originalMessages = Messages
-            .Where(m => !m.ReplyToMessageId.HasValue)
+            // ✅ FIX: كل الرسائل بالترتيب الزمني بما فيها الـ replies
+            // قبل كان بيشيل الـ replies من الـ main list ويعرضها nested تحت الـ parent
+            // ده كان بيخلي الـ reply تتعرض في مكان الـ parent مش في مكانها الزمني الصح
+            var allMessages = Messages
             .DistinctBy(m => m.Id)
             .OrderBy(m => m.CreatedAt)
             .ToList();
+
+            // قائمة لتخزين المعرفات التي تم دمجها (للـ system messages)
+            var skipIds = new HashSet<Guid>();
+
+            // جلب اسمك الحالي للمقارنة
+            var myName = GroupMembers?.FirstOrDefault(m => m.Id == CurrentUserId)?.DisplayName;
         }
 
-        @for (int i = 0; i < originalMessages.Count; i++)
+        @for (int i = 0; i < allMessages.Count; i++)
         {
-            var msg = originalMessages[i];
-            var prev = i > 0 ? originalMessages[i - 1] : null;
-            var next = i < originalMessages.Count - 1 ? originalMessages[i + 1] : null;
+            var msg = allMessages[i];
+            if (skipIds.Contains(msg.Id)) continue;
 
+            var prev = i > 0 ? allMessages[i - 1] : null;
+            var next = i < allMessages.Count - 1 ? allMessages[i + 1] : null;
+
+            // --- فاصل التاريخ ---
             var currDate = msg.CreatedAt.ToLocalTime().Date;
             var prevDate = prev?.CreatedAt.ToLocalTime().Date;
-
             if (prev is null || prevDate != currDate)
             {
                 <div class="date-sep" @key="@($"date-{currDate:yyyyMMdd}")">@FormatDateLabel(currDate)</div>
@@ -35,21 +45,77 @@
 
             @if (IsSystemMessage(msg))
             {
-                <div class="system-message-container" @key="@($"sys-{msg.Id}")">
-                    <div class="system-content">
-                        <span class="system-text">@FormatSystemMessage(msg.Content)</span>
+                // --- منطق الدمج (Aggregation) والتحويل لـ You ---
+                var actorName = "";
+                var actionType = "";
+                var targets = new List<string>();
+
+                var parts = msg.Content.Split(" by ");
+                if (parts.Length == 2)
+                {
+                    actionType = parts[0].Contains("added") ? "added" : "removed";
+                    actorName = parts[1].Trim();
+                    targets.Add(parts[0].Replace(" was added", "").Replace(" was removed", "").Replace(" were added", "").Replace(" were removed", "").Trim());
+
+                    // البحث عن الرسايل اللي ورا بعض لنفس الشخص
+                    int j = i + 1;
+                    while (j < allMessages.Count)
+                    {
+                        var nextMsg = allMessages[j];
+                        var nextParts = nextMsg.Content.Split(" by ");
+                        if (IsSystemMessage(nextMsg) && nextParts.Length == 2 && nextParts[1].Trim() == actorName && nextParts[0].Contains(actionType))
+                        {
+                            targets.Add(nextParts[0].Replace(" was added", "").Replace(" was removed", "").Replace(" were added", "").Replace(" were removed", "").Trim());
+                            skipIds.Add(nextMsg.Id);
+                            j++;
+                        }
+                        else break;
+                    }
+
+                    // تحويل الأسماء لـ You
+                    var processedTargets = targets.Select(t => (!string.IsNullOrEmpty(myName) && t.Equals(myName, StringComparison.OrdinalIgnoreCase)) ? "You" : t).Distinct().ToList();
+                    var processedActor = (!string.IsNullOrEmpty(myName) && actorName.Equals(myName, StringComparison.OrdinalIgnoreCase)) ? "You" : actorName;
+
+                    string finalMsg;
+                    if (processedTargets.Count == 1)
+                    {
+                        var verb = processedTargets[0] == "You" ? "were" : "was";
+                        finalMsg = $"{processedTargets[0]} {verb} {actionType} by {processedActor}";
+                    }
+                    else
+                    {
+                        // ترتيب عشان لو You موجودة تيجي في الأول
+                        if (processedTargets.Contains("You")) { processedTargets.Remove("You"); processedTargets.Insert(0, "You"); }
+                        var targetText = processedTargets.Count > 2 ? $"{processedTargets[0]}, {processedTargets[1]} and {processedTargets.Count - 2} others" : string.Join(" and ", processedTargets);
+                        finalMsg = $"{targetText} were {actionType} by {processedActor}";
+                    }
+
+                    <div class="system-message-container" @key="@($"sys-{msg.Id}")">
+                        <div class="system-message">
+                            <span class="system-text">@FormatSystemCleanUp(finalMsg)</span>
+                        </div>
                     </div>
-                </div>
+                }
+                else
+                {
+                    // رسايل نظام تانية (زي pinned)
+                    <div class="system-message-container" @key="@($"sys-{msg.Id}")">
+                        <div class="system-message">
+                            <span class="system-text">@FormatSystemCleanUp(msg.Content.Replace(myName ?? "___", "You"))</span>
+                        </div>
+                    </div>
+                }
             }
             else
             {
+                // --- الرسائل العادية (بما فيها الـ replies) ---
                 var samePrev = IsSameGroup(prev, msg);
                 var sameNext = IsSameGroup(msg, next);
-                var pos = (!samePrev && !sameNext) ? "single" :
-                (!samePrev && sameNext) ? "start" :
-                (samePrev && sameNext) ? "mid" : "end";
+                var pos = (!samePrev && !sameNext) ? "single" : (!samePrev && sameNext) ? "start" : (samePrev && sameNext) ? "mid" : "end";
 
-                @* ✅ استخدام Fixed @key عشان منع إعادة الإنشاء *@
+                // ✅ لو الرسالة عندها reply preview، خليها single عشان تبان واضحة
+                if (msg.ReplyInfo != null) pos = "single";
+
                 <MessageBubble @key="@msg.Id"
                                Message="@msg"
                                CurrentUserId="@CurrentUserId"
@@ -66,29 +132,6 @@
                                OnEditRequested="OnEditRequested"
                                OnDeleteRequested="OnDeleteRequested"
                                OnToggleReaction="@OnToggleReaction" />
-
-                @foreach (var reply in GetRepliesForMessage(msg.Id))
-                {
-                    @* ✅ نفس الشي للردود *@
-                    <div class="reply-container" @key="@($"reply-{reply.Id}")" data-parent="@msg.Id">
-                        <MessageBubble @key="@reply.Id"
-                                       Message="@reply"
-                                       CurrentUserId="@CurrentUserId"
-                                       GroupMembers="@GroupMembers"
-                                       GroupPosition="single"
-                                       IsNew="@(newIds.Contains(reply.Id) && !_processedNewMessages.Contains(reply.Id))"
-                                       ShowMeta="true"
-                                       OnRetry="@OnRetry"
-                                       OnReaction="@OnReaction"
-                                       OnReplyRequested="@OnReplyRequested"
-                                       OnScrollToMessage="@OnScrollToMessage"
-                                       OnOpenReactionDetails="@OnOpenReactionDetails"
-                                       OpenReactionMessageId="@OpenReactionMessageId"
-                                       OnToggleReaction="@OnToggleReaction"
-                                       OnEditRequested="OnEditRequested"
-                                       OnDeleteRequested="OnDeleteRequested" />
-                    </div>
-                }
             }
         }
     </div>
@@ -121,42 +164,34 @@
     private bool isAtBottom = true;
     private bool showNewDivider;
     private readonly HashSet<Guid> newIds = new();
-    private readonly HashSet<Guid> _processedNewMessages = new(); // ✅ متتبع الرسائل الجديدة المعالجة
+    private readonly HashSet<Guid> _processedNewMessages = new();
     private string _lastMessagesHash = string.Empty;
     private bool _isCheckingBottom = false;
 
     private bool IsSystemMessage(MessageModel msg)
     {
         if (msg == null) return false;
-        if (msg.IsSystem || msg.Type == "System") return true;
-        if (string.IsNullOrEmpty(msg.Content)) return false;
-
-        var lower = msg.Content.ToLower();
-        return lower.Contains("created the group") ||
-               lower.Contains("was added by") ||
-               lower.Contains("was removed by") ||
-               lower.Contains("left") ||
-               lower.Contains("pinned a message");
+        return msg.IsSystem || msg.Type == "System" ||
+               (msg.Content != null && (msg.Content.Contains("added by") || msg.Content.Contains("removed by")));
     }
 
-    private List<MessageModel> GetRepliesForMessage(Guid messageId)
+    private string FormatSystemCleanUp(string content)
     {
-        return Messages.Where(m => m.ReplyToMessageId == messageId)
-                       .OrderBy(m => m.CreatedAt)
-                       .ToList();
+        if (string.IsNullOrEmpty(content)) return content;
+        return content.Replace("was added by", "added by")
+                      .Replace("were added by", "added by")
+                      .Replace("was removed by", "removed by")
+                      .Replace("were removed by", "removed by")
+                      .Replace("created the group", "created group")
+                      .ToUpper();
     }
-
-    private string FormatSystemMessage(string content)
-        => content.Replace("created the group", "created group")
-                  .Replace("was added by", "added by")
-                  .Replace("was removed by", "removed by");
 
     private static bool IsSameGroup(MessageModel? a, MessageModel? b)
     {
-        if (a is null || b is null) return false;
-        if (a.SenderId != b.SenderId) return false;
-        var dt = (b.CreatedAt - a.CreatedAt).Duration();
-        return dt <= TimeSpan.FromMinutes(2);
+        if (a is null || b is null || a.SenderId != b.SenderId) return false;
+        // ✅ لو أي منهم عنده ReplyInfo، متجمعهاش عشان تبان واضحة
+        if (a.ReplyInfo != null || b.ReplyInfo != null) return false;
+        return (b.CreatedAt - a.CreatedAt).Duration() <= TimeSpan.FromMinutes(2);
     }
 
     private static string FormatDateLabel(DateTime date)
@@ -164,100 +199,50 @@
         var today = DateTime.Now.Date;
         if (date == today) return "TODAY";
         if (date == today.AddDays(-1)) return "YESTERDAY";
-        if (date > today.AddDays(-7)) return date.ToString("dddd").ToUpper();
-        return date.ToString("MMM dd, yyyy").ToUpper();
+        return date.ToString("MMMM dd, yyyy").ToUpper();
     }
 
-    // ✅ تحسين: منع إعادة الرسم غير الضرورية (بدون async)
     protected override bool ShouldRender()
     {
-        var msgHash = string.Join("|", Messages.Select(m =>
-            $"{m.Id}:{m.Content?.Length}:{m.PersonalStatus}:{m.ReadCount}:{m.DeliveredCount}:{m.IsEdited}:{m.IsDeleted}"
-        ));
-
-        // ضمّن حاجات UI المهمة عشان التحديثات متتبلعش
-        var uiHash = $"{OpenReactionMessageId}:{showNewDivider}:{isAtBottom}:{newIds.Count}";
-
-        var currentHash = msgHash + "||" + uiHash;
-
-        if (_lastMessagesHash == currentHash) return false;
-
-        _lastMessagesHash = currentHash;
+        var msgHash = string.Join("|", Messages.Select(m => $"{m.Id}:{m.PersonalStatus}:{m.ReadCount}"));
+        var uiHash = $"{OpenReactionMessageId}:{showNewDivider}:{isAtBottom}";
+        if (_lastMessagesHash == msgHash + uiHash) return false;
+        _lastMessagesHash = msgHash + uiHash;
         return true;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (Messages.Count == 0)
-        {
-            lastMessageCount = 0;
-            return;
-        }
-
-        // ✅ منع إعادة المعالجة إذا كان العدد نفسه
-        if (Messages.Count <= lastMessageCount)
-        {
-            return;
-        }
-
-        // ✅ التحقق من isAtBottom بشكل غير متزامن
+        if (Messages.Count == 0 || Messages.Count <= lastMessageCount) return;
         var atBottom = await CheckIfAtBottom();
-
         if (AutoScroll && atBottom)
         {
             try
             {
                 await Scroll.ScrollToBottomAsync(listRef);
-
-                // تنظيف الـ new messages
-                showNewDivider = false;
-                newIds.Clear();
-                _processedNewMessages.Clear();
-
-                if (Messages.Count > 0)
-                {
-                    await OnReachedBottom.InvokeAsync(Messages[^1].Id);
-                }
+                showNewDivider = false; newIds.Clear(); _processedNewMessages.Clear();
+                if (Messages.Count > 0) await OnReachedBottom.InvokeAsync(Messages[^1].Id);
             }
             catch { }
         }
         else
         {
-            // إضافة الرسائل الجديدة فقط
             for (int i = lastMessageCount; i < Messages.Count; i++)
             {
-                var newMsg = Messages[i];
-                newIds.Add(newMsg.Id);
-
-                // ✅ لو الرسالة مش جديدة (قدام), نضيفها للمعالجة عشان متظهرش كـ New
-                if (newMsg.CreatedAt < DateTime.UtcNow.AddSeconds(-30))
-                {
-                    _processedNewMessages.Add(newMsg.Id);
-                }
+                var newMsg = Messages[i]; newIds.Add(newMsg.Id);
+                if (newMsg.CreatedAt < DateTime.UtcNow.AddSeconds(-30)) _processedNewMessages.Add(newMsg.Id);
             }
             showNewDivider = newIds.Count > 0;
         }
-
         lastMessageCount = Messages.Count;
     }
 
     private async Task<bool> CheckIfAtBottom()
     {
         if (_isCheckingBottom) return isAtBottom;
-
-        try
-        {
-            _isCheckingBottom = true;
-            return await Scroll.IsAtBottomAsync(listRef);
-        }
-        catch
-        {
-            return true;
-        }
-        finally
-        {
-            _isCheckingBottom = false;
-        }
+        try { _isCheckingBottom = true; return await Scroll.IsAtBottomAsync(listRef); }
+        catch { return true; }
+        finally { _isCheckingBottom = false; }
     }
 
     private CancellationTokenSource? _scrollCts;
@@ -265,52 +250,23 @@
 
     private async Task OnScroll()
     {
-        _scrollCts?.Cancel();
-        _scrollCts = new CancellationTokenSource();
+        _scrollCts?.Cancel(); _scrollCts = new CancellationTokenSource();
         try { await Task.Delay(80, _scrollCts.Token); } catch { return; }
-
         var atBottom = await Scroll.IsAtBottomAsync(listRef);
-        var wasBottom = isAtBottom;
         isAtBottom = atBottom;
-
         if (!isAtBottom) return;
-
-        // ✅ تنظيف الـ new messages عند الوصول للأسفل
-        if (showNewDivider || newIds.Count > 0)
+        if (showNewDivider) { showNewDivider = false; StateHasChanged(); }
+        if (Messages.Count > 0 && Messages[^1].Id != _lastBottomReportedMessageId)
         {
-            showNewDivider = false;
-            newIds.Clear();
-            _processedNewMessages.Clear();
-            await InvokeAsync(StateHasChanged);
+            _lastBottomReportedMessageId = Messages[^1].Id;
+            await OnReachedBottom.InvokeAsync(_lastBottomReportedMessageId);
         }
-
-        if (Messages.Count == 0) return;
-
-        var lastId = Messages[^1].Id;
-        if (lastId == _lastBottomReportedMessageId && wasBottom) return;
-
-        _lastBottomReportedMessageId = lastId;
-        await OnReachedBottom.InvokeAsync(lastId);
     }
 
     private async Task ScrollDown()
     {
         await Scroll.ScrollToBottomSmoothAsync(listRef);
-        isAtBottom = true;
-
-        // ✅ تنظيف الـ new messages
-        showNewDivider = false;
-        newIds.Clear();
-        _processedNewMessages.Clear();
-
-        if (Messages.Count > 0)
-        {
-            await OnReachedBottom.InvokeAsync(Messages[^1].Id);
-        }
-    }
-
-    public async Task ForceRefreshAsync()
-    {
-        await InvokeAsync(StateHasChanged);
+        isAtBottom = true; showNewDivider = false;
+        if (Messages.Count > 0) await OnReachedBottom.InvokeAsync(Messages[^1].Id);
     }
 }

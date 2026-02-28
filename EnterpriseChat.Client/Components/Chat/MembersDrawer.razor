@@ -21,53 +21,57 @@
         </div>
 
         <div class="drawer-body">
-            @if (CanManageMembers)
+            @* المالك والأدمن يقدروا يغيروا اسم الجروب *@
+            @if (IsCurrentUserOwner)
             {
                 <div class="drawer-section rename-section">
                     <div class="section-label">Rename Group</div>
-                    <div class="rename-box">
-                        <input type="text" @bind="newGroupName" placeholder="Enter new name..." />
-                        <button class="mini-btn save-btn" @onclick="HandleRename" disabled="@isBusy">Save</button>
-                    </div>
-                </div>
-            }
 
-            @if (CanManageMembers)
-            {
-                <div class="drawer-section search-section">
-                    <div class="section-label">Add Member</div>
-                    <div class="search-box">
-                        <input type="text" placeholder="Search users..."
-                               @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" />
-                        @if (isSearching)
-                        {
-                            <span class="spinner"></span>
-                        }
-                    </div>
-                    @if (searchResults.Any())
+                    @if (!isEditingName)
                     {
-                        <div class="search-results">
-                            @foreach (var user in searchResults)
-                            {
-                                <div class="search-item">
-                                    <div class="user-info">
-                                        <div class="user-name">@user.DisplayName</div>
-                                        <div class="user-email">@user.Email</div>
-                                    </div>
-                                    <button class="add-btn" @onclick="() => HandleAdd(user.Id)" disabled="@isBusy">Add</button>
-                                </div>
-                            }
+                        <div class="display-name-wrapper" @onclick="EnableEdit">
+                            <span class="current-group-name">@GroupName</span>
+                            <div class="edit-hint-icon">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rename-box edit-mode-active">
+                            <input type="text" @bind="newGroupName"
+                                   placeholder="Enter new name..."
+                                   @onkeyup="@(e => { if (e.Key == "Escape") isEditingName = false; })" />
+
+                            <div class="edit-actions" style="display:flex; gap:5px; margin-top:8px;">
+                                <button class="mini-btn save-btn" @onclick="HandleRename" disabled="@isBusy">Save</button>
+                                <button class="mini-btn cancel-btn" style="background:rgba(255,255,255,0.1);" @onclick="() => isEditingName = false">Cancel</button>
+                            </div>
                         </div>
                     }
                 </div>
             }
 
+            @* المالك والأدمن يقدروا يضيفوا أعضاء *@
+            @if (IsCurrentUserOwner || IsCurrentUserAdmin)
+            {
+                <div class="drawer-section search-section">
+                    <div class="section-label">Add Member</div>
+                    <button class="add-members-action-btn" @onclick="() => showInviteModal = true">
+                        <span class="icon">➕</span> Add New Members
+                    </button>
+                </div>
+            }
+
             <div class="drawer-section">
                 <div class="section-label">Members List</div>
+                <div style="font-size: 10px; color: #666; margin-bottom: 10px; padding: 5px; background: #111; border-radius: 4px;">
+                  
+                </div>
                 <div class="members-list">
                     @foreach (var u in Members.OrderByDescending(m => m.Id == OwnerId))
                     {
-                        <div class="member-item">
+                        <div class="member-item @( _memberToTransfer == u.Id ? "confirming-transfer" : "" )">
                             <div class="member-avatar">
                                 @u.DisplayName[..1].ToUpper()
                                 @if (u.IsOnline)
@@ -82,25 +86,82 @@
                                     {
                                         <span class="badge owner">Owner</span>
                                     }
+                                    else if (u.IsAdmin)
+                                    {
+                                        <span class="badge admin">Admin</span>
+                                    }
                                 </div>
                             </div>
 
-                            @* صلاحيات المالك تجاه الآخرين *@
-                            @if (CurrentUserId == OwnerId && u.Id != OwnerId)
-                            {
-                                <div class="member-actions">
-                                    <button class="action-icon-btn transfer" title="Transfer Ownership" @onclick="() => OnTransferOwner.InvokeAsync(u.Id)">👑</button>
-                                    <button class="action-icon-btn" title="Promote/Demote Admin" @onclick="() => OnToggleAdmin.InvokeAsync(u.Id)">⭐</button>
-                                    <button class="action-icon-btn danger" title="Remove Member" @onclick="() => OnRemove.InvokeAsync(u.Id)">✕</button>
-                                </div>
-                            }
-                            @* صلاحيات الأدمن تجاه غير المالك وغير الأدمن *@
-                            else if (CanManageMembers && u.Id != OwnerId && u.Id != CurrentUserId)
-                            {
-                                <div class="member-actions">
-                                    <button class="action-icon-btn danger" title="Remove Member" @onclick="() => OnRemove.InvokeAsync(u.Id)">✕</button>
-                                </div>
-                            }
+                            <div class="member-actions">
+
+                                @if (IsCurrentUserOwner && u.Id != OwnerId)
+                                {
+                                    <div class="transfer-wrapper" @onclick:stopPropagation="true">
+                                        <button class="action-icon-btn transfer @( _memberToTransfer == u.Id ? "is-active" : "" )"
+                                                title="Transfer Ownership"
+                                                @onclick="() => ToggleTransferConfirm(u.Id)">
+                                            👑
+                                        </button>
+
+                                        @if (_memberToTransfer == u.Id)
+                                        {
+                                            <div class="confirm-click-trap" @onclick="() => _memberToTransfer = null"></div>
+
+                                            <div class="transfer-popover" role="dialog" aria-label="Confirm ownership transfer">
+                                                <div class="transfer-popover-title">Transfer owner?</div>
+
+                                                <div class="transfer-popover-actions">
+                                                    <button class="tp-btn yes" title="Confirm"
+                                                            @onclick="() => ConfirmTransfer(u.Id)">
+                                                        ✓
+                                                    </button>
+                                                    <button class="tp-btn no" title="Cancel"
+                                                            @onclick="CloseTransferPopup">
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @* زرار الأدمن يفضل بره الـ wrapper عشان مكانه ميتغيرش *@
+                                    <button class="action-icon-btn @(u.IsAdmin ? "admin-active" : "admin-inactive")"
+                                            title="@(u.IsAdmin ? "Demote from Admin" : "Promote to Admin")"
+                                            @onclick="() => OnToggleAdmin.InvokeAsync(u.Id)">
+                                        <span class="star-icon">@(u.IsAdmin ? "⭐" : "☆")</span>
+                                    </button>
+                                }
+
+                                @* منطق الحذف الجديد *@
+                                @{
+                                    bool canRemoveThisUser = false;
+                                    // 1. المالك يحذف أي حد إلا نفسه
+                                    if (IsCurrentUserOwner && u.Id != OwnerId) { canRemoveThisUser = true; }
+                                    // 2. الأدمن يحذف الأعضاء العاديين فقط (مش المالك ولا أدمن زيه)
+                                    else if (IsCurrentUserAdmin && u.Id != OwnerId && !u.IsAdmin && u.Id != CurrentUserId) { canRemoveThisUser = true; }
+                                }
+
+                                @if (canRemoveThisUser)
+                                {
+                                    @if (_memberToRemove == u.Id)
+                                    {
+                                        <div class="confirm-remove-popup" @onclick:stopPropagation="true">
+                                            <span>Remove @u.DisplayName?</span>
+                                            <button class="mini-btn confirm-yes" @onclick="() => ConfirmRemove(u.Id)">✔️</button>
+                                            <button class="mini-btn confirm-no" @onclick="() => _memberToRemove = null">✖️</button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button class="action-icon-btn danger"
+                                                title="Remove Member"
+                                                @onclick="() => ShowRemoveConfirmation(u.Id)">
+                                            ✕
+                                        </button>
+                                    }
+                                }
+                            </div>
                         </div>
                     }
                 </div>
@@ -108,7 +169,6 @@
         </div>
 
         <div class="drawer-footer" style="display:flex; flex-direction:column; gap:10px;">
-            @* زر حذف الجروب يظهر للمالك فقط *@
             @if (CurrentUserId == OwnerId)
             {
                 <button class="leave-btn delete" @onclick="HandleDelete">
@@ -116,15 +176,67 @@
                 </button>
             }
 
-            @* زر المغادرة *@
-            <button class="leave-btn" @onclick="HandleLeave">
+            <button class="leave-btn" @onclick="OpenLeaveModal">
                 <span class="icon">🚪</span> Leave group
             </button>
         </div>
-    </aside>
+       </aside>
+
+    @* ===== Leave Modals (ضعهم هنا بالظبط) ===== *@
+    @if (showLeaveModal)
+    {
+        <div class="leave-modal-overlay" @onclick="CloseLeaveModals">
+            <div class="leave-modal" @onclick:stopPropagation="true">
+                <div class="leave-modal-header">
+                    <div class="leave-modal-title">Leave group?</div>
+                    <button class="leave-modal-close" @onclick="CloseLeaveModals">✕</button>
+                </div>
+
+                <div class="leave-modal-body">
+                    Are you sure you want to leave this group?
+                </div>
+
+                <div class="leave-modal-footer">
+                    <button class="leave-btn2 cancel" @onclick="CloseLeaveModals">Cancel</button>
+                    <button class="leave-btn2 confirm" @onclick="ConfirmLeave">Leave</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (showOwnerLeaveModal)
+    {
+        <div class="leave-modal-overlay" @onclick="CloseLeaveModals">
+            <div class="leave-modal owner" @onclick:stopPropagation="true">
+                <div class="leave-modal-header">
+                    <div class="leave-modal-title">Owner can’t leave</div>
+                    <button class="leave-modal-close" @onclick="CloseLeaveModals">✕</button>
+                </div>
+
+                <div class="leave-modal-body">
+                    You’re the owner. Transfer ownership first, or delete the group.
+                    <div class="hint">Tip: use the 👑 icon next to a member.</div>
+                </div>
+
+                <div class="leave-modal-footer">
+                    <button class="leave-btn2 cancel" @onclick="CloseLeaveModals">Close</button>
+                    <button class="leave-btn2 owner-action" @onclick="OwnerTransferHint">Transfer</button>
+                    <button class="leave-btn2 danger" @onclick="OwnerDeleteFromModal">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
+    <InviteModal IsOpen="showInviteModal"
+                 RoomId="@RoomId"
+                 GroupName="@GroupName"
+                 CurrentUserId="CurrentUserId"
+                 ExistingMembers="Members"
+                 OnSuccess="HandleBulkAddSuccess"
+                 OnClose="() => showInviteModal = false" />
 }
 
 @code {
+    [Parameter] public Guid RoomId { get; set; }
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public IReadOnlyList<UserModel> Members { get; set; } = [];
     [Parameter] public Guid OwnerId { get; set; }
@@ -141,38 +253,200 @@
     [Parameter] public EventCallback OnLeave { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
 
-    private string searchTerm = "";
+    // Helpers للصلاحيات
+    private bool IsCurrentUserAdmin => Members.Any(m => m.Id == CurrentUserId && m.IsAdmin);
+    private bool IsCurrentUserOwner => CurrentUserId == OwnerId;
+    private Guid? _memberToTransfer = null; // لتتبع من سيستلم التاج
+    private Guid? _memberToRemove = null;
     private string newGroupName = "";
-    private List<UserModel> searchResults = new();
-    private bool isSearching = false;
     private bool isBusy = false;
-    private CancellationTokenSource? _cts;
-
-    protected override void OnParametersSet() { if (string.IsNullOrEmpty(newGroupName)) newGroupName = GroupName; }
-
-    private async Task HandleSearch()
+    private bool isEditingName = false;
+    private bool showInviteModal = false;
+    private CancellationTokenSource? _transferCts;
+    private const int TransferAutoCloseMs = 4000; // 4 ثواني (عدّلها براحتك)
+    private CancellationTokenSource? _removeCts;
+    private DotNetObjectReference<MembersDrawer>? _dotNetRef;
+    private bool showLeaveModal = false;
+    private bool showOwnerLeaveModal = false;
+    protected override void OnInitialized()
     {
-        _cts?.Cancel();
-        _cts = new CancellationTokenSource();
-        if (searchTerm.Length < 2) { searchResults.Clear(); return; }
-        try
-        {
-            isSearching = true;
-            await Task.Delay(300, _cts.Token);
-            var results = await UsersApi.SearchAsync(searchTerm, CurrentUserId, 5, _cts.Token);
-            var existingIds = Members.Select(m => m.Id).ToHashSet();
-            searchResults = results.Where(r => !existingIds.Contains(r.Id))
-                                   .Select(r => new UserModel { Id = r.Id, DisplayName = r.DisplayName, Email = r.Email }).ToList();
-        }
-        catch { }
-        finally { isSearching = false; StateHasChanged(); }
+        base.OnInitialized();
+        _dotNetRef = DotNetObjectReference.Create(this);
     }
 
-    private async Task HandleAdd(Guid userId) { isBusy = true; await OnAdd.InvokeAsync(userId); searchTerm = ""; searchResults.Clear(); isBusy = false; }
-    private async Task HandleRename() { if (string.IsNullOrWhiteSpace(newGroupName) || newGroupName == GroupName) return; isBusy = true; await OnRename.InvokeAsync(newGroupName); isBusy = false; }
-    private async Task HandleLeave() { if (await JS.InvokeAsync<bool>("confirm", "Are you sure you want to leave this group?")) await OnLeave.InvokeAsync(); }
+    private void EnableEdit()
+    {
+        newGroupName = GroupName;
+        isEditingName = true;
+    }
+    private void OwnerTransferHint()
+    {
+        CloseLeaveModals();
+        Toasts.Info("Owner action", "Select a member and transfer ownership 👑", 3000);
+    }
 
-    private async Task HandleDelete() { if (await JS.InvokeAsync<bool>("confirm", "⚠️ DELETE GROUP? This will remove all messages and members forever.")) await OnDelete.InvokeAsync(); }
+    private async Task OwnerDeleteFromModal()
+    {
+        CloseLeaveModals();
+        await HandleDelete();
+    }
+    private async Task HandleRename()
+    {
+        if (string.IsNullOrWhiteSpace(newGroupName) || newGroupName == GroupName)
+        {
+            isEditingName = false;
+            return;
+        }
+
+        isBusy = true;
+        await OnRename.InvokeAsync(newGroupName);
+        isEditingName = false;
+        isBusy = false;
+    }
+    private void OpenLeaveModal()
+    {
+        if (IsCurrentUserOwner)
+            showOwnerLeaveModal = true;
+        else
+            showLeaveModal = true;
+    }
+
+    private async Task ConfirmLeave()
+    {
+        showLeaveModal = false;
+        await OnLeave.InvokeAsync();
+    }
+
+    private void CloseLeaveModals()
+    {
+        showLeaveModal = false;
+        showOwnerLeaveModal = false;
+    }
+    private void ShowRemoveConfirmation(Guid userId)
+    {
+        _removeCts?.Cancel();
+        _removeCts?.Dispose();
+
+        _memberToRemove = userId;
+        _removeCts = new CancellationTokenSource();
+
+        _ = Task.Delay(5000, _removeCts.Token)
+            .ContinueWith(t =>
+            {
+                if (t.IsCanceled || t.IsFaulted) return;
+
+                if (_memberToRemove == userId)
+                {
+                    _memberToRemove = null;
+                    InvokeAsync(StateHasChanged);
+                }
+            }, TaskScheduler.Default);
+    }
+    private async Task ConfirmTransfer(Guid userId)
+    {
+        await OnTransferOwner.InvokeAsync(userId);
+        _memberToTransfer = null;
+        CloseTransferPopup();
+        StateHasChanged();
+    }
+    private async Task ConfirmRemove(Guid userId)
+    {
+        await OnRemove.InvokeAsync(userId);
+        _memberToRemove = null;
+        _removeCts?.Cancel();
+    }
+
+    private void CloseRemovePopup()
+    {
+        _memberToRemove = null;
+        _removeCts?.Cancel();
+        StateHasChanged();
+    }
+    private void ToggleTransferConfirm(Guid userId)
+{
+    // لو ضغط على نفس الشخص تاني = اقفل
+    if (_memberToTransfer == userId)
+    {
+        CloseTransferPopup();
+        return;
+    }
+
+    _memberToTransfer = userId;
+
+    // ابدأ تايمر يقفل لوحده
+    _transferCts?.Cancel();
+    _transferCts?.Dispose();
+    _transferCts = new CancellationTokenSource();
+
+    _ = Task.Delay(TransferAutoCloseMs, _transferCts.Token)
+        .ContinueWith(t =>
+        {
+            if (t.IsCanceled || t.IsFaulted) return;
+
+            // اقفل فقط لو لسه نفس الشخص مفتوح
+            if (_memberToTransfer == userId)
+            {
+                _memberToTransfer = null;
+                InvokeAsync(StateHasChanged);
+            }
+        }, TaskScheduler.Default);
+}
+
+private void CloseTransferPopup()
+{
+    _memberToTransfer = null;
+    _transferCts?.Cancel();
+    _transferCts?.Dispose();
+    _transferCts = null;
+    StateHasChanged();
+}
+    [JSInvokable]
+    public void OnDocumentClick()
+    {
+        CloseRemovePopup();
+    }
+
+    private async Task HandleBulkAddSuccess()
+    {
+        showInviteModal = false;
+        await OnAdd.InvokeAsync(Guid.Empty);
+        StateHasChanged();
+    }
+
+    // private async Task HandleLeave()
+    // {
+    //     if (await JS.InvokeAsync<bool>("confirm", "Are you sure you want to leave this group?"))
+    //         await OnLeave.InvokeAsync();
+    // }
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrEmpty(newGroupName))
+            newGroupName = GroupName;
+
+        Console.WriteLine($"[MembersDrawer] OnParametersSet - Members count: {Members.Count}");
+        foreach (var u in Members)
+        {
+            Console.WriteLine($"[MembersDrawer] Member {u.DisplayName} - IsAdmin: {u.IsAdmin}");
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleDelete()
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "⚠️ DELETE GROUP? This will remove all messages and members forever."))
+            await OnDelete.InvokeAsync();
+    }
 
     private Task Close() => OnClose.InvokeAsync();
+
+    public void Dispose()
+    {
+        _removeCts?.Cancel();
+        _removeCts?.Dispose();
+        _dotNetRef?.Dispose();
+        _transferCts?.Cancel();
+        _transferCts?.Dispose();
+    }
 }

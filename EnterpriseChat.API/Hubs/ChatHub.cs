@@ -289,7 +289,15 @@ public sealed class ChatHub : Hub
             await Clients.Caller.SendAsync("Pong", DateTime.UtcNow);
         }
     }
+    public async Task AdminPromoted(Guid roomId, Guid userId)
+    {
+        await Clients.Group(roomId.ToString()).SendAsync("AdminPromoted", roomId, userId);
+    }
 
+    public async Task AdminDemoted(Guid roomId, Guid userId)
+    {
+        await Clients.Group(roomId.ToString()).SendAsync("AdminDemoted", roomId, userId);
+    }
     // ✅ دالة للتحقق من صحة الاتصالات
     public async Task CheckUserConnection(Guid userId)
     {
@@ -714,6 +722,11 @@ public sealed class ChatHub : Hub
             Console.WriteLine($"[ChatHub] Error in GetVisibleOnlineUsersForMe: {ex.Message}");
             return allOnline.Where(u => u != me).ToList();
         }
+    }
+
+    public async Task MemberRoleChanged(Guid roomId, Guid userId, bool isAdmin)
+    {
+        await Clients.Group(roomId.ToString()).SendAsync("MemberRoleChanged", roomId, userId, isAdmin);
     }
 
 

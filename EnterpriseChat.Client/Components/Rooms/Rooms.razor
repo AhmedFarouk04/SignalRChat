@@ -209,57 +209,50 @@
     }
 
 
-private async void OnUserBlockedByMeChanged(Guid userId, bool blocked)
+    private async void OnUserBlockedByMeChanged(Guid userId, bool blocked)
     {
-        Console.WriteLine($"[Rooms] OnUserBlockedByMeChanged: userId={userId}, blocked={blocked}");
-
-        // لو فك البلوك (blocked = false)
-        if (!blocked)
+        await InvokeAsync(async () =>
         {
-            try
+            Console.WriteLine($"[Rooms] Block Status Changed: user={userId}, isBlocked={blocked}");
+
+            if (blocked)
             {
-                // نجيب الحالة مباشرة من GetOnlineUsers
-                var onlineUsers = await Realtime.GetOnlineUsersAsync();
-                var isOnline = onlineUsers?.Contains(userId) ?? false;
-
-                // تحديث الحالة في الـ dictionary
-                _onlineStatus[userId] = isOnline;
-
-                if (isOnline)
+                // لو حصل بلوك: فوراً خليه أوفلاين في القائمة
+                _onlineStatus[userId] = false;
+                _lastSeenMap[userId] = DateTime.UtcNow;
+            }
+            else
+            {
+                // لو فك البلوك: دي أهم حتة (اسأل السيرفر فوراً هو فاتح ولا لأ)
+                try
                 {
-                    _lastSeenMap.Remove(userId);
-                    Console.WriteLine($"[Rooms] User {userId} is ONLINE after unblock");
-                }
-                else
-                {
-                    // لو أوفلاين، نجيب آخر ظهور
-                    var status = await Realtime.GetUserOnlineStatus(userId);
-                    if (status != null)
+                    var onlineUsers = await Realtime.GetOnlineUsersAsync();
+                    var isOnline = onlineUsers?.Contains(userId) ?? false;
+                    _onlineStatus[userId] = isOnline;
+
+                    if (isOnline)
                     {
-                        var lastSeen = (DateTime?)status.GetType().GetProperty("LastSeen")?.GetValue(status);
-                        if (lastSeen.HasValue)
-                        {
-                            _lastSeenMap[userId] = lastSeen.Value;
-                            Console.WriteLine($"[Rooms] LastSeen for {userId} after unblock: {lastSeen}");
-                        }
+                        _lastSeenMap.Remove(userId);
+                    }
+                    else
+                    {
+                        // لو مش أونلاين، جيب آخر ظهور عشان الـ UI يتحدث صح
+                        var status = await Realtime.GetUserOnlineStatus(userId);
+                        var lastSeen = (DateTime?)status?.GetType().GetProperty("LastSeen")?.GetValue(status);
+                        if (lastSeen.HasValue) _lastSeenMap[userId] = lastSeen.Value;
                     }
                 }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Rooms] Error refreshing after unblock: {ex.Message}");
+                }
+            }
 
-                await InvokeAsync(StateHasChanged);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Rooms] Error updating status after unblock: {ex.Message}");
-            }
-        }
-        else
-        {
-            // لو بلوك جديد، نخليه أوفلاين
-            _onlineStatus[userId] = false;
-            _lastSeenMap[userId] = DateTime.UtcNow;
-            await InvokeAsync(StateHasChanged);
-        }
+            StateHasChanged(); // إجبار الصفحة على إعادة الرسم فوراً
+        });
     }
+
+
     protected override async Task OnInitializedAsync()
     {
         var userId = await CurrentUser.GetUserIdAsync();
@@ -456,7 +449,7 @@ private async void OnUserBlockedByMeChanged(Guid userId, bool blocked)
         Realtime.TypingStopped += OnTypingStopped;
         Realtime.RoomUpdated += OnRoomUpdated;
         Realtime.UserBlockedByMeChanged += OnUserBlockedByMeChanged;
-        Realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
+        Realtime.UserBlockedMeChanged += OnUserBlockedByMeChanged; //        Realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
         Realtime.MessageReceiptStatsUpdated += OnMessageReceiptStatsUpdated;
         Realtime.Disconnected += OnRealtimeDisconnected;
         Realtime.Reconnected += OnRealtimeReconnected;
@@ -621,6 +614,12 @@ private async void OnUserOnline(Guid userId)
 
     private void OnRoomUpdated(RoomUpdatedModel upd)
     {
+        // ✅ تحقق من حالة الحظر قبل طلب تحديث الشاشة
+        if (Flags.GetBlocked(upd.SenderId))
+        {
+            return;
+        }
+
         _ = InvokeAsync(StateHasChanged);
     }
 

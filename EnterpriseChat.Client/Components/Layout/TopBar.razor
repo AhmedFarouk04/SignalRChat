@@ -78,7 +78,7 @@
                         }
                         else
                         {
-                            <span>@MembersCount members</span>
+                            <span>@(VM?.GroupMembers?.Members?.Count ?? MembersCount) members</span>
                             <span>•</span>
                             <span>@(CurrentOnlineCount) online</span>
                         }
@@ -111,17 +111,27 @@
                         <span class="pin-icon-small">📌</span>
                         @if (VM.PinnedMessages.Count > 1)
                         {
-                            <span class="pin-count-text">@VM.PinnedMessages.Count</span>
+                            <span class="pin-count-text">@(_displayIndex + 1)/@VM.PinnedMessages.Count</span>
                         }
                     </div>
                     <div class="pin-preview-text">
                         <span style="color: var(--accent-main); font-weight: bold;">Pinned: </span>
                         @currentPinned.Content
                     </div>
-                    <button class="icon-btn" style="font-size: 10px;" @onclick:stopPropagation="true"
-                            @onclick="() => OnScrollToMessage.InvokeAsync(currentPinned.Id)">
-                        ➡️
-                    </button>
+                    <div style="display:flex; gap:4px; align-items:center;">
+                        <button class="icon-btn" style="font-size: 10px;"
+                                title="Go to message"
+                                @onclick:stopPropagation="true"
+                                @onclick="() => OnScrollToMessage.InvokeAsync(currentPinned.Id)">
+                            ➡️
+                        </button>
+                        <button class="icon-btn" style="font-size: 10px; color: #ff6b6b;"
+                                title="Unpin"
+                                @onclick:stopPropagation="true"
+                                @onclick="() => HandleUnpin(currentPinned.Id)">
+                            ✕
+                        </button>
+                    </div>
                 </div>
             }
         }
@@ -147,7 +157,11 @@
     private int _displayIndex = 0;
     private Guid _currentUserId;
     private int CurrentOnlineCount => VM?.OnlineUsers?.Count ?? OnlineCount;
-
+    private async Task HandleUnpin(Guid messageId)
+    {
+        if (VM != null)
+            await VM.UnpinMessageAsync(messageId);
+    }
     protected override async Task OnInitializedAsync()
     {
         var userId = await CurrentUser.GetUserIdAsync();
@@ -163,6 +177,11 @@
         {
             VM.Changed += OnViewModelChanged;
         }
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        // ✅ كل ما الـ Parent بيبعت parameters جديدة، force re-render
+        await InvokeAsync(StateHasChanged);
     }
     private void OnBlockedByMe(Guid userId, bool blocked)
     {
@@ -224,9 +243,9 @@
     {
         if (Room?.Id == roomId && !IsPrivate)
         {
-            OnlineCount = count; // تحديث القيمة
-            InvokeAsync(StateHasChanged); // إعادة الرسم
-            Console.WriteLine($"[TopBar] Updated online count for room {roomId}: {count}");
+            // تحديث القيمة التي يقرأ منها الـ HTML (CurrentOnlineCount)
+            OnlineCount = count;
+            InvokeAsync(StateHasChanged);
         }
     }
 

@@ -33,65 +33,56 @@ public sealed class CreateGroupChatHandler : IRequestHandler<CreateGroupChatComm
 
     public async Task<ChatRoom> Handle(CreateGroupChatCommand command, CancellationToken ct)
     {
-        // 1. Validation على اسم الجروب (مشابه لواتساب)
+        if (command.CreatorId.Value == Guid.Empty)
+            throw new ArgumentException("Creator ID cannot be empty.");
+
         var trimmedName = command.Name?.Trim();
         if (string.IsNullOrWhiteSpace(trimmedName))
-        {
             throw new ArgumentException("Group name cannot be empty or whitespace.");
-        }
-
         if (trimmedName.Length < 3)
-        {
             throw new ArgumentException("Group name must be at least 3 characters long.");
-        }
-
         if (trimmedName.Length > 50)
-        {
             throw new ArgumentException("Group name cannot exceed 50 characters.");
-        }
 
-        // 2. Validation على الأعضاء
+        // ✅ فلترة قوية جدًا + رسالة واضحة
         var validMembers = command.Members
-            .Where(m => m != Guid.Empty && m != command.CreatorId.Value) // استبعاد الـ creator نفسه
+            .Where(m => m != Guid.Empty && m != command.CreatorId.Value)
             .Distinct()
             .ToList();
 
         if (!validMembers.Any())
-        {
-            throw new ArgumentException("Group must have at least one member besides the creator.");
-        }
+            throw new ArgumentException("You must select at least one other member to create a group.");
 
-        // 3. إنشاء الجروب
         var room = ChatRoom.CreateGroup(trimmedName, command.CreatorId, validMembers);
+
         await _repository.AddAsync(room, ct);
         await _unitOfWork.CommitAsync(ct);
 
-        // 4. إنشاء رسالة نظام "Group created"
         var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
         var creatorName = await _users.GetDisplayNameAsync(command.CreatorId.Value, ct) ?? "Someone";
 
-        var sysMsg = new Message(
+        var systemText = $"{creatorName} created the group \"{trimmedName}\"";
+
+        var sysMsg = Message.CreateSystemMessage(
             room.Id,
-            command.CreatorId,
-            $"{creatorName} created the group \"{trimmedName}\"",
+            systemText,
+            SystemMessageType.GroupCreated,
             recipients);
 
         await _messages.AddAsync(sysMsg, ct);
         await _unitOfWork.CommitAsync(ct);
 
-        // 5. تحويل الرسالة لـ DTO وبثها
         var msgDto = new MessageDto
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = command.CreatorId.Value,
+            SenderId = Guid.Empty,  // System ID
             Content = sysMsg.Content,
-            CreatedAt = sysMsg.CreatedAt
+            CreatedAt = sysMsg.CreatedAt,
+            IsSystemMessage = true
         };
-
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        // 6. إشعار تحديث الروم للجميع
         await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
         {
             RoomId = room.Id.Value,
@@ -102,7 +93,6 @@ public sealed class CreateGroupChatHandler : IRequestHandler<CreateGroupChatComm
             UnreadDelta = 0
         }, recipients);
 
-        // 7. إضافة الجروب لقايمة الرومات عند الجميع
         var now = DateTime.UtcNow;
         var dto = new RoomListItemDto
         {
@@ -111,10 +101,10 @@ public sealed class CreateGroupChatHandler : IRequestHandler<CreateGroupChatComm
             Type = room.Type.ToString(),
             UnreadCount = 0,
             IsMuted = false,
-            LastMessageAt = now,
-            LastMessagePreview = null,
-            LastMessageId = null,
-            LastMessageSenderId = null,
+            LastMessageAt = sysMsg.CreatedAt,
+            LastMessagePreview = null,  // ✅ من غير Preview
+            LastMessageId = sysMsg.Id.Value,
+            LastMessageSenderId = Guid.Empty,  // ✅ System ID
             LastMessageStatus = null
         };
 

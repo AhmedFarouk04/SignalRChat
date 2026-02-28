@@ -9,4 +9,5 @@ public sealed class UserModel
 
     public bool IsOnline { get; set; }
     public DateTime? LastSeen { get; set; }
+    public bool IsAdmin { get; set; } = false;
 }

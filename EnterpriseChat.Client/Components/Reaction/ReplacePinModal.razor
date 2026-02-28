@@ -1,0 +1,19 @@
+﻿@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="OnCancel">
+        <div class="modal-box" @onclick:stopPropagation="true">
+            <div class="modal-title">Replace oldest pin?</div>
+            <div class="modal-subtitle">Your new pin will replace the oldest one.</div>
+            <div class="modal-actions">
+                <button class="btn-cancel" @onclick="OnCancel">Cancel</button>
+                <button class="btn-confirm" @onclick="OnContinue">Continue</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnContinue { get; set; }
+}

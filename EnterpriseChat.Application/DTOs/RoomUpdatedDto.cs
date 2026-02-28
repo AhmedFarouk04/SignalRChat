@@ -15,4 +15,6 @@ public sealed class RoomUpdatedDto
 
     public bool IsReply { get; set; }
     public Guid? ReplyToMessageId { get; set; }
+    public bool IsSystemMessage { get; set; } // 👈 أضف هذا
+
 }

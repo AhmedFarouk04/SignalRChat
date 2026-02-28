@@ -12,6 +12,7 @@ namespace EnterpriseChat.Application.DTOs
         public Guid UserId { get; set; }
         public string DisplayName { get; set; } = "";
         public ReactionType Type { get; set; }
+        public DateTime CreatedAt { get; set; }  // ✨ أضفنا ده
         public bool IsMe { get; set; }
     }
 }

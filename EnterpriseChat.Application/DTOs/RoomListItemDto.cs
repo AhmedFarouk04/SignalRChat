@@ -9,7 +9,7 @@ public sealed class RoomListItemDto
 
     public Guid? OtherUserId { get; init; }
     public string? OtherDisplayName { get; init; }
-
+    public string? LastReactionPreview { get; set; }
     public int UnreadCount { get; init; }
     public bool IsMuted { get; init; }
 

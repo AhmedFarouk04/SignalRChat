@@ -16,6 +16,7 @@ public sealed class ChatDbContext : DbContext
     public DbSet<ChatUser> Users => Set<ChatUser>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Reaction> Reactions => Set<Reaction>();
+    public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
 
     public ChatDbContext(DbContextOptions<ChatDbContext> options)
         : base(options)
@@ -79,20 +80,7 @@ public sealed class ChatDbContext : DbContext
                 .Metadata.SetValueComparer(messageIdComparer);
         });
 
-        modelBuilder.Entity<ChatRoom>(entity =>
-        {
-            entity.Property(e => e.Id)
-                .HasConversion(
-                    v => v.Value,
-                    v => new RoomId(v))
-                .Metadata.SetValueComparer(roomIdComparer);
-
-            entity.Property(e => e.OwnerId)
-                .HasConversion(
-                    v => v!.Value,
-                    v => new UserId(v))
-                .Metadata.SetValueComparer(userIdComparer);
-        });
+      
 
         // ✅ ChatRoomMember - التعديل النهائي مع Shadow Property Nullable
         modelBuilder.Entity<ChatRoomMember>(entity =>
@@ -168,5 +156,75 @@ public sealed class ChatDbContext : DbContext
         modelBuilder.Entity<Message>()
             .HasIndex(m => m.Content)
             .HasDatabaseName("IX_Message_Content");
+
+
+        // ✅ Reaction Configuration - ده اللي ناقص وبيسبب مشكلة الـ Include
+        modelBuilder.Entity<Reaction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasConversion(
+                    v => v.Value,
+                    v => new ReactionId(v)); // ← دلوقتي هيشتغل بعد ما constructor بقى public
+
+            entity.Property(e => e.MessageId)
+                .HasConversion(
+                    v => v.Value,
+                    v => new MessageId(v))
+                .Metadata.SetValueComparer(messageIdComparer);
+
+            entity.Property(e => e.UserId)
+                .HasConversion(
+                    v => v.Value,
+                    v => new UserId(v))
+                .Metadata.SetValueComparer(userIdComparer);
+
+            entity.Property(e => e.Type)
+                .HasConversion<int>();
+
+            entity.HasOne<Message>()
+                .WithMany(m => m.Reactions)
+                .HasForeignKey(r => r.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(r => new { r.MessageId, r.UserId })
+                .IsUnique();
+        });
+
+        // ✅ PinnedMessage Configuration
+        modelBuilder.Entity<PinnedMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.RoomId)
+                .HasConversion(
+                    v => v.Value,
+                    v => new RoomId(v))
+                .Metadata.SetValueComparer(roomIdComparer);
+
+            entity.Property(e => e.MessageId)
+                .HasConversion(
+                    v => v.Value,
+                    v => new MessageId(v))
+                .Metadata.SetValueComparer(messageIdComparer);
+
+            entity.Property(e => e.PinnedByUserId)
+                .HasConversion(
+                    v => v.Value,
+                    v => new UserId(v))
+                .Metadata.SetValueComparer(userIdComparer);
+
+            
+
+            entity.HasOne<Message>()
+                .WithMany()
+                .HasForeignKey(e => e.MessageId)
+                .HasPrincipalKey(m => m.Id)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(e => new { e.RoomId, e.MessageId }).IsUnique();
+            entity.HasIndex(e => e.PinnedAt);
+        });
     }
 }

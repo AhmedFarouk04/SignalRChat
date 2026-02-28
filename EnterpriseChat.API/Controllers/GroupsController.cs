@@ -6,6 +6,7 @@ using EnterpriseChat.Domain.ValueObjects;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace EnterpriseChat.API.Controllers;
 
@@ -41,7 +42,7 @@ public sealed class GroupsController : BaseController
         if (request.Members == null || request.Members.Count == 0)
             return BadRequest("At least one member is required.");
 
-        var creatorId = GetCurrentUserId();
+        var creatorId = GetSafeCurrentUserId();
 
         var members = request.Members
       .Where(x => x != Guid.Empty && x != creatorId.Value)  // فلتر empty + duplicate creator
@@ -77,24 +78,28 @@ public sealed class GroupsController : BaseController
     [HttpPost("{roomId}/members/{userId}")]
     public async Task<IActionResult> AddMember(Guid roomId, Guid userId, CancellationToken ct)
     {
-        await _mediator.Send(new AddMemberToGroupCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
+        await _mediator.Send(new AddMemberToGroupCommand(
+            new RoomId(roomId),
+            new UserId(userId),
+            GetSafeCurrentUserId()), ct);
 
-       
         return NoContent();
     }
 
     [HttpDelete("{roomId}/members/{userId}")]
     public async Task<IActionResult> RemoveMember(Guid roomId, Guid userId, CancellationToken ct)
     {
-        await _mediator.Send(new RemoveMemberFromGroupCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
+        await _mediator.Send(new RemoveMemberFromGroupCommand(
+            new RoomId(roomId),
+            new UserId(userId),
+            GetSafeCurrentUserId()), ct);
 
-       
         return NoContent();
     }
     [HttpDelete("{roomId:guid}/leave")]
     public async Task<IActionResult> Leave(Guid roomId, CancellationToken ct)
     {
-        var requesterId = GetCurrentUserId();
+        var requesterId = GetSafeCurrentUserId();
 
         await _mediator.Send(new LeaveGroupCommand(new RoomId(roomId), requesterId), ct);
 
@@ -186,6 +191,42 @@ public sealed class GroupsController : BaseController
                 new RoomId(roomId),
                 GetCurrentUserId()),
             ct));
+    }
+
+    // POST api/groups/{roomId}/members/bulk
+    [HttpPost("{roomId}/members/bulk")]
+    public async Task<IActionResult> AddMembersBulk(Guid roomId, [FromBody] List<Guid> userIds, CancellationToken ct)
+    {
+        if (userIds == null || !userIds.Any())
+            return BadRequest("User IDs list cannot be empty.");
+
+        var memberIds = userIds
+            .Where(id => id != Guid.Empty)
+            .Select(id => new UserId(id))
+            .ToList();
+
+        await _mediator.Send(new AddMembersToGroupBulkCommand(
+            new RoomId(roomId),
+            memberIds,
+            GetCurrentUserId()), ct);
+
+        return NoContent();
+    }
+    private UserId GetSafeCurrentUserId()
+    {
+        // جرب أكتر من Claim شائع في JWT
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                       ?? User.FindFirst("sub")?.Value
+                       ?? User.FindFirst("UserId")?.Value;
+
+        if (string.IsNullOrEmpty(userIdClaim)
+            || !Guid.TryParse(userIdClaim, out var userGuid)
+            || userGuid == Guid.Empty)
+        {
+            throw new UnauthorizedAccessException("User ID cannot be empty. Please login again.");
+        }
+
+        return new UserId(userGuid);   // أو UserId.From(userGuid) حسب كودك
     }
 
 }

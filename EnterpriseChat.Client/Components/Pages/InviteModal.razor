@@ -1,0 +1,218 @@
+﻿@using EnterpriseChat.Client.Models
+@using EnterpriseChat.Client.Services.Http
+@using EnterpriseChat.Client.Services.Ui
+@inject UsersApi UsersApi
+@inject GroupsApi GroupsApi
+@inject ToastService Toasts
+
+@if (IsOpen)
+{
+    <div class="im-overlay" @onclick="Close">
+        <div class="im-container" @onclick:stopPropagation="true">
+
+            <div class="im-header">
+                <div class="im-header-left">
+                    <div class="im-header-icon">👥</div>
+                    <div class="im-header-info">
+                        <h3>Add Members</h3>
+                        <p>Invite people to <strong>@GroupName</strong></p>
+                    </div>
+                </div>
+                <button class="im-close-btn" @onclick="Close">✕</button>
+            </div>
+
+            <div class="im-body">
+
+                <span class="im-field-label">Selected</span>
+                <div class="im-chips-box @(selectedUsers.Any() ? "" : "empty")">
+                    @if (selectedUsers.Any())
+                    {
+                        @foreach (var user in selectedUsers)
+                        {
+                            var initial = user.DisplayName?.Length > 0 ? user.DisplayName[0].ToString().ToUpper() : "?";
+                            <div class="im-chip">
+                                <div class="im-chip-av">@initial</div>
+                                <span class="im-chip-name">@user.DisplayName</span>
+                                <button class="im-chip-del" @onclick="() => ToggleUser(user)" type="button">✕</button>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <span class="im-chips-placeholder">No users selected yet…</span>
+                    }
+                </div>
+
+                <div class="im-search-wrap">
+                    <span class="im-search-ico">🔍</span>
+                    <input class="im-search-input"
+                           type="text"
+                           placeholder="Search by name or email…"
+                           @bind="searchTerm"
+                           @bind:event="oninput"
+                           @onkeyup="HandleSearch" />
+                    @if (isSearching)
+                    {
+                        <div class="im-spinner"></div>
+                    }
+                </div>
+
+                <div class="im-results">
+                    @if (searchResults.Any())
+                    {
+                        @foreach (var user in searchResults)
+                        {
+                            var isSelected = selectedUsers.Any(u => u.Id == user.Id);
+                            var initial = user.DisplayName?.Length > 0 ? user.DisplayName[0].ToString().ToUpper() : "?";
+                            var avatarColor = GetAvatarColor(user.DisplayName);
+                            <div class="im-result-row @(isSelected ? "selected" : "")"
+                                 @onclick="() => ToggleUser(user)">
+                                <div class="im-result-av @avatarColor">@initial</div>
+                                <div class="im-result-info">
+                                    <div class="im-result-name">@user.DisplayName</div>
+                                    <div class="im-result-sub">@user.Email</div>
+                                </div>
+                                <div class="im-result-check">✓</div>
+                            </div>
+                        }
+                    }
+                    else if (!string.IsNullOrWhiteSpace(searchTerm) && !isSearching)
+                    {
+                        <div class="im-empty">
+                            <div class="im-empty-icon">🔎</div>
+                            <p>No results found for "@searchTerm"</p>
+                        </div>
+                    }
+                    else if (string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        <div class="im-empty">
+                            <div class="im-empty-icon">✨</div>
+                            <p>Start typing to search for people</p>
+                        </div>
+                    }
+                </div>
+
+            </div>
+
+            <div class="im-footer">
+                <span class="im-footer-info">
+                    @if (selectedUsers.Any())
+                    {
+                        <strong>@selectedUsers.Count</strong>
+                        <span> @(selectedUsers.Count == 1 ? "member" : "members") selected</span>
+                    }
+                </span>
+                <div class="im-footer-btns">
+                    <button class="im-btn-cancel" @onclick="Close" type="button">Cancel</button>
+                    <button class="im-btn-add"
+                            disabled="@(!selectedUsers.Any() || isBusy)"
+                            @onclick="HandleAddMembers"
+                            type="button">
+                        @if (isBusy)
+                        {
+                            <span class="im-btn-spinner"></span>
+                            <span>Adding…</span>
+                        }
+                        else
+                        {
+                            <span>Add @(selectedUsers.Any() ? selectedUsers.Count.ToString() : "") @(selectedUsers.Count == 1 ? "Member" : "Members")</span>
+                            @if (selectedUsers.Any())
+                            {
+                                <span class="im-btn-badge">@selectedUsers.Count</span>
+                            }
+                        }
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid RoomId { get; set; }
+    [Parameter] public string GroupName { get; set; } = "";
+    [Parameter] public Guid CurrentUserId { get; set; }
+    [Parameter] public IReadOnlyList<UserModel> ExistingMembers { get; set; } = [];
+    [Parameter] public EventCallback OnSuccess { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string searchTerm = "";
+    private List<UserModel> searchResults = new();
+    private List<UserModel> selectedUsers = new();
+    private bool isSearching = false;
+    private bool isBusy = false;
+    private CancellationTokenSource? _cts;
+
+    private static readonly string[] AvatarColors =
+        ["av-purple", "av-blue", "av-teal", "av-pink", "av-amber", "av-green"];
+
+    private string GetAvatarColor(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return AvatarColors[0];
+        return AvatarColors[Math.Abs(name.GetHashCode()) % AvatarColors.Length];
+    }
+
+    private async Task HandleSearch()
+    {
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+
+        if (searchTerm.Length < 2) { searchResults.Clear(); StateHasChanged(); return; }
+
+        try
+        {
+            isSearching = true;
+            StateHasChanged();
+            await Task.Delay(300, _cts.Token);
+            var results = await UsersApi.SearchAsync(searchTerm, CurrentUserId, 15, _cts.Token);
+
+            var existingIds = ExistingMembers.Select(m => m.Id).ToHashSet();
+            searchResults = results
+                .Where(r => !existingIds.Contains(r.Id))
+                .Select(r => new UserModel { Id = r.Id, DisplayName = r.DisplayName, Email = r.Email })
+                .ToList();
+        }
+        catch (TaskCanceledException) { }
+        catch { }
+        finally { isSearching = false; StateHasChanged(); }
+    }
+
+    private void ToggleUser(UserModel user)
+    {
+        if (selectedUsers.Any(u => u.Id == user.Id))
+            selectedUsers.RemoveAll(u => u.Id == user.Id);
+        else
+            selectedUsers.Add(user);
+        StateHasChanged();
+    }
+
+    private async Task HandleAddMembers()
+    {
+        if (!selectedUsers.Any()) return;
+        isBusy = true;
+        StateHasChanged();
+        try
+        {
+            var ids = selectedUsers.Select(u => u.Id).ToList();
+            await GroupsApi.AddMembersBulkAsync(RoomId, ids);
+            Toasts.Success("Success", $"{selectedUsers.Count} members added.");
+            await OnSuccess.InvokeAsync();
+            Close();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error("Error", "Failed to add members: " + ex.Message);
+        }
+        finally { isBusy = false; StateHasChanged(); }
+    }
+
+    private void Close()
+    {
+        searchTerm = "";
+        searchResults.Clear();
+        selectedUsers.Clear();
+        OnClose.InvokeAsync();
+    }
+}

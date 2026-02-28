@@ -19,4 +19,7 @@ public sealed class RoomListItemModel
     public string? LastMessagePreview { get; set; }
     public Guid? LastMessageId { get; set; }
     public Dictionary<Guid, string> MemberNames { get; init; } = new();
+
+    public string? LastReactionPreview { get; set; }  // مثال: "Ahmed reacted ❤️ to your message"
+    public Guid? LastReactionMessageSenderId { get; set; } // صاحب الرسالة اللي اتعمل عليها reaction
 }

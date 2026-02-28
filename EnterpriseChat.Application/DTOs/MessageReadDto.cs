@@ -21,5 +21,16 @@ public sealed class MessageReadDto
     public int DeliveredCount { get; init; }
     public int ReadCount { get; init; }
     public int TotalRecipients { get; init; }
+    public MessageReactionsDto? Reactions { get; init; }
+
+    public bool IsEdited { get; init; }
+    public bool IsDeleted { get; init; }
+    public Guid? ReplyToMessageId { get; init; }
+    public ReplyInfoDto? ReplyInfo { get; init; }
+    public bool IsSystem { get; init; }
+    public string? Type { get; init; }
+
+
+
 
 }

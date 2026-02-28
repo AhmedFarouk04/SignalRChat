@@ -86,4 +86,6 @@ public static class ApiEndpoints
 
     public static string UserSearch(string query, int take, Guid excludeUserId)  // ✅ تعديل
         => $"api/users/search?query={Uri.EscapeDataString(query)}&take={take}&excludeUserId={excludeUserId}";
+
+    public static string AddGroupMembersBulk(Guid roomId) => $"api/groups/{roomId}/members/bulk";
 }

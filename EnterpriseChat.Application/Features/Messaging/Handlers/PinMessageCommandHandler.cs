@@ -18,16 +18,26 @@ public sealed class PinMessageCommandHandler : IRequestHandler<PinMessageCommand
 
     public async Task<Unit> Handle(PinMessageCommand request, CancellationToken ct)
     {
-        var room = await _roomRepo.GetByIdAsync(request.RoomId, ct)
+        var room = await _roomRepo.GetByIdWithPinsAsync(request.RoomId, ct)
                    ?? throw new Exception("Room not found");
 
-        // تحديث الغرفة بالرسالة المثبتة
-        // السطر رقم 25 في الـ Handler الخاص بك يجب أن يكون هكذا:
-        room.PinMessage(request.MessageId?.Value, request.Duration);
+        if (request.MessageId == null)
+        {
+            if (request.UnpinMessageId.HasValue)
+                room.UnpinMessage(request.UnpinMessageId.Value);
+            else
+                room.UnpinAll();
+        }
+        else
+        {
+            room.PinMessage(request.MessageId.Value, request.Duration, request.PinnedBy);
+        }
+
         await _unitOfWork.CommitAsync(ct);
 
-        // إرسال الإشارة عبر SignalR للجميع في الغرفة
-        await _broadcaster.NotifyMessagePinned(request.RoomId.Value, request.MessageId?.Value);
+        // ✅ الفرق: Pin → ابعت الـ ID | Unpin (أي نوع) → ابعت null دايماً
+        var broadcastId = request.MessageId != null ? request.MessageId.Value : (Guid?)null; 
+        await _broadcaster.NotifyMessagePinned(request.RoomId.Value, broadcastId);
 
         return Unit.Value;
     }

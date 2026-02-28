@@ -12,18 +12,15 @@ public class MessageDto
     public DateTime CreatedAt { get; set; }
     public MessageStatus Status { get; set; }
     public MessageReactionsDto? Reactions { get; set; }
-
-    // ✅ أضف هذه الخصائص للـ Delivery Tracking:
     public int ReadCount { get; set; }
     public int DeliveredCount { get; set; }
     public int TotalRecipients { get; set; }
-
-    // ✅ أضف خصائص الردود:
     public ReplyInfoDto? ReplyInfo { get; set; }
     public Guid? ReplyToMessageId { get; set; }
-
-    // ✅ أضف خصائص Edit/Delete:
     public bool IsEdited { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime? UpdatedAt { get; set; }
+
+    // ✅ جديد: للرسائل النظامية
+    public bool IsSystemMessage { get; set; } = false;
 }

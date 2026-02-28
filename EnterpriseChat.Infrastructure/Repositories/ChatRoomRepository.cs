@@ -34,28 +34,14 @@ public sealed class ChatRoomRepository : IChatRoomRepository
             await _context.SaveChangesAsync(ct);
         }
     }
+    // في ChatRoomRepository.cs
+   
     public Task AddAsync(ChatRoom room, CancellationToken cancellationToken = default)
         => _context.ChatRooms.AddAsync(room, cancellationToken).AsTask();
 
-    public async Task<ChatRoom?> GetByIdAsync(RoomId roomId, CancellationToken cancellationToken = default)
-    {
-        return await _context.ChatRooms
-            .Include(r => r.Members)
-            .FirstOrDefaultAsync(r => r.Id == roomId.Value, cancellationToken);
-    }
+  
 
-    public async Task<ChatRoom?> GetByIdWithMembersAsync(RoomId roomId, CancellationToken cancellationToken = default)
-    {
-        return await _context.ChatRooms
-            .Include(r => r.Members)
-            .FirstOrDefaultAsync(r => r.Id == roomId.Value, cancellationToken);
-    }
-
-    public async Task<bool> ExistsAsync(RoomId roomId, CancellationToken cancellationToken = default)
-    {
-        return await _context.ChatRooms
-            .AnyAsync(r => r.Id == roomId.Value, cancellationToken);
-    }
+   
 
     public async Task<ChatRoom?> FindPrivateRoomAsync(UserId a, UserId b, CancellationToken ct = default)
     {
@@ -81,5 +67,43 @@ public sealed class ChatRoomRepository : IChatRoomRepository
     {
         _context.ChatRooms.Remove(room);
         return Task.CompletedTask;
+    }
+
+
+
+
+
+
+
+
+    // GetByIdWithPinsAsync
+    public async Task<ChatRoom?> GetByIdWithPinsAsync(RoomId roomId, CancellationToken ct = default)
+    {
+        return await _context.ChatRooms
+            .Include(r => r.PinnedMessages)
+            .FirstOrDefaultAsync(r => r.Id == roomId, ct);   // ← بدون .Value
+    }
+
+    // GetByIdAsync
+    public async Task<ChatRoom?> GetByIdAsync(RoomId roomId, CancellationToken cancellationToken = default)
+    {
+        return await _context.ChatRooms
+            .Include(r => r.Members)
+            .FirstOrDefaultAsync(r => r.Id == roomId, cancellationToken);
+    }
+
+    // GetByIdWithMembersAsync
+    public async Task<ChatRoom?> GetByIdWithMembersAsync(RoomId roomId, CancellationToken cancellationToken = default)
+    {
+        return await _context.ChatRooms
+            .Include(r => r.Members)
+            .FirstOrDefaultAsync(r => r.Id == roomId, cancellationToken);
+    }
+
+    // ExistsAsync
+    public async Task<bool> ExistsAsync(RoomId roomId, CancellationToken cancellationToken = default)
+    {
+        return await _context.ChatRooms
+            .AnyAsync(r => r.Id == roomId, cancellationToken);
     }
 }

@@ -43,12 +43,30 @@ public sealed class ChatService : IChatService
             DeliveredCount = m.DeliveredCount,
             ReadCount = m.ReadCount,
             TotalRecipients = m.TotalRecipients,
-            // استخدم PersonalStatus (اللي راجع من الـ backend دلوقتي)
             PersonalStatus = (ClientMessageStatus)(int)m.PersonalStatus,
-
-            // لو عايز fallback للـ Status القديم (اختياري)
-            // Status = (ClientMessageStatus)(int)(m.Status ?? DomainMessageStatus.Sent),
-
+            IsEdited = m.IsEdited,
+            IsDeleted = m.IsDeleted,
+            ReplyToMessageId = m.ReplyToMessageId,
+            ReplyInfo = m.ReplyInfo == null ? null : new ReplyInfoModel
+            {
+                MessageId = m.ReplyInfo.MessageId,
+                SenderId = m.ReplyInfo.SenderId,
+                SenderName = m.ReplyInfo.SenderName,
+                ContentPreview = m.ReplyInfo.ContentPreview,
+                CreatedAt = m.ReplyInfo.CreatedAt,
+                IsDeleted = m.ReplyInfo.IsDeleted
+            },
+            IsSystem = m.IsSystem,
+            Type = m.Type,
+            Reactions = m.Reactions == null || (!m.Reactions.Counts?.Any() ?? true)
+    ? null
+    : new MessageReactionsModel
+    {
+        MessageId = m.Reactions.MessageId,
+        Counts = m.Reactions.Counts ?? new Dictionary<ReactionType, int>(),
+        CurrentUserReactionType = m.Reactions.CurrentUserReactionType,
+        CurrentUserReaction = m.Reactions.CurrentUserReaction
+    },
             Receipts = (m.Receipts ?? new()).Select(r => new MessageReceiptModel
             {
                 UserId = r.UserId,
@@ -151,43 +169,41 @@ public sealed class ChatService : IChatService
             ct);
     }
 
-    public async Task PinMessageAsync(Guid roomId, Guid? messageId)
-    {
-        var json = JsonSerializer.Serialize(new { MessageId = messageId });
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        await _api.SendAsync(HttpMethod.Post, $"api/rooms/{roomId}/pin", content);
-    }
+    
 
     public async Task<MessageReactionsModel?> GetMessageReactionsAsync(Guid messageId, CancellationToken ct = default)
     {
         return await _api.GetAsync<MessageReactionsModel>($"/api/chat/messages/{messageId}/reactions", ct);
     }
 
-    public async Task<MessageDto?> SendMessageWithReplyAsync(
-         Guid roomId,
-         string content,
-         ReplyInfoModel? replyInfo)
+    public async Task<MessageDto?> SendMessageWithReplyAsync(Guid roomId, string content, ReplyInfoModel? replyInfo)
     {
         var request = new
         {
             RoomId = roomId,
             Content = content,
-            ReplyToMessageId = replyInfo?.MessageId,
-            ReplyInfo = replyInfo
+            ReplyToMessageId = replyInfo?.MessageId  // ✅ السيرفر بيبني ReplyInfo من الـ DB
         };
-        return await _api.PostAsync<object, MessageDto>(
-            ApiEndpoints.SendMessage,
-            request);
+        return await _api.PostAsync<object, MessageDto>(ApiEndpoints.SendMessage, request);
     }
 
-    public async Task PinMessageAsync(Guid roomId, Guid? messageId, string? duration = null)
+    public async Task PinMessageAsync(Guid roomId, Guid? messageId, string? duration = null, Guid? unpinMessageId = null)
     {
-        var payload = new { MessageId = messageId, Duration = duration };
-        var json = JsonSerializer.Serialize(payload);
+        var json = JsonSerializer.Serialize(new
+        {
+            MessageId = messageId,
+            Duration = duration,
+            UnpinMessageId = unpinMessageId
+        });
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         await _api.SendAsync(HttpMethod.Post, $"api/rooms/{roomId}/pin", content);
     }
 
+    public async Task<List<Guid>> GetPinnedMessagesAsync(Guid roomId)
+    {
+        var result = await _api.GetAsync<List<Guid>>($"api/rooms/{roomId}/pins");
+        return result ?? new List<Guid>();
+    }
     public async Task<IReadOnlyList<MessageModel>> SearchMessagesAsync(Guid roomId, string term, int take = 50)
     {
         if (string.IsNullOrWhiteSpace(term)) return [];
