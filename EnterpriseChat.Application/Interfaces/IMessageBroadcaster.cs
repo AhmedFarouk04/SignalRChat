@@ -22,6 +22,8 @@ public interface IMessageBroadcaster
 
     // ✅ NEW: remove room from someone’s rooms list
     Task RemovedFromRoomAsync(RoomId roomId, UserId userId);
+    Task BroadcastToRoomGroupAsync(Guid roomId, MessageDto message);
+
     Task RemovedFromRoomAsync(RoomId roomId, IEnumerable<UserId> users);
 
     // ✅ NEW: group deleted

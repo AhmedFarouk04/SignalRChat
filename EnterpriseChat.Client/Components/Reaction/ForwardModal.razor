@@ -65,14 +65,33 @@
 @code {
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
-
     private string searchTerm = "";
     private List<Guid> selectedRoomIds = new();
+    private List<RoomListItemModel> _rooms = new(); // ✅ local list
 
     private IEnumerable<RoomListItemModel> FilteredRooms =>
-        RoomsVM.Rooms.Where(r => string.IsNullOrEmpty(searchTerm) ||
-                                r.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-                     .Take(15); // زودنا العدد شوية
+        _rooms.Where(r => string.IsNullOrEmpty(searchTerm) ||
+                         (r.Name?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+              .Take(15);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // ✅ كل ما الـ Modal يفتح، جيب الـ Rooms
+        if (IsOpen)
+        {
+            // لو RoomsVM فيه data خدها
+            if (RoomsVM.Rooms.Any())
+            {
+                _rooms = RoomsVM.Rooms.ToList();
+            }
+            else
+            {
+                // لو فاضية، حمّل من API
+                await RoomsVM.LoadAsync();
+                _rooms = RoomsVM.Rooms.ToList();
+            }
+        }
+    }
 
     private void ToggleTarget(Guid roomId)
     {

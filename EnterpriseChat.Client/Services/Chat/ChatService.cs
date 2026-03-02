@@ -226,6 +226,12 @@ public sealed class ChatService : IChatService
 
     public async Task ForwardMessagesAsync(ForwardMessagesRequest request)
     {
-        await _api.PostAsync<ForwardMessagesRequest, object>("api/chat/messages/forward", request);
+        var json = JsonSerializer.Serialize(new
+        {
+            MessageIds = request.MessageIds,
+            TargetRoomIds = request.TargetRoomIds
+        });
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        await _api.SendAsync(HttpMethod.Post, "api/chat/messages/forward", content);
     }
 }

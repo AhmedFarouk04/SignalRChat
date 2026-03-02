@@ -33,7 +33,6 @@ namespace EnterpriseChat.Application.Features.Messaging.Handlers
 
         public async Task<bool> Handle(ForwardMessagesCommand command, CancellationToken ct)
         {
-            // 1. جلب الرسائل الأصلية المطلوب عمل Forward لها
             var originalMessages = new List<Message>();
             foreach (var mId in command.MessageIds)
             {
@@ -45,12 +44,10 @@ namespace EnterpriseChat.Application.Features.Messaging.Handlers
 
             var senderIdVo = new UserId(command.SenderId);
 
-            // 2. تكرار الرسائل لكل غرفة مستهدفة
             foreach (var targetRoomId in command.TargetRoomIds)
             {
                 var roomIdVo = new RoomId(targetRoomId);
                 var room = await _roomRepository.GetByIdWithMembersAsync(roomIdVo, ct);
-
                 if (room == null || !room.IsMember(senderIdVo)) continue;
 
                 var recipients = room.Members
@@ -58,31 +55,44 @@ namespace EnterpriseChat.Application.Features.Messaging.Handlers
                     .Where(id => id != senderIdVo)
                     .ToList();
 
+                var allMembers = recipients.Concat(new[] { senderIdVo }).ToList();
+                var messagesToBroadcast = new List<(MessageDto dto, RoomUpdatedDto roomUpdate)>();
+
                 foreach (var originalMsg in originalMessages)
                 {
-                    // إنشاء رسالة جديدة محتواها هو نفس محتوى الرسالة القديمة
-                    // ملاحظة: يمكنك إضافة "Forwarded" badge في الـ UI لاحقاً
-                    var newMessage = new Message(
-                        roomIdVo,
-                        senderIdVo,
-                        originalMsg.Content,
-                        recipients,
-                        null // الـ Forward لا يعتبر Reply
-                    );
-
+                    var newMessage = new Message(roomIdVo, senderIdVo, originalMsg.Content, recipients, null);
                     await _messageRepository.AddAsync(newMessage, ct);
 
-                    // 3. التبليغ Real-time لكل غرفة
-                    // هنا بنبعت DTO بسيط عشان الناس تحس بالرسالة فوراً
-                    var dto = MappingToDto(newMessage, recipients.Count);
-                    await _broadcaster.BroadcastMessageAsync(dto, recipients);
+                    messagesToBroadcast.Add((
+                        MappingToDto(newMessage, recipients.Count),
+                        new RoomUpdatedDto
+                        {
+                            RoomId = targetRoomId,
+                            MessageId = newMessage.Id.Value,
+                            SenderId = command.SenderId,
+                            Preview = newMessage.Content.Length > 60
+                                ? newMessage.Content[..60] + "…"
+                                : newMessage.Content,
+                            CreatedAt = newMessage.CreatedAt,
+                            UnreadDelta = 1
+                        }
+                    ));
+                }
+
+                // ✅ Commit الأول قبل أي broadcast
+                await _unitOfWork.CommitAsync(ct);
+
+                // ✅ بعد الـ commit، ابعت SignalR
+                foreach (var (dto, roomUpdate) in messagesToBroadcast)
+                {
+                    await _broadcaster.BroadcastToRoomGroupAsync(targetRoomId, dto);
+
+                    await _broadcaster.RoomUpdatedAsync(roomUpdate, allMembers);
                 }
             }
 
-            await _unitOfWork.CommitAsync(ct);
             return true;
         }
-
         private MessageDto MappingToDto(Message msg, int recipientsCount) => new MessageDto
         {
             Id = msg.Id.Value,

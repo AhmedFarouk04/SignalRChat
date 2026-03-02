@@ -626,7 +626,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     private void RegisterHandlers()
     {
         // ✅ HANDLER: MessageReceived
-        _connection!.On<MessageDto>("MessageReceived", dto =>
+        _connection!.On<MessageDto>("MessageReceived", async dto =>
         {
             Console.WriteLine($"[SignalR] 🟢 MESSAGE RECEIVED! ID: {dto.Id}");
             var st = (Client.Models.MessageStatus)dto.Status;
@@ -646,6 +646,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 DeliveredCount = dto.DeliveredCount,
                 TotalRecipients = dto.TotalRecipients
             };
+
             if (dto.ReplyInfo != null)
             {
                 message.ReplyInfo = new ReplyInfoModel
@@ -658,9 +659,23 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     IsDeleted = dto.ReplyInfo.IsDeleted
                 };
             }
-            MessageReceived?.Invoke(message);
-        });
 
+            MessageReceived?.Invoke(message);
+
+            // ✅ أضف ده - بعت Delivered للسيرفر فوراً لو الرسالة مش بتاعتي
+            var currentUserId = await GetCurrentUserIdAsync();
+            if (currentUserId.HasValue && dto.SenderId != currentUserId.Value)
+            {
+                try
+                {
+                    await _connection.InvokeAsync("DeliverMessage", dto.Id);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[MessageReceived] Deliver failed: {ex.Message}");
+                }
+            }
+        });
         // ✅ HANDLER: UserOnline - مع فلترة صارمة
         // في ChatRealtimeClient.cs - داخل RegisterHandlers()
         // ✅ HANDLER: UserOnline - مع التحقق المباشر من الـ Server

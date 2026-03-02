@@ -1909,3 +1909,53 @@ t-radius: 6px !important; /* للـ gray */
     direction: rtl;
     text-align: right;
 }
+/* طبقة شفافة تغطي الشاشة بالكامل خلف القوائم المفتوحة */
+.menu-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: transparent;
+    z-index: 998; /* أقل من الـ menu بواحد */
+    cursor: default;
+}
+
+/* تعديل الـ z-index للقوائم لضمان ظهورها فوق الطبقة */
+.msg-context-menu, .reactions-hover-wrap {
+    z-index: 999 !important;
+}
+.msg-context-menu {
+    /* ... كودك الحالي ... */
+    position: absolute;
+    top: 100%; /* تظهر أسفل الـ bubble */
+    z-index: 1000;
+    /* أضف هذا لضمان عدم خروج القائمة عن الشاشة في الرسائل الأخيرة */
+    transform-origin: top;
+}
+
+/* إذا كانت الرسالة "mine" (يمين) اجعل القائمة تفتح من اليمين */
+.msg.mine .msg-context-menu {
+    right: 0;
+}
+
+/* إذا كانت الرسالة "theirs" (يسار) اجعل القائمة تفتح من اليسار */
+.msg.theirs .msg-context-menu {
+    left: 0;
+}
+
+.menu-backdrop-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: transparent; /* شفافة تماماً */
+    z-index: 990; /* أقل من المنيو بس أعلى من الشات */
+    cursor: default;
+}
+
+/* تأكد إن المنيو والإيموجي الـ z-index بتاعهم أعلى من 990 */
+.msg-context-menu, .reactions-hover-wrap {
+    z-index: 1000 !important;
+}

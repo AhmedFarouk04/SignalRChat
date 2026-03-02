@@ -729,5 +729,11 @@ public sealed class ChatHub : Hub
         await Clients.Group(roomId.ToString()).SendAsync("MemberRoleChanged", roomId, userId, isAdmin);
     }
 
-
+    public async Task DeliverMessage(Guid messageId)
+    {
+        var userId = GetUserId();
+        await _mediator.Send(new DeliverMessageCommand(
+            MessageId.From(messageId),
+            userId));
+    }
 }

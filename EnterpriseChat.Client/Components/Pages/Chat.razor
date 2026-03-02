@@ -198,20 +198,22 @@
                                OnClose="CloseMembers" />
             }
 
-            @if (VM.IsSelectionMode)
-            {
-                <div class="forward-action-bar">
-                    <div class="selection-info">
-                        <button class="icon-btn close-btn" @onclick="() => VM.IsSelectionMode = false">✕</button>
-                        <span>@VM.SelectedMessageIds.Count Selected</span>
-                    </div>
-                    <button class="forward-submit-btn @(VM.SelectedMessageIds.Any() ? "active" : "")"
-                            disabled="@(!VM.SelectedMessageIds.Any())" @onclick="() => VM.IsForwardModalOpen = true">
-                        Forward ➔
-                    </button>
+            </div> @* نهاية chat-input *@
+
+        @if (VM.IsSelectionMode)
+        {
+            <div class="forward-action-bar">
+                <div class="selection-info">
+                    <button class="icon-btn close-btn" @onclick="ExitSelectionMode">✕</button>                    <span>@VM.SelectedMessageIds.Count Selected</span>
                 </div>
+                <button class="forward-submit-btn @(VM.SelectedMessageIds.Any() ? "active" : "")"
+                        disabled="@(!VM.SelectedMessageIds.Any())"
+                        @onclick="() => VM.IsForwardModalOpen = true">
+                    Forward ➔
+                </button>
+            </div>
         }
-        </div>
+
     }
     
 <PinDurationModal IsOpen="VM.IsPinModalOpen" OnCancel="() => VM.IsPinModalOpen = false" OnConfirm="VM.ConfirmPinAsync" />
@@ -1050,10 +1052,15 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
             InvokeAsync(StateHasChanged);
         });
     }
-
+    private void ExitSelectionMode()
+    {
+        VM.IsSelectionMode = false;
+        VM.SelectedMessageIds.Clear();
+        StateHasChanged();
+    }
     private async void OnVmChanged()
     {
-        if (VM.IsPinModalOpen || VM.IsForwardModalOpen || VM.IsReplaceModalOpen)
+        if (VM.IsPinModalOpen || VM.IsForwardModalOpen || VM.IsReplaceModalOpen || VM.IsSelectionMode)
         {
             await InvokeAsync(StateHasChanged);
             return;

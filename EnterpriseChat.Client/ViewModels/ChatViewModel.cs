@@ -57,8 +57,21 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public ObservableCollection<MessageModel> PinnedMessages { get; } = new();
 
     private bool _isSelectionMode;
-    public bool IsSelectionMode { get => _isSelectionMode; set { _isSelectionMode = value; if (!value) SelectedMessageIds.Clear(); NotifyChanged(); } }
 
+    public event Action? SelectionModeChanged;
+
+    public bool IsSelectionMode
+    {
+        get => _isSelectionMode;
+        set
+        {
+            _isSelectionMode = value;
+            if (!value) SelectedMessageIds.Clear();
+            SelectionModeChanged?.Invoke(); // ✅ أضف ده
+            NotifyChanged();
+        }
+    }
+   
     public ObservableCollection<Guid> SelectedMessageIds { get; } = new();
 
     public Guid? PinnedMessageId => PinnedMessages.LastOrDefault()?.Id;
@@ -94,8 +107,12 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
 
     // ميثود لفتح الـ Forward Modal (هنحتاجها لاحقاً)
-    public bool IsForwardModalOpen { get; set; }
-    public void OpenForwardModal() => IsForwardModalOpen = true;
+    private bool _isForwardModalOpen;
+    public bool IsForwardModalOpen
+    {
+        get => _isForwardModalOpen;
+        set { _isForwardModalOpen = value; NotifyChanged(); }
+    }
     public async Task ConfirmPinAsync(string duration)
     {
         if (!_messageIdToPin.HasValue) return;
@@ -162,7 +179,6 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
             // 3. إنهاء وضع الاختيار وتقديم تغذية راجعة
             IsSelectionMode = false;
-            _toasts.Success("Success", "Messages forwarded successfully!");
 
             NotifyChanged();
             return true;

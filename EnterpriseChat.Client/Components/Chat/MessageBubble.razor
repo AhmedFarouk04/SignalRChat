@@ -16,6 +16,11 @@
 
 @if (Message != null)
 {
+    @if (IsMenuOpen || IsReactionOpen)
+    {
+        @* دي طبقة شفافة بتغطي الشاشة كلها أول ما المنيو أو الإيموجي يفتحوا *@
+        <div class="menu-backdrop-overlay" @onclick="CloseAllPopups"></div>
+    }
     <div class="msg-selection-wrapper @(IsMine ? "mine-wrapper" : "theirs-wrapper") @(VM.IsSelectionMode ? "selection-active" : "")"
          @onclick="() => { if (VM.IsSelectionMode) VM.ToggleMessageSelection(Message.Id); }">
 
@@ -118,21 +123,26 @@
             @if (IsMenuOpen)
             {
                 <div class="msg-context-menu" @onclick:stopPropagation="true">
-                    <button class="menu-item" @onclick="async () => { CloseMenu(); await OnReplyClick(); }">Reply</button>
+                    <button class="menu-item" @onclick="async () => { CloseMenu(); await OnReplyClick(); }">↩️ Reply</button>
+
                     @if (!Message.IsDeleted)
                     {
                         <button class="menu-item" @onclick="HandlePinClick">
                             @(VM.IsMessagePinned(Message.Id) ? "📌 Unpin" : "📌 Pin")
                         </button>
+
+                        @* ✅ زرار Forward الجديد *@
+                        <button class="menu-item" @onclick="HandleForwardClick">➤ Forward</button>
                     }
+
                     @if (IsMine && !Message.IsDeleted)
                     {
-                        <button class="menu-item" @onclick="() => { CloseMenu(); OnEditRequested.InvokeAsync(Message); }">Edit</button>
+                        <button class="menu-item" @onclick="() => { CloseMenu(); OnEditRequested.InvokeAsync(Message); }">✏️ Edit</button>
                     }
-                    <button class="menu-item delete" @onclick="HandleDeleteClick">Delete</button>
+
+                    <button class="menu-item delete" @onclick="HandleDeleteClick">🗑️ Delete</button>
                 </div>
             }
-
             @if (IsReactionOpen)
             {
                 <div class="reactions-hover-wrap" @onclick:stopPropagation="true">
@@ -171,9 +181,20 @@
     {
         if (Message != null)
             Message.PropertyChanged += OnMessagePropertyChanged;
-        MenuState.PropertyChanged += (s, e) => InvokeAsync(StateHasChanged);
-    }
+        MenuState.PropertyChanged += OnMenuStateChanged;
+        VM.SelectionModeChanged += OnSelectionModeChanged; // ✅ أضف ده
 
+    }
+    private void OnMenuStateChanged(object? s, PropertyChangedEventArgs e) => InvokeAsync(StateHasChanged);
+    private void OnSelectionModeChanged() => InvokeAsync(StateHasChanged); // ✅ أضف ده
+
+    private void HandleForwardClick()
+    {
+        CloseMenu();
+        VM.IsSelectionMode = true;
+        VM.SelectedMessageIds.Clear();
+        VM.SelectedMessageIds.Add(Message!.Id);
+    }
     private void OnMessagePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         InvokeAsync(StateHasChanged);
@@ -184,11 +205,42 @@
         if (Message != null)
             Message.PropertyChanged -= OnMessagePropertyChanged;
         MenuState.PropertyChanged -= (s, e) => { };
+        VM.SelectionModeChanged -= OnSelectionModeChanged;
     }
 
-    private async Task ToggleMenu() { MenuState.OpenMenuMessageId = IsMenuOpen ? null : Message?.Id; }
+    private async Task ToggleMenu()
+    {
+        if (!IsMenuOpen)
+        {
+            await OnToggleReaction.InvokeAsync(Guid.Empty); // اقفل الإيموجي الأول
+            MenuState.OpenMenuMessageId = Message?.Id;
+        }
+        else { CloseMenu(); }
+    }
     private void CloseMenu() => MenuState.CloseMenu();
-    private async Task ToggleReactions() => await OnToggleReaction.InvokeAsync(Message!.Id);
+
+
+    private async Task ToggleReactions()
+    {
+        if (!IsReactionOpen)
+        {
+            CloseMenu(); // اقفل المنيو الأول
+            await OnToggleReaction.InvokeAsync(Message!.Id);
+        }
+        else { await OnToggleReaction.InvokeAsync(Guid.Empty); }
+    }
+
+    // الدالة السحرية اللي هتقفل كل حاجة لما تضغط برا
+    private async Task CloseAllPopups()
+    {
+        CloseMenu();
+        await OnToggleReaction.InvokeAsync(Guid.Empty);
+        StateHasChanged();
+    }
+
+
+
+
     private async Task HandleDeleteClick() { CloseMenu(); await OnDeleteRequested.InvokeAsync(Message); }
     private string GetStatusClass() => Message?.PersonalStatus.ToString().ToLower() ?? "sent";
 
@@ -236,11 +288,26 @@
     }
 
     [JSInvokable]
-    public Task OnDocumentClick()
+    public async Task OnDocumentClick()
     {
-        if (IsMenuOpen) { MenuState.CloseMenu(); StateHasChanged(); }
-        if (IsReactionOpen) { OnToggleReaction.InvokeAsync(Guid.Empty); }
-        return Task.CompletedTask;
+        bool needsRefresh = false;
+
+        if (IsMenuOpen)
+        {
+            MenuState.CloseMenu();
+            needsRefresh = true;
+        }
+
+        if (IsReactionOpen)
+        {
+            await OnToggleReaction.InvokeAsync(Guid.Empty);
+            needsRefresh = true;
+        }
+
+        if (needsRefresh)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
     }
     private void HandlePinClick()
     {

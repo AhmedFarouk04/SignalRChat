@@ -1,53 +1,41 @@
-﻿// clickHandler.js - ES Module + Global Fallback
+﻿// clickHandler.js 
 
 let currentHandler = null;
-let dotNetHelperRef = null;
 
 export function registerClickHandler(dotNetHelper) {
-    console.log('[clickHandler] Registering...');
-
-    if (!dotNetHelper) {
-        console.error('[clickHandler] No dotNetHelper provided');
-        return null;
-    }
-
-    unregisterClickHandler(); // تنظيف
-
-    dotNetHelperRef = dotNetHelper;
+    // 1. تنظيف أي مستمع قديم عشان م يحصلش تكرار (Memory Leak)
+    unregisterClickHandler();
 
     currentHandler = async (event) => {
-        if (!dotNetHelperRef) return;
+        // فحص ذكي: لو الضغطة حصلت جوا قائمة مفتوحة أصلاً، م تعملش حاجة
+        // ده بيمنع إن القائمة تقفل نفسها لما تضغط على خيار جواها
+        if (event.target.closest('.msg-context-menu') || event.target.closest('.reactions-hover-wrap')) {
+            return;
+        }
+
         try {
-            await dotNetHelperRef.invokeMethodAsync('OnDocumentClick');
+            // بننادي دالة C# اللي في الـ Razor
+            await dotNetHelper.invokeMethodAsync('OnDocumentClick');
         } catch (error) {
-            if (error.message && (error.message.includes('disposed') || error.message.includes('no tracked object'))) {
-                console.warn('[clickHandler] Auto-cleanup disposed reference');
-                dotNetHelperRef = null;
-                return;
-            }
-            console.error('[clickHandler] Error invoking method:', error);
+            // لو الـ Component اتشال من الشاشة، بنظف الـ Handler
+            unregisterClickHandler();
         }
     };
 
-    document.addEventListener('click', currentHandler, true);
-    console.log('[clickHandler] Registered successfully');
+    // 2. التعديل الجوهري: شيلنا الـ 'true' وخليناها 'false' (الوضع الافتراضي)
+    // ده بيسمح لـ stopPropagation اللي في الـ Razor إنها تشتغل صح
+    document.addEventListener('click', currentHandler, false);
+
     return currentHandler;
 }
 
 export function unregisterClickHandler() {
-    console.log('[clickHandler] Unregistering...');
-
     if (currentHandler) {
-        document.removeEventListener('click', currentHandler, true);
+        document.removeEventListener('click', currentHandler, false);
         currentHandler = null;
-    }
-
-    if (dotNetHelperRef) {
-        try { dotNetHelperRef.dispose(); } catch (e) { }
-        dotNetHelperRef = null;
     }
 }
 
-// Global fallback عشان أي مكان تاني بينادي window.
+// السطور دي عشان الـ Blazor يشوف الدوال دي من أي مكان
 window.registerClickHandler = registerClickHandler;
 window.unregisterClickHandler = unregisterClickHandler;

@@ -24,7 +24,11 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         _muteRepo = muteRepo;
         _messageRepo = messageRepo;
     }
-
+    public async Task BroadcastToRoomGroupAsync(Guid roomId, MessageDto message)
+    {
+        await _hub.Clients.Group(roomId.ToString())
+            .SendAsync("MessageReceived", message);
+    }
     public async Task BroadcastMessageAsync(MessageDto message, IEnumerable<UserId> recipients)
     {
         var users = recipients?.DistinctBy(u => u.Value).ToList() ?? new();
