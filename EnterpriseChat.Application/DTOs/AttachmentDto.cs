@@ -8,5 +8,6 @@ public sealed record AttachmentDto(
     string ContentType,
     long Size,
     string DownloadUrl,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+      bool CanDelete
 );

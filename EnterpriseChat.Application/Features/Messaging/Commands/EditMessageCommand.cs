@@ -3,5 +3,5 @@ using MediatR;
 
 namespace EnterpriseChat.Application.Features.Messaging.Commands
 {
-    public sealed record EditMessageCommand(Guid MessageId, UserId UserId, string NewContent) : IRequest;
+    public sealed record EditMessageCommand(Guid MessageId, UserId UserId, string NewContent) : IRequest<Unit>;
 }

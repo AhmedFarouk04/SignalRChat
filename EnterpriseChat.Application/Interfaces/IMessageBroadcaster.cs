@@ -7,8 +7,8 @@ namespace EnterpriseChat.Application.Interfaces;
 public interface IMessageBroadcaster
 {
     Task BroadcastMessageAsync(MessageDto message, IEnumerable<UserId> recipients);
-    Task MessageDeliveredAsync(MessageId messageId, UserId userId);
-    Task MessageReadAsync(MessageId messageId, UserId userId);
+    Task MessageDeliveredAsync(MessageId messageId, UserId userId, RoomId roomId);
+    Task MessageReadAsync(MessageId messageId, UserId userId, RoomId roomId);
     Task RoomUpdatedAsync(RoomUpdatedDto update, IEnumerable<UserId> users);
 
     // Rooms realtime
@@ -44,8 +44,7 @@ public interface IMessageBroadcaster
 
 
     Task MessageUpdatedAsync(MessageId messageId, string newContent, IEnumerable<UserId> recipients);
-    Task MessageDeletedAsync(MessageId messageId, IEnumerable<UserId> recipients);
-
+    Task MessageDeletedAsync(MessageId messageId, bool isForEveryone, IEnumerable<UserId> recipients);
     Task MessageStatusUpdatedAsync(
         MessageId messageId,
         UserId userId,

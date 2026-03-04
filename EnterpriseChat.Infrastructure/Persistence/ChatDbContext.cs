@@ -17,6 +17,7 @@ public sealed class ChatDbContext : DbContext
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Reaction> Reactions => Set<Reaction>();
     public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
+    public DbSet<MessageDeletion> MessageDeletions => Set<MessageDeletion>();
 
     public ChatDbContext(DbContextOptions<ChatDbContext> options)
         : base(options)
@@ -225,6 +226,22 @@ public sealed class ChatDbContext : DbContext
 
             entity.HasIndex(e => new { e.RoomId, e.MessageId }).IsUnique();
             entity.HasIndex(e => e.PinnedAt);
+        });
+
+
+        modelBuilder.Entity<MessageDeletion>(entity =>
+        {
+            entity.Property(e => e.MessageId)
+                .HasConversion(
+                    v => v.Value,
+                    v => new MessageId(v))
+                .Metadata.SetValueComparer(messageIdComparer);
+
+            entity.Property(e => e.UserId)
+                .HasConversion(
+                    v => v.Value,
+                    v => new UserId(v))
+                .Metadata.SetValueComparer(userIdComparer);
         });
     }
 }

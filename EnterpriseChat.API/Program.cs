@@ -4,7 +4,7 @@ using EnterpriseChat.API.Messaging;
 using EnterpriseChat.API.Middleware;
 using EnterpriseChat.API.Presence;
 using EnterpriseChat.Application.Features.Messaging.Commands;
-using EnterpriseChat.Application.Interfaces; // IPasswordHasher (Application)
+using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Infrastructure;
 using EnterpriseChat.Infrastructure.Persistence;
 using EnterpriseChat.Infrastructure.Persistence.Seeding;
@@ -43,28 +43,29 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // CORS
-// CORS
 builder.Services.AddCors(opt =>
 {
     opt.AddPolicy("client", p =>
         p.WithOrigins(
-            "https://localhost:7080",  // URL الـ Client
+            "https://localhost:7080",
             "http://localhost:7080",
-            "https://localhost:7188",   // API نفسها (للتجربة)
-            "http://localhost:5055"     // HTTP version
+            "https://localhost:7188",
+            "http://localhost:5055"
           )
          .AllowAnyHeader()
          .AllowAnyMethod()
-         .AllowCredentials()); // ✅ مهم جداً للـ SignalR
+         .AllowCredentials());
 });
 
-
+// DbContext
 // DbContext
 builder.Services.AddDbContext<ChatDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sql => sql.CommandTimeout(300)));
-
+        sql => {
+            sql.CommandTimeout(300);
+            sql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery); // ✅ أضف هذا السطر فقط
+        }));
 // Infrastructure + MediatR
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddMediatR(typeof(SendMessageCommand).Assembly);
@@ -77,7 +78,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-// ✅ SMTP Options (bind من Email:Smtp)
+// SMTP Options
 builder.Services.AddOptions<SmtpSettings>()
     .Bind(builder.Configuration.GetRequiredSection("Email:Smtp"))
     .Validate(s => !string.IsNullOrWhiteSpace(s.Host), "Email:Smtp:Host is required")
@@ -87,7 +88,6 @@ builder.Services.AddOptions<SmtpSettings>()
     .ValidateOnStart();
 
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
-
 
 // Redis
 var redisConnectionString =
@@ -106,14 +106,14 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, Ente
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = true;
-    options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
+    options.MaximumReceiveMessageSize = 1024 * 1024;
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
     options.HandshakeTimeout = TimeSpan.FromSeconds(30);
 })
 .AddStackExchangeRedis(redisConnectionString, options =>
 {
-    options.Configuration.ChannelPrefix = "EnterpriseChat";  // ✅ وحد الاسم
+    options.Configuration.ChannelPrefix = "EnterpriseChat";
     options.Configuration.AbortOnConnectFail = false;
     options.Configuration.AllowAdmin = true;
     options.Configuration.ConnectTimeout = 5000;
@@ -175,13 +175,8 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ChatDbContext>();
     await db.Database.MigrateAsync();
-
-    //var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
-    //var seeder = new DatabaseSeeder(db, hasher);
-    //await seeder.SeedAsync();
 }
 
-// ✅ مهم جدًا
 app.UseRouting();
 
 app.UseCors("client");
@@ -189,7 +184,6 @@ app.UseCors("client");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ✅ اربط CORS بالـ endpoints
 app.MapControllers().RequireCors("client");
 app.MapHub<ChatHub>("/hubs/chat").RequireCors("client");
 

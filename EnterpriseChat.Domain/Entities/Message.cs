@@ -27,8 +27,8 @@ public class Message
     public bool IsDeleted { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
     public DateTime? DeletedAt { get; private set; }
-
-    // ✅ الخصائص المحسوبة الجديدة
+    private readonly List<MessageDeletion> _deletions = new();
+    public IReadOnlyCollection<MessageDeletion> Deletions => _deletions.AsReadOnly();
     public int DeliveredCount => _receipts.Count(r => r.Status >= MessageStatus.Delivered);
     public int ReadCount => _receipts.Count(r => r.Status >= MessageStatus.Read);
     public bool IsBlocked { get; private set; } // ✅ ضيف السطر ده
@@ -69,7 +69,31 @@ public class Message
             CreatedAt,
             replyToMessageId
         ));
-       
+
+    }
+    // Delete For Me - يضيف record في _deletions
+    public void DeleteForUser(UserId userId)
+    {
+        if (_deletions.Any(d => d.UserId == userId))
+            return; // already deleted for this user
+
+        _deletions.Add(new MessageDeletion(Id, userId));
+    }
+
+    // Delete For Everyone - الـ hard delete الموجود + بس نحدث الـ Content
+    public void DeleteForEveryone(UserId requestedBy)
+    {
+        if (IsDeleted) return;
+
+        IsDeleted = true;
+        DeletedAt = DateTime.UtcNow;
+        Content = "This message was deleted";
+    }
+
+    // Helper - هينفعنا في الـ Query layer
+    public bool IsDeletedForUser(UserId userId)
+    {
+        return IsDeleted || _deletions.Any(d => d.UserId == userId);
     }
     public static Message CreateSystemMessage(
         RoomId roomId,
@@ -133,6 +157,7 @@ public class Message
     public void Edit(string newContent)
     {
         if (IsDeleted) throw new InvalidOperationException("Cannot edit a deleted message.");
+        if (string.IsNullOrWhiteSpace(newContent)) throw new ArgumentException("Content cannot be empty");
 
         Content = newContent;
         IsEdited = true;
@@ -176,7 +201,24 @@ public class Message
             _reactions.Add(new Reaction(Id, userId, reactionType));
         }
     }
+    public bool CanEdit(DateTime currentTime, TimeSpan? editWindow = null)
+    {
+        if (IsDeleted || IsSystemMessage) return false;
 
+        var window = editWindow ?? TimeSpan.FromMinutes(15);
+        return (currentTime - CreatedAt) <= window;
+    }
+    public void ClearReadReceipts()
+    {
+        foreach (var receipt in _receipts)
+        {
+            receipt.ResetToDelivered();
+        }
+    }
+    public void ClearAllReceipts()
+    {
+        _receipts.Clear(); // امسح Read و Delivered كلهم
+    }
     public MessageReceiptStats GetReceiptStats()
     {
         var receipts = _receipts.ToList();

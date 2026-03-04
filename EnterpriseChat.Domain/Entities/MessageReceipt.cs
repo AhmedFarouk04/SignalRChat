@@ -36,7 +36,12 @@ public sealed class MessageReceipt
         Status = MessageStatus.Delivered;
         UpdatedAt = DateTime.UtcNow;
     }
-
+    public void ResetToDelivered()
+    {
+        if (Status == MessageStatus.Read)
+            Status = MessageStatus.Delivered; 
+        UpdatedAt = DateTime.UtcNow;
+    }
     public void MarkRead()
     {
         if (Status >= MessageStatus.Read)

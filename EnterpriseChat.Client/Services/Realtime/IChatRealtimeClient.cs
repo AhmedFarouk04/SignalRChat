@@ -37,7 +37,8 @@ public interface IChatRealtimeClient
     event Action<Guid, Guid>? OwnerTransferred;
     event Action<RoomListItemDto>? RoomUpserted;
     event Action<Guid, string>? MessageUpdated; // (messageId, newContent)
-    event Action<Guid>? MessageDeleted;
+    public event Action<Guid, bool>? MessageDeleted;
+
     // في IChatRealtimeClient.cs أضف:
     event Action<Guid, Guid, int> MessageStatusUpdated; // messageId, userId, status
     event Action<Guid, Guid, bool>? MemberRoleChanged;

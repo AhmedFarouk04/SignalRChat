@@ -1,13 +1,13 @@
 ﻿@page "/groups/{RoomId:guid}/settings"
 @attribute [Authorize]
 @using EnterpriseChat.Application.DTOs
-@using EnterpriseChat.Client.Authentication.Abstractions 
-@using EnterpriseChat.Client.Services.Http 
+@using EnterpriseChat.Client.Authentication.Abstractions
+@using EnterpriseChat.Client.Services.Http
 @using EnterpriseChat.Client.Services.Realtime
-@using EnterpriseChat.Client.Services.Ui 
+@using EnterpriseChat.Client.Services.Ui
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components 
-@using Microsoft.AspNetCore.Components.Authorization 
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @inject ICurrentUser CurrentUser
 @inject ToastService Toasts
 @inject GroupsApi GroupsApi
@@ -68,7 +68,7 @@ else
                 }
             </div>
         }
-            @if (isAdmin)
+        @if (isAdmin)
         {
             <div style="margin-top:16px;">
                 <h3 style="margin:0 0 8px 0;">Add members</h3>
@@ -212,7 +212,7 @@ else
         Console.WriteLine($"[DEBUG] RealtimeClient connected: {RealtimeClient.State.IsConnected}");
 
     }
-   
+
     private async Task LoadAsync()
     {
         loading = true;

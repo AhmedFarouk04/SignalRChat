@@ -16,6 +16,9 @@
 
 @if (Message != null)
 {
+    var _ = Message;
+    var personalStatus = Message.PersonalStatus; @* ← force capture القيمة الحالية *@
+
     @if (IsMenuOpen || IsReactionOpen)
     {
         @* دي طبقة شفافة بتغطي الشاشة كلها أول ما المنيو أو الإيموجي يفتحوا *@
@@ -78,7 +81,7 @@
                     }
                     else
                     {
-                        <MarkdownText Content="@Message.Content" />
+                        <span>@Message.Content</span>
                         @if (Message.IsEdited)
                         {
                             <span class="edited-badge">(edited)</span>
@@ -88,12 +91,15 @@
 
                 <div class="message-meta" dir="ltr">
                     <span class="message-time">@Message.CreatedAt.ToLocalTime().ToString("h:mm tt")</span>
+
+                  
+
                     @if (IsMine)
                     {
                         <span class="message-status-icon @GetStatusClass()">
                             @if (Message.PersonalStatus == ClientMessageStatus.Read)
                             {
-                                <span class="status-icon read">✓✓</span>
+                                <span class="status-icon read" style="color:#4FC3F7 !important;">✓✓</span>
                             }
                             else if (Message.PersonalStatus == ClientMessageStatus.Delivered)
                             {
@@ -134,8 +140,7 @@
                         @* ✅ زرار Forward الجديد *@
                         <button class="menu-item" @onclick="HandleForwardClick">➤ Forward</button>
                     }
-
-                    @if (IsMine && !Message.IsDeleted)
+                    @if (IsMine && !Message.IsDeleted && CanEdit)
                     {
                         <button class="menu-item" @onclick="() => { CloseMenu(); OnEditRequested.InvokeAsync(Message); }">✏️ Edit</button>
                     }
@@ -169,8 +174,10 @@
     [Parameter] public EventCallback<Guid> OnToggleReaction { get; set; }
     [Parameter] public EventCallback<MessageModel> OnEditRequested { get; set; }
     [Parameter] public EventCallback<MessageModel> OnDeleteRequested { get; set; }
+    private MessageModel? _prevMessage;
 
     private DotNetObjectReference<MessageBubble>? _clickObjRef;
+    protected override bool ShouldRender() => true;
 
     private bool IsMenuOpen => MenuState.OpenMenuMessageId == Message?.Id;
     private bool IsReactionOpen => OpenReactionMessageId == Message?.Id;
@@ -179,11 +186,10 @@
 
     protected override void OnInitialized()
     {
-        if (Message != null)
-            Message.PropertyChanged += OnMessagePropertyChanged;
+       
         MenuState.PropertyChanged += OnMenuStateChanged;
         VM.SelectionModeChanged += OnSelectionModeChanged; // ✅ أضف ده
-
+   
     }
     private void OnMenuStateChanged(object? s, PropertyChangedEventArgs e) => InvokeAsync(StateHasChanged);
     private void OnSelectionModeChanged() => InvokeAsync(StateHasChanged); // ✅ أضف ده
@@ -197,14 +203,35 @@
     }
     private void OnMessagePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        InvokeAsync(StateHasChanged);
+        if (Message == null) return;
+
+        Console.WriteLine($"[Bubble] PropertyChanged: {e.PropertyName}, PersonalStatus={Message.PersonalStatus}");
+
+        // استخدم InvokeAsync مباشرة بدون Task.Yield
+        _ = InvokeAsync(StateHasChanged);
     }
+
+    protected override void OnParametersSet()
+    {
+        if (_prevMessage != Message)
+        {
+            if (_prevMessage != null)
+                _prevMessage.PropertyChanged -= OnMessagePropertyChanged;
+            if (Message != null)
+                Message.PropertyChanged += OnMessagePropertyChanged;
+            _prevMessage = Message;
+        }
+        base.OnParametersSet();
+    }
+
 
     public void Dispose()
     {
-        if (Message != null)
-            Message.PropertyChanged -= OnMessagePropertyChanged;
-        MenuState.PropertyChanged -= (s, e) => { };
+        // ✅ واحدة بس
+        if (_prevMessage != null)
+            _prevMessage.PropertyChanged -= OnMessagePropertyChanged;
+
+        MenuState.PropertyChanged -= OnMenuStateChanged;
         VM.SelectionModeChanged -= OnSelectionModeChanged;
     }
 
@@ -238,7 +265,8 @@
         StateHasChanged();
     }
 
-
+    private bool CanEdit => Message != null &&
+                        (DateTime.UtcNow - Message.CreatedAt).TotalMinutes <= 15;
 
 
     private async Task HandleDeleteClick() { CloseMenu(); await OnDeleteRequested.InvokeAsync(Message); }
@@ -274,8 +302,7 @@
             _clickObjRef.Dispose();
             _clickObjRef = null;
         }
-        if (Message != null) Message.PropertyChanged -= (s, e) => { };
-        MenuState.PropertyChanged -= (s, e) => { };
+       
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

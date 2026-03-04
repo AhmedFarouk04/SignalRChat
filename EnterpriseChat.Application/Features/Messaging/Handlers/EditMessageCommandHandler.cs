@@ -16,7 +16,10 @@ namespace EnterpriseChat.Application.Features.Messaging.Handlers
         private readonly IUnitOfWork _uow;
         private readonly IMessageBroadcaster _broadcaster;
 
-        public EditMessageCommandHandler(IMessageRepository messageRepo, IUnitOfWork uow, IMessageBroadcaster broadcaster)
+        public EditMessageCommandHandler(
+            IMessageRepository messageRepo,
+            IUnitOfWork uow,
+            IMessageBroadcaster broadcaster)
         {
             _messageRepo = messageRepo;
             _uow = uow;
@@ -25,27 +28,30 @@ namespace EnterpriseChat.Application.Features.Messaging.Handlers
 
         public async Task<Unit> Handle(EditMessageCommand request, CancellationToken ct)
         {
-            var message = await _messageRepo.GetByIdAsync(request.MessageId, ct)
-                          ?? throw new InvalidOperationException("Message not found.");
+            var message = await _messageRepo.GetByIdWithReceiptsAsync(request.MessageId, ct)
+                ?? throw new InvalidOperationException("Message not found.");
 
-            // التحقق من الملكية: صاحب الرسالة فقط
             if (message.SenderId != request.UserId)
                 throw new UnauthorizedAccessException("You can only edit your own messages.");
+            if (!message.CanEdit(DateTime.UtcNow))
+                throw new InvalidOperationException("Message can no longer be edited.");
+            if (message.IsDeleted)
+                throw new InvalidOperationException("Cannot edit a deleted message.");
 
             message.Edit(request.NewContent);
+            message.ClearReadReceipts(); // ✅ امسح Read بس
+                                         // ✅ رجّع لـ Delivered - الناس لازم تقرأ التعديل
+
             await _uow.CommitAsync(ct);
 
             var members = await _messageRepo.GetRoomMemberIdsAsync(message.RoomId, ct);
+            var stats = message.GetReceiptStats(); // ← دلوقتي read=0, delivered=N
 
-            // تحديث Real-time للرسالة والـ Sidebar
-            await _broadcaster.MessageUpdatedAsync(message.Id, message.Content, members);
-            await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
-            {
-                RoomId = message.RoomId.Value,
-                MessageId = message.Id.Value,
-                Preview = message.Content,
-                CreatedAt = DateTime.UtcNow
-            }, members);
+            await _broadcaster.MessageReceiptStatsUpdatedAsync(
+                message.Id.Value, message.RoomId.Value,
+                stats.TotalRecipients, stats.DeliveredCount, stats.ReadCount);
+
+            await _broadcaster.MessageUpdatedAsync(message.Id.Value, message.Content, members);
 
             return Unit.Value;
         }

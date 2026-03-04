@@ -50,6 +50,7 @@
             OnUnblock="UnblockOtherUser"
             OnMembers="OpenMembers" />
 
+
     @if (VM.UiError != null)
     {
         <div class="chat-error">@VM.UiError</div>
@@ -88,7 +89,8 @@
                              OpenReactionMessageId="@OpenReactionMessageId"
                              OnToggleReaction="ToggleReaction"
                              OnEditRequested="StartEdit"
-                             OnDeleteRequested="HandleDeleteRequested" />
+                             OnDeleteRequested="HandleDeleteRequested"
+                             AutoScroll="@_isFirstLoad" />
 
                 <div id="messages-end"></div>
 
@@ -222,6 +224,19 @@
                  OnContinue="() => { VM.IsReplaceModalOpen = false; VM.IsPinModalOpen = true; }" />    
         
         <ForwardModal IsOpen="VM.IsForwardModalOpen" OnClose="() => VM.IsForwardModalOpen = false" />
+    <EditModal IsOpen="@_isEditModalOpen"
+               IsOpenChanged="@((v) => _isEditModalOpen = v)"
+               Message="@_editingMessage"
+               OnSave="HandleEditSave"
+               OnClose="CloseEditModal" />
+
+    <DeleteMessageModal IsOpen="@_isDeleteModalOpen"
+                        Message="@_deletingMessage"
+                        CurrentUserId="@VM.CurrentUserId"
+                        IsAdmin="@(VM.GroupMembers?.Members
+                                                .FirstOrDefault(m => m.Id == VM.CurrentUserId)?.IsAdmin ?? false)"
+                        OnClose="@(() => { _isDeleteModalOpen = false; _deletingMessage = null; })"
+                        OnConfirm="HandleDeleteConfirmed" />
 </div>
 
 
@@ -243,7 +258,10 @@
     private bool _reactionModalOpen;
     private Guid _reactionMessageId;
     private Guid? OpenReactionMessageId;
-    private MessageModel? _editingMessage;
+    private MessageModel? _editingMessage = null;
+    private bool _isFirstLoad = true;
+    private bool _isDeleteModalOpen = false;
+    private MessageModel? _deletingMessage = null;
     private bool _isEnteringChat = false; // ✅ متغير جديد
 
     private IJSObjectReference? _clickModule;
@@ -252,13 +270,43 @@
     // ✅ متغيرات لتتبع التغييرات ومنع إعادة الرسم غير الضرورية
     private int _lastMessageCount = 0;
     private Guid _lastMessageId = Guid.Empty;
-    private int _lastPinCount = 0; // ← أضف ده
+    private int _lastPinCount = 0;
+    // ← أضف ده
+   
+    private bool _isEditModalOpen = false;
+
+    private void StartEdit(MessageModel msg)
+    {
+        _editingMessage = msg;
+        _isEditModalOpen = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleEditSave(MessageModel msg)
+    {
+        Console.WriteLine($"[HandleEditSave] id={msg.Id}, content={msg.Content}");
+
+        // ✅ خزن الـ content قبل أي تغيير
+        var newContent = msg.Content;
+
+        _isEditModalOpen = false;
+        _editingMessage = null;
+
+        // ✅ بعدين نفذ الـ edit
+        await VM.EditMessageAsync(msg.Id, newContent);
+
+        StateHasChanged();
+    }
+
+    private void CloseEditModal()
+    {
+        _isEditModalOpen = false;
+        _editingMessage = null;
+    }
+    
+    
     protected override async Task OnInitializedAsync()
     
-    
-
-
-
     
     {
         VM.IsPageActive = true;
@@ -272,7 +320,6 @@
         // ✅ إلغاء الاشتراك في أحداث UserOnline/Offline مؤقتاً
         Realtime.UserOnline -= OnUserOnline;
         Realtime.UserOffline -= OnUserOffline;
-
         Realtime.UserLastSeenUpdated += OnUserLastSeenUpdated;
         Realtime.GroupRenamed += HandleGroupRenamedRealtime;
         Realtime.UserBlockedByMeChanged += OnUserBlockedByMeChanged;
@@ -283,12 +330,14 @@
         Realtime.MemberRoleChanged += HandleMemberRoleChangedUI;
         Realtime.AdminPromoted += HandleAdminStatusChangedUI;
         Realtime.AdminDemoted += HandleAdminStatusChangedUI;
-        Realtime.MessageReceiptStatsUpdated += HandleGlobalStatsUpdate;
+         Realtime.MessageReceiptStatsUpdated += HandleGlobalStatsUpdate;
        
         Realtime.MemberRemoved += OnMemberRemovedRealtime;
 
 
         await VM.InitializeAsync(RoomId);
+        _isFirstLoad = true;
+
         _lastMessageCount = VM.Messages.Count;
         if (VM.Messages.Count > 0)
         {
@@ -311,13 +360,19 @@
             StateHasChanged();
         });
     }
-    private void HandleMemberRoleChangedUI(Guid roomId, Guid userId, bool isAdmin)
+   
+    private async void HandleMemberRoleChangedUI(Guid roomId, Guid userId, bool isAdmin)
     {
         if (roomId == RoomId)
-        {
-            InvokeAsync(StateHasChanged); // 🚀 ده اللي بيخلي الشاشة تتحدث فوراً عند الشخص التاني
-        }
+            await InvokeAsync(async () =>
+            {
+                await VM.RefreshRoomStateAsync(RoomId); // ← أضف الـ refresh
+                StateHasChanged();
+            });
     }
+
+    private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) => InvokeAsync(StateHasChanged);
+
     [JSInvokable]
     public void OnDocumentClick()
     {
@@ -352,20 +407,26 @@
         var msg = VM.Messages.FirstOrDefault(m => m.Id == messageId);
         if (msg == null) return;
 
-        // حدّث العدادات
+        // ✅ شيل IsBeingEdited check
         msg.TotalRecipients = total;
         msg.DeliveredCount = delivered;
         msg.ReadCount = read;
 
-        // في private: أول ما delivered >= 1 يبقى ✓✓
-        // أول ما read >= 1 يبقى ✓✓ read
-        msg.PersonalStatus =
-            (read >= 1) ? EnterpriseChat.Client.Models.MessageStatus.Read :
-            (delivered >= 1) ? EnterpriseChat.Client.Models.MessageStatus.Delivered :
-            EnterpriseChat.Client.Models.MessageStatus.Sent;
+        if (VM.Room?.Type == "Private")
+        {
+            var newStatus =
+                (read >= 1) ? EnterpriseChat.Client.Models.MessageStatus.Read :
+                (delivered >= 1) ? EnterpriseChat.Client.Models.MessageStatus.Delivered :
+                EnterpriseChat.Client.Models.MessageStatus.Sent;
+
+            // ✅ مش هنخلي الـ status يرجع للوراء
+            if (newStatus > msg.PersonalStatus)
+                msg.PersonalStatus = newStatus;
+        }
 
         _ = InvokeAsync(StateHasChanged);
     }
+
     private async void OnMemberRemovedRealtime(Guid roomId, Guid userId, string name)
     {
         if (roomId != RoomId) return;
@@ -381,8 +442,6 @@
         });
     }
 
-// دالة مساعدة لاستقبال التحديث من SignalR مباشرة
-private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) => InvokeAsync(StateHasChanged);  
 
 
     private async void OnUserBlockedByMeChanged(Guid userId, bool blocked)
@@ -575,6 +634,13 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
             {
                 Console.WriteLine($"[Chat] Error checking user status: {ex.Message}");
             }
+
+        }
+        if (_isFirstLoad && VM.Messages.Any())
+        {
+            await Task.Delay(100); // انتظر شوية عشان DOM يكتمل
+            await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
+            _isFirstLoad = false;
         }
     }
 
@@ -811,30 +877,24 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
         return Task.CompletedTask;
     }
 
-    private void StartEdit(MessageModel msg)
+ 
+    private void HandleDeleteRequested(MessageModel msg)
     {
-        _editingMessage = msg;
-        currentMessage = msg.Content;
-        _ = JS.InvokeVoidAsync("eval", "document.querySelector('.composer-input').focus()");
+        _deletingMessage = msg;
+        _isDeleteModalOpen = true;
+        StateHasChanged();
     }
-
-    private async Task HandleDeleteRequested(MessageModel msg)
-    {
-        if (msg.SenderId == VM.CurrentUserId)
-        {
-            if (await JS.InvokeAsync<bool>("confirm", "Delete for everyone?"))
-                await VM.DeleteMessageAsync(msg.Id, true);
-        }
-        else
-            await VM.DeleteMessageAsync(msg.Id, false);
-    }
-
     private Task ToggleReaction(Guid messageId)
     {
         OpenReactionMessageId = OpenReactionMessageId == messageId ? null : messageId;
         return Task.CompletedTask;
     }
-
+    private async Task HandleDeleteConfirmed(bool deleteForEveryone)
+    {
+        if (_deletingMessage == null) return;
+        await VM.DeleteMessageAsync(_deletingMessage.Id, deleteForEveryone);
+        _deletingMessage = null;
+    }
     private async Task OpenReactionDetails(Guid messageId)
     {
         _reactionMessageId = messageId;
@@ -894,17 +954,19 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
             message.SenderId = VM.OtherUser.Id;
         }
 
-        // ✅ لو الرسالة من الطرف الآخر في محادثة خاصة، خليها مقروءة فوراً
-        if (VM.Room?.Type == "Private" && message.SenderId != VM.CurrentUserId)
+        // ✅ لا تفرض Read للرسائل الواردة - دع الـ ViewModel يتولى ذلك
+        // فقط ضع علامة ShouldForceRead = true إذا كانت الصفحة نشطة
+        if (VM.Room?.Type == "Private" && message.SenderId != VM.CurrentUserId && VM.IsPageActive)
         {
-            message.PersonalStatus = ClientMessageStatus.Read;
-            Console.WriteLine($"[Chat] 🟦 Forced Read for incoming private message {message.Id}");
+            message.ShouldForceRead = true; // هذا سيقوم بتحديث PersonalStatus عبر PropertyChanged
+            Console.WriteLine($"[Chat] ✅ Set ShouldForceRead=true for message {message.Id}");
         }
-        // ✅ ابحث عن الرسالة لو موجودة
+
+        // باقي الكود كما هو...
         var existingMessage = VM.Messages.FirstOrDefault(m => m.Id == message.Id);
         if (existingMessage != null)
         {
-            // ✅ حدث الخصائص مباشرة في الـ ObservableCollection
+            // تحديث الخصائص
             var needsUpdate = false;
 
             if (existingMessage.ReplyInfo?.ContentPreview != message.ReplyInfo?.ContentPreview)
@@ -913,17 +975,7 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
                 needsUpdate = true;
             }
 
-            if (existingMessage.Status != message.Status)
-            {
-                existingMessage.Status = message.Status;
-                needsUpdate = true;
-            }
-
-            if (existingMessage.PersonalStatus != message.PersonalStatus)
-            {
-                existingMessage.PersonalStatus = message.PersonalStatus;
-                needsUpdate = true;
-            }
+            // ✅ لا تقم بتحديث PersonalStatus هنا مباشرة - دع الخاصية تقوم بذلك
 
             if (existingMessage.DeliveredCount != message.DeliveredCount)
             {
@@ -945,16 +997,15 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
 
             if (needsUpdate)
             {
-                // ✅ ObservableCollection会自动 notify UI
                 await InvokeAsync(StateHasChanged);
             }
             return;
         }
 
-        // ✅ رسالة جديدة - أضفها للمجموعة
+        // رسالة جديدة
         VM.Messages.Add(message);
 
-        // ✅ معالجة Reply Info
+        // معالجة Reply Info...
         if (message.ReplyToMessageId.HasValue && message.ReplyInfo == null)
         {
             var originalMessage = VM.Messages.FirstOrDefault(m => m.Id == message.ReplyToMessageId.Value);
@@ -972,12 +1023,6 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
                     IsDeleted = originalMessage.IsDeleted
                 };
             }
-        }
-
-        // ✅ Mark as read فوراً لو مش منك
-        if (message.SenderId != VM.CurrentUserId)
-        {
-            _ = VM.MarkRoomReadAsync(RoomId, message.Id);
         }
 
         await ScrollToBottom();
@@ -1065,38 +1110,12 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
             await InvokeAsync(StateHasChanged);
             return;
         }
-        if (_renderQueued || VM.IsSearching) return;
 
-        var currentCount = VM.Messages.Count;
-        var currentLastId = currentCount > 0 ? VM.Messages[^1].Id : Guid.Empty;
-        var currentPinCount = VM.PinnedMessages.Count; // ← أضف ده
+        if (VM.IsSearching) return;
 
-        if (currentCount == _lastMessageCount
-            && currentLastId == _lastMessageId
-            && currentPinCount == _lastPinCount) // ← أضف ده
-        {
-            return;
-        }
-
-        _lastMessageCount = currentCount;
-        _lastMessageId = currentLastId;
-        _lastPinCount = currentPinCount; // ← أضف ده
-
-        _renderQueued = true;
-        _ = InvokeAsync(async () =>
-        {
-            try
-            {
-                await Task.Delay(50);
-                StateHasChanged();
-                await JS.InvokeVoidAsync("scrollToBottomSmooth", "chat-messages");
-            }
-            finally
-            {
-                _renderQueued = false;
-            }
-        });
+        await InvokeAsync(StateHasChanged);
     }
+
     public void Dispose()
     {
         VM.DeactivateChat();
@@ -1112,10 +1131,12 @@ private void HandleGlobalStatsUpdate(Guid mid, Guid rid, int t, int d, int r) =>
         Realtime.RoomPresenceUpdated -= OnRoomPresenceUpdated;
         Realtime.MessageReceiptStatsUpdated -= OnMessageReceiptStatsUpdated;
         Realtime.MemberAdded -= OnMemberAddedRealtime;
-        Realtime.MessageReceiptStatsUpdated -= HandleGlobalStatsUpdate;
+        // Realtime.MessageReceiptStatsUpdated -= HandleGlobalStatsUpdate;
         NotificationManager.SetCurrentPage("unknown", null, Guid.Empty);
         Realtime.MemberRoleChanged -= HandleMemberRoleChangedUI;
         Realtime.MemberRemoved -= OnMemberRemovedRealtime;
+        Realtime.MessageReceiptStatsUpdated -= HandleGlobalStatsUpdate;
+
         Realtime.AdminPromoted -= HandleAdminStatusChangedUI;
         Realtime.AdminDemoted -= HandleAdminStatusChangedUI;
         _readCts?.Cancel();

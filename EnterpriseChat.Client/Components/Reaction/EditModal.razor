@@ -1,0 +1,83 @@
+﻿@namespace EnterpriseChat.Client.Components.Chat
+
+@if (IsOpen && Message != null)
+{
+    <div class="modal-overlay" @onclick="OnClose">
+        <div class="edit-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Edit message</h3>
+                <button class="close-btn" @onclick="OnClose" type="button">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <textarea class="edit-textarea"
+                          value="@editedContent"
+                          @oninput="@(e => { editedContent = e.Value?.ToString() ?? string.Empty; Console.WriteLine($"[EditModal] Input changed: {editedContent}"); })"
+                          maxlength="2000"
+                          placeholder="Edit your message..."
+                          autofocus></textarea>
+
+                <div class="char-counter @(editedContent.Length > 1900 ? "warning" : "")">
+                    @editedContent.Length / 2000
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="cancel-btn" @onclick="OnClose" type="button">Cancel</button>
+                <button class="save-btn"
+                        @onclick="SaveEdit"
+                        disabled="@(string.IsNullOrWhiteSpace(editedContent) || editedContent == _originalContent || _isSaving)"
+                        type="button">
+                    Save changes
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public MessageModel? Message { get; set; }
+    [Parameter] public EventCallback<MessageModel> OnSave { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string editedContent = string.Empty;
+    private Guid _openedForMessageId = Guid.Empty;
+    private string _originalContent = string.Empty;
+    private bool _isSaving = false; // ✅ منع أي تدخل أثناء الحفظ
+
+    protected override void OnParametersSet()
+    {
+        // ✅ فقط set لما modal يفتح لأول مرة - وبس
+        if (Message != null && IsOpen && !_isSaving && _openedForMessageId != Message.Id)
+        {
+            _openedForMessageId = Message.Id;
+            _originalContent = Message.Content;
+            editedContent = Message.Content;
+        }
+    }
+
+    private async Task SaveEdit()
+    {
+        if (string.IsNullOrWhiteSpace(editedContent) || Message == null) return;
+
+        // ✅ Trim هنا برضو
+        var trimmedContent = editedContent.Trim();
+
+        if (string.IsNullOrWhiteSpace(trimmedContent)) return;
+        if (trimmedContent == _originalContent.Trim()) return;
+
+        var updatedMessage = new MessageModel
+        {
+            Id = Message.Id,
+            Content = trimmedContent, // ✅ trimmed
+        };
+
+        _isSaving = true;
+        await OnSave.InvokeAsync(updatedMessage);
+        await OnClose.InvokeAsync();
+        _isSaving = false;
+        _openedForMessageId = Guid.Empty;
+    }
+}

@@ -294,20 +294,31 @@ public async Task<IActionResult> UploadAttachment(
 
 
 
-[HttpGet("rooms/{roomId:guid}/attachments")]
+    [HttpGet("rooms/{roomId:guid}/attachments")]
     public async Task<IActionResult> ListRoomAttachments(
-    Guid roomId,
-    [FromServices] ChatDbContext db,
-    [FromServices] IRoomAuthorizationService auth,
-    [FromQuery] int skip = 0,
-    [FromQuery] int take = 50,
-    CancellationToken ct = default)
+        Guid roomId,
+        [FromServices] ChatDbContext db,
+        [FromServices] IRoomAuthorizationService auth,
+        [FromServices] IUserDirectoryService userDirectory, // هنحتاجها
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 50,
+        CancellationToken ct = default)
     {
         if (roomId == Guid.Empty) return BadRequest("RoomId is required.");
         skip = Math.Max(0, skip);
         take = Math.Clamp(take, 1, 100);
 
-        await auth.EnsureUserIsMemberAsync(new RoomId(roomId), GetCurrentUserId(), ct);
+        var currentUserId = GetCurrentUserId();
+        await auth.EnsureUserIsMemberAsync(new RoomId(roomId), currentUserId, ct);
+
+        // جلب معلومات العضو الحالي لمعرفة صلاحياته
+        var currentUser = await userDirectory.GetUserAsync(currentUserId, ct);
+        var room = await db.ChatRooms
+            .Include(r => r.Members)
+            .FirstOrDefaultAsync(r => r.Id == roomId, ct);
+
+        var isOwner = room?.OwnerId == currentUserId;
+        var isAdmin = room?.Members.Any(m => m.UserId == currentUserId && m.IsAdmin) ?? false;
 
         var list = await db.Attachments.AsNoTracking()
             .Where(a => a.RoomId == roomId)
@@ -315,8 +326,19 @@ public async Task<IActionResult> UploadAttachment(
             .Skip(skip)
             .Take(take)
             .Select(a => new AttachmentDto(
-                a.Id, a.RoomId, a.UploaderId, a.FileName, a.ContentType, a.Size,
-                $"/api/attachments/{a.Id}", a.CreatedAt))
+                a.Id,
+                a.RoomId,
+                a.UploaderId,
+                a.FileName,
+                a.ContentType,
+                a.Size,
+                $"/api/attachments/{a.Id}",
+                a.CreatedAt,
+                // ✅ منطق الصلاحية:
+                // Owner أو Admin يقدر يحذف أي حاجة
+                // المستخدم العادي يقدر يحذف ملفاته بس
+                isOwner || isAdmin || a.UploaderId == currentUserId.Value
+            ))
             .ToListAsync(ct);
 
         return Ok(list);
@@ -533,8 +555,12 @@ public async Task<IActionResult> UploadAttachment(
     [HttpDelete("messages/{messageId:guid}")]
     public async Task<IActionResult> DeleteMessage(Guid messageId, [FromQuery] bool deleteForEveryone, CancellationToken ct)
     {
-        // شيل الـ .Value من GetCurrentUserId()
-        await _mediator.Send(new DeleteMessageCommand(messageId, GetCurrentUserId(), deleteForEveryone), ct);
+        await _mediator.Send(
+            new DeleteMessageCommand(
+                new MessageId(messageId),
+                GetCurrentUserId(),
+                deleteForEveryone),
+            ct);
         return NoContent();
     }
     // EnterpriseChat.API/Controllers/ChatController.cs

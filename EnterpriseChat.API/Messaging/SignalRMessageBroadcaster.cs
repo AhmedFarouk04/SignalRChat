@@ -53,10 +53,11 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
 
 
-    public async Task MessageDeliveredAsync(MessageId messageId, UserId userId)
+    public async Task MessageDeliveredAsync(MessageId messageId, UserId userId, RoomId roomId)
     {
+        // ✅ لازم نبعت الـ roomId كمان عشان الكلاينت يقدر يعرف الرسالة في أنهي غرفة
         await _hub.Clients.User(userId.Value.ToString())
-            .SendAsync("MessageDelivered", messageId.Value);
+            .SendAsync("MessageDelivered", messageId.Value, roomId.Value);
     }
 
     public async Task MemberLeftAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
@@ -210,24 +211,44 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
     public async Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users)
         => await MemberRemovedAsync(roomId, memberId, null, null, users);
 
-    public async Task MessageUpdatedAsync(MessageId messageId, string newContent, IEnumerable<UserId> recipients)
+public async Task MessageUpdatedAsync(MessageId messageId, string newContent, IEnumerable<UserId> recipients)
+{
+    var recipientsList = recipients?.DistinctBy(u => u.Value).ToList() ?? new();
+
+    // ✅ استخدم GetByIdWithReceiptsAsync بدل GetByIdAsync
+    var msg = await _messageRepo.GetByIdWithReceiptsAsync(messageId, CancellationToken.None);
+    if (msg == null) return;
+
+    var stats = msg.GetReceiptStats();
+
+    var tasks = recipientsList.Select(r =>
+        _hub.Clients.User(r.Value.ToString())
+            .SendAsync("MessageUpdated", messageId.Value, newContent));
+
+    await Task.WhenAll(tasks);
+
+    // ✅ دلوقتي الـ stats صح لأن الـ Receipts موجودة
+    await _hub.Clients.User(msg.SenderId.Value.ToString())
+        .SendAsync("MessageReceiptStatsUpdated",
+            messageId.Value,
+            msg.RoomId.Value,
+            stats.TotalRecipients,
+            stats.DeliveredCount,
+            stats.ReadCount);
+}
+    public async Task MessageDeletedAsync(MessageId messageId, bool isForEveryone, IEnumerable<UserId> recipients)
     {
-        var tasks = recipients.Select(r =>
-            _hub.Clients.User(r.Value.ToString()).SendAsync("MessageUpdated", messageId.Value, newContent));
+        var tasks = recipients.DistinctBy(r => r.Value).Select(r =>
+            _hub.Clients.User(r.Value.ToString())
+                .SendAsync("MessageDeleted", messageId.Value, isForEveryone));
         await Task.WhenAll(tasks);
     }
 
-    public async Task MessageDeletedAsync(MessageId messageId, IEnumerable<UserId> recipients)
+    public async Task MessageReadAsync(MessageId messageId, UserId userId, RoomId roomId)
     {
-        var tasks = recipients.Select(r =>
-            _hub.Clients.User(r.Value.ToString()).SendAsync("MessageDeleted", messageId.Value));
-        await Task.WhenAll(tasks);
-    }
-
-    public async Task MessageReadAsync(MessageId messageId, UserId userId)
-    {
+        // ✅ بنبعت المعاملين عشان الـ Handler في الكلاينت يشتغل صح
         await _hub.Clients.User(userId.Value.ToString())
-            .SendAsync("MessageRead", messageId.Value);
+            .SendAsync("MessageRead", messageId.Value, roomId.Value);
     }
 
     public async Task MessageReactionUpdatedAsync(

@@ -11,7 +11,7 @@ public sealed class GroupsApi
         _api = api;
     }
 
-    
+
     public sealed class CreateGroupRequest
     {
         public string Name { get; set; } = "";

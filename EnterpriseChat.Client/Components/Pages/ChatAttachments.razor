@@ -39,6 +39,11 @@
                             </div>
                             <div class="room-preview">
                                 @FormatSize(a.Size) • @a.CreatedAt.ToLocalTime()
+                                @* اختياري: عرض اسم الرافع لو تحب *@
+                                @* @if (a.UploaderId != Guid.Empty && a.UploaderId != CurrentUserId) *@
+                                @* { *@
+                                @*     <span style="opacity:0.6; margin-left:4px;">• by @a.UploaderName</span> *@
+                                @* } *@
                             </div>
                         </div>
                     </div>
@@ -48,13 +53,32 @@
                             Download
                         </button>
 
-                        <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => DeleteAsync(a.Id))">
-                            Delete
-                        </button>
+                        @* ✅ أظهر زر Delete فقط إذا كان CanDelete = true *@
+                        @if (a.CanDelete)
+                        {
+                            <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => DeleteAsync(a.Id))">
+                                Delete
+                            </button>
+                        }
                     </div>
                 </li>
             }
         </ul>
+    }
+    @if (_deletingAttachmentId.HasValue)
+    {
+        <div class="confirm-modal-overlay">
+            <div class="confirm-modal">
+                <div class="confirm-modal-header">Delete file?</div>
+                <div class="confirm-modal-body">
+                    Are you sure you want to delete "@_deletingAttachmentName"?
+                </div>
+                <div class="confirm-modal-footer">
+                    <button class="mini-btn cancel" @onclick="CancelDelete">Cancel</button>
+                    <button class="mini-btn danger" @onclick="ConfirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
     }
 </div>
 
@@ -64,7 +88,8 @@
     private bool busy;
     private string? error;
     private readonly List<AttachmentDto> items = new();
-
+    private Guid? _deletingAttachmentId = null;
+    private string? _deletingAttachmentName = null;
     private Guid _loadedRoomId;
 
     protected override async Task OnParametersSetAsync()
@@ -163,13 +188,25 @@
 
     private async Task DeleteAsync(Guid attachmentId)
     {
+        var attachment = items.FirstOrDefault(x => x.Id == attachmentId);
+        if (attachment == null) return;
+
+        _deletingAttachmentId = attachmentId;
+        _deletingAttachmentName = attachment.FileName;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (!_deletingAttachmentId.HasValue) return;
+
         busy = true;
         error = null;
         await InvokeAsync(StateHasChanged);
 
         try
         {
-            await AttachmentsApi.DeleteAsync(attachmentId);
+            await AttachmentsApi.DeleteAsync(_deletingAttachmentId.Value);
             await LoadAsync();
         }
         catch (Exception ex)
@@ -179,10 +216,18 @@
         finally
         {
             busy = false;
+            _deletingAttachmentId = null;
+            _deletingAttachmentName = null;
             await InvokeAsync(StateHasChanged);
         }
     }
 
+    private void CancelDelete()
+    {
+        _deletingAttachmentId = null;
+        _deletingAttachmentName = null;
+        StateHasChanged();
+    }
     private static string FormatSize(long bytes)
     {
         if (bytes < 1024) return $"{bytes} B";

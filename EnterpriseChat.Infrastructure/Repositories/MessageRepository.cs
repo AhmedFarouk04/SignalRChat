@@ -29,7 +29,12 @@ public sealed class MessageRepository : IMessageRepository
                         && !m.IsBlocked)
             .CountAsync(ct);
     }
-
+    public async Task<Message?> GetByIdAsync(MessageId messageId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Messages
+            .Include(m => m.Deletions)
+            .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
+    }
     public async Task<int> GetTotalUnreadCountAsync(RoomId roomId, UserId userId, CancellationToken ct = default)
     {
         return await _context.Messages
@@ -76,7 +81,6 @@ public sealed class MessageRepository : IMessageRepository
         CancellationToken cancellationToken = default)
     {
         return await _context.Messages
-            .AsNoTracking()
             .Where(m => m.RoomId == roomId)
             .OrderByDescending(m => m.CreatedAt)
             .Skip(skip)
@@ -261,8 +265,8 @@ GROUP BY m.RoomId";
 }
     // داخل class MessageRepository
     public async Task<Dictionary<Guid, LastMessageInfo>> GetLastMessagesAsync(
-        IReadOnlyList<Guid> roomIds,
-        CancellationToken ct)
+     IReadOnlyList<Guid> roomIds,
+     CancellationToken ct)
     {
         var ids = roomIds?.Distinct().ToList() ?? new();
         if (ids.Count == 0) return new Dictionary<Guid, LastMessageInfo>();
@@ -309,9 +313,10 @@ WHERE r.rn = 1
 
         var paramJson = new SqlParameter("@json", json);
 
+        // ✅ التغيير هنا: استخدم ct بدل CancellationToken.None
         var rows = await _context.Database
             .SqlQueryRaw<LastMessageRow>(sql, paramJson)
-            .ToListAsync(ct);
+            .ToListAsync(ct);  // 👈 كده صحيح
 
         var dict = new Dictionary<Guid, LastMessageInfo>();
 
@@ -338,7 +343,7 @@ WHERE r.rn = 1
     }
 
     // ✅ الـ DTO المعدل (حذفنا MaxStatus نهائيًا)
-   
+
     public async Task<Message?> GetByIdWithReceiptsAsync(MessageId messageId, CancellationToken ct = default)
     {
         return await _context.Messages

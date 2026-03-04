@@ -1,0 +1,56 @@
+﻿@using EnterpriseChat.Client.Models
+
+@if (IsOpen && Message != null)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-box delete-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <span>Delete Message</span>
+                <button class="close-btn" @onclick="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="delete-preview">
+                    @(Message.Content.Length > 60 ? Message.Content[..60] + "…" : Message.Content)
+                </p>
+            </div>
+            <div class="modal-actions delete-actions">
+                <button class="btn-delete-me" @onclick="HandleDeleteForMe">
+                     Delete For Me
+                </button>
+                @if (CanDeleteForEveryone)
+                {
+                    <button class="btn-delete-all" @onclick="HandleDeleteForEveryone">
+                         Delete For Everyone
+                    </button>
+                }
+                <button class="btn-cancel" @onclick="Close">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public MessageModel? Message { get; set; }
+    [Parameter] public Guid CurrentUserId { get; set; }
+    [Parameter] public bool IsAdmin { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<bool> OnConfirm { get; set; }
+
+    private bool CanDeleteForEveryone =>
+        Message != null && (Message.SenderId == CurrentUserId || IsAdmin);
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private async Task HandleDeleteForMe()
+    {
+        await OnConfirm.InvokeAsync(false);
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleDeleteForEveryone()
+    {
+        await OnConfirm.InvokeAsync(true);
+        await OnClose.InvokeAsync();
+    }
+}

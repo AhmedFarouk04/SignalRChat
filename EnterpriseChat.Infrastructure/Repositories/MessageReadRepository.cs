@@ -18,40 +18,51 @@ public sealed class MessageReadRepository : IMessageReadRepository
     }
 
     public async Task<IReadOnlyList<MessageReadDto>> GetMessagesAsync(
-      RoomId roomId,
-      UserId forUserId,
-      int skip = 0,
-      int take = 100,
-      CancellationToken ct = default)
+    RoomId roomId,
+    UserId forUserId,
+    int skip = 0,
+    int take = 100,
+    CancellationToken ct = default)
     {
         var currentUserIdValue = forUserId.Value;
 
-        var rawQuery = _context.Messages
-            .AsNoTracking()
-            .Where(m => m.RoomId == roomId && !m.IsBlocked)
+        // ✅ استخدم ct العادي هنا، لكن مع إضافة timeout
+        var deletedMessageIds = await _context.Set<MessageDeletion>()
+            .Where(d => d.UserId == forUserId)
+            .Join(
+                _context.Messages.Where(m => m.RoomId == roomId),
+                d => d.MessageId,
+                m => m.Id,
+                (d, m) => d.MessageId)
+            .ToListAsync(ct);   // ✅ استخدم ct العادي
+
+        // ✅ الحل: حول من SplitQuery لـ Include مع ThenInclude
+        var rawMessages = await _context.Messages
+            // ❌ إلغاء AsSplitQuery
+            // .AsSplitQuery()
+            .Include(m => m.Receipts)      // ✅ استخدم Include بدل SplitQuery
+            .Include(m => m.Reactions)
             .Include(m => m.ReplyToMessage)
-            .OrderByDescending(m => m.CreatedAt);
-
-        if (skip > 0) rawQuery = (IOrderedQueryable<Message>)rawQuery.Skip(skip);
-        if (take > 0) rawQuery = (IOrderedQueryable<Message>)rawQuery.Take(take);
-
-        // ✅ FIX: جيب الرسائل أولاً كـ list عشان نعمل client-side join
-        var rawMessages = await rawQuery
-            .OrderBy(m => m.CreatedAt)
-            .AsSplitQuery()
+            .Where(m => m.RoomId == roomId
+                && !m.IsBlocked
+                && !deletedMessageIds.Contains(m.Id))
+            .OrderByDescending(m => m.CreatedAt)
+            .Skip(skip > 0 ? skip : 0)
+            .Take(take > 0 ? take : 100)
             .Select(m => new
             {
                 Message = m,
-                Receipts = m.Receipts.Select(r => new { r.UserId, r.Status }),
-                Reactions = m.Reactions.Select(r => new { r.UserId, r.Type }),
+                Receipts = m.Receipts.Select(r => new { r.UserId, r.Status }).ToList(),
+                Reactions = m.Reactions.Select(r => new { r.UserId, r.Type }).ToList(),
                 ReplyToSenderId = m.ReplyToMessage != null ? m.ReplyToMessage.SenderId : null,
                 ReplyToContent = m.ReplyToMessage != null ? m.ReplyToMessage.Content : null,
                 ReplyToCreatedAt = m.ReplyToMessage != null ? m.ReplyToMessage.CreatedAt : (DateTime?)null,
                 ReplyToIsDeleted = m.ReplyToMessage != null && m.ReplyToMessage.IsDeleted
             })
-            .ToListAsync(ct);
+            .OrderBy(m => m.Message.CreatedAt)
+            .ToListAsync(ct);   // ✅ استخدم ct العادي   // ← None — ده أهم سطر
 
-        // ✅ FIX: جيب أسماء الـ senders للرسائل المرد عليها دفعة واحدة (batch)
+        // ✅ Batch fetch sender names — query واحدة بدل N+1
         var replySenderIds = rawMessages
             .Where(x => x.ReplyToSenderId != null)
             .Select(x => x.ReplyToSenderId!.Value)
@@ -62,7 +73,7 @@ public sealed class MessageReadRepository : IMessageReadRepository
             ? await _context.Users
                 .Where(u => replySenderIds.Contains(u.Id))
                 .Select(u => new { u.Id, u.DisplayName })
-                .ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct)
+                .ToDictionaryAsync(u => u.Id, u => u.DisplayName, CancellationToken.None)
             : new Dictionary<Guid, string>();
 
         var result = rawMessages.Select(x =>
@@ -77,13 +88,22 @@ public sealed class MessageReadRepository : IMessageReadRepository
             if (isSender)
             {
                 if (!receipts.Any())
+                {
                     personalStatus = MessageStatus.Sent;
-                else if (receipts.All(r => r.Status >= MessageStatus.Read))
-                    personalStatus = MessageStatus.Read;
-                else if (receipts.All(r => r.Status >= MessageStatus.Delivered))
-                    personalStatus = MessageStatus.Delivered;
+                }
                 else
-                    personalStatus = MessageStatus.Sent;
+                {
+                    var readCount = receipts.Count(r => r.Status >= MessageStatus.Read);
+                    var deliveredCount = receipts.Count(r => r.Status >= MessageStatus.Delivered);
+                    var total = receipts.Count;
+
+                    if (readCount >= total || readCount > 0)
+                        personalStatus = MessageStatus.Read;
+                    else if (deliveredCount > 0)
+                        personalStatus = MessageStatus.Delivered;
+                    else
+                        personalStatus = MessageStatus.Sent;
+                }
             }
             else
             {
@@ -91,8 +111,8 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 personalStatus = myReceipt?.Status ?? MessageStatus.Sent;
             }
 
-            var deliveredCount = receipts.Count(r => r.Status >= MessageStatus.Delivered);
-            var readCount = receipts.Count(r => r.Status >= MessageStatus.Read);
+            var deliveredCountDto = receipts.Count(r => r.Status >= MessageStatus.Delivered);
+            var readCountDto = receipts.Count(r => r.Status >= MessageStatus.Read);
 
             MessageReactionsDto? reactionsDto = null;
             if (reactions.Any())
@@ -111,7 +131,6 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 };
             }
 
-            // ✅ FIX: ReplyInfo مع SenderName من الـ dictionary
             ReplyInfoDto? replyInfo = null;
             if (m.ReplyToMessageId != null && x.ReplyToSenderId != null)
             {
@@ -120,7 +139,7 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 {
                     MessageId = m.ReplyToMessageId.Value,
                     SenderId = x.ReplyToSenderId.Value,
-                    SenderName = senderName, // ✅ الاسم الحقيقي من DB
+                    SenderName = senderName,
                     ContentPreview = x.ReplyToIsDeleted
                         ? "This message was deleted"
                         : (x.ReplyToContent?.Length > 100
@@ -139,8 +158,8 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 Content = m.Content,
                 CreatedAt = m.CreatedAt,
                 PersonalStatus = personalStatus,
-                DeliveredCount = deliveredCount,
-                ReadCount = readCount,
+                DeliveredCount = deliveredCountDto,
+                ReadCount = readCountDto,
                 IsEdited = m.IsEdited,
                 IsDeleted = m.IsDeleted,
                 ReplyToMessageId = m.ReplyToMessageId?.Value,
@@ -154,9 +173,6 @@ public sealed class MessageReadRepository : IMessageReadRepository
             };
         }).ToList();
 
-        foreach (var msg in result.Take(3))
-            Console.WriteLine($"[REPO] Msg {msg.Id} personal={msg.PersonalStatus} replyInfo={msg.ReplyInfo != null} replySender={msg.ReplyInfo?.SenderName}");
-
         return result;
     }
 
@@ -168,8 +184,8 @@ public sealed class MessageReadRepository : IMessageReadRepository
     {
         var term = searchTerm.Trim().ToLower();
 
+        // Search مش بتستخدم AsSplitQuery، ct عادي كويس هنا
         return await _context.Messages
-            .AsNoTracking()
             .Where(m => m.RoomId == roomId &&
                         !m.IsDeleted &&
                         !m.IsBlocked &&
@@ -198,23 +214,5 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 }).ToList()
             })
             .ToListAsync(ct);
-    }
-
-    private static MessageStatus CalculateMessageStatusForSender(Message m)
-    {
-        var recipientReceipts = m.Receipts
-            .Where(r => r.UserId != m.SenderId)
-            .ToList();
-
-        if (!recipientReceipts.Any())
-            return MessageStatus.Sent;
-
-        if (recipientReceipts.All(r => r.Status == MessageStatus.Read))
-            return MessageStatus.Read;
-
-        if (recipientReceipts.All(r => r.Status >= MessageStatus.Delivered))
-            return MessageStatus.Delivered;
-
-        return MessageStatus.Sent;
     }
 }

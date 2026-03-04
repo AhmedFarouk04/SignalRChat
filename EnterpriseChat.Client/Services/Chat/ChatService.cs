@@ -44,6 +44,7 @@ public sealed class ChatService : IChatService
             ReadCount = m.ReadCount,
             TotalRecipients = m.TotalRecipients,
             PersonalStatus = (ClientMessageStatus)(int)m.PersonalStatus,
+            IsConfirmedRead = m.PersonalStatus == DomainMessageStatus.Read,
             IsEdited = m.IsEdited,
             IsDeleted = m.IsDeleted,
             ReplyToMessageId = m.ReplyToMessageId,

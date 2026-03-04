@@ -553,6 +553,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _realtime.MemberRoleChanged -= OnMemberRoleChanged;
         _realtime.AdminPromoted -= OnAdminPromoted;
         _realtime.AdminDemoted -= OnAdminDemoted;
+        _realtime.MessageDeleted -= OnMessageDeleted;
         _eventsRegistered = false;
         _eventsRoomId = null;
     }
@@ -656,6 +657,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         var msg = Messages.FirstOrDefault(m => m.Id == messageId);
         if (msg != null)
         {
+            msg.IsConfirmedRead = true;
             msg.PersonalStatus = ClientMessageStatus.Read;
             msg.ReadCount = Math.Max(msg.ReadCount, 1);
             NotifyChangedThrottled();
@@ -1917,33 +1919,81 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             msg.Content = newContent;
             msg.IsEdited = true;
+            msg.UpdatedAt = DateTime.UtcNow;
+
+            // ✅ reset فوري في الـ UI قبل ما الـ StatsUpdated يوصل
+            msg.PersonalStatus = ClientMessageStatus.Delivered;
+            msg.IsConfirmedRead = false;
+            msg.ReadCount = 0;
+
             NotifyChanged();
         }
     }
-
-    private void OnMessageDeleted(Guid messageId)
+    private void OnMessageDeleted(Guid messageId, bool isForEveryone)
     {
-        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
-        if (msg != null)
+        if (isForEveryone)
         {
-            msg.IsDeleted = true;
-            msg.Content = "This message was deleted";
-            NotifyChanged();
+            // حذف للكل: غير المحتوى وعلم IsDeleted
+            var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+            if (msg != null)
+            {
+                msg.IsDeleted = true;
+                msg.Content = "🚫 This message was deleted";
+                NotifyChanged();
+            }
+        }
+        else
+        {
+            // حذف للمستخدم الحالي فقط: أزل من الـ list
+            var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+            if (msg != null)
+            {
+                Messages.Remove(msg);
+                NotifyChanged();
+            }
         }
     }
-
     public async Task EditMessageAsync(Guid messageId, string newContent)
     {
+        newContent = newContent.Trim();
+        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+
+        // ✅ بعد التعديل، reset الـ status عشان ApplyStats يحدده صح
+        var savedReadCount = msg?.ReadCount ?? 0;
+        var savedDeliveredCount = msg?.DeliveredCount ?? 0;
+
+        if (msg != null)
+        {
+            msg.IsBeingEdited = true;
+            msg.Content = newContent;
+            msg.IsEdited = true;
+            msg.UpdatedAt = DateTime.UtcNow;
+            NotifyChanged();
+        }
+
         try
         {
             await _chatService.EditMessageAsync(messageId, newContent);
+
+            if (msg != null)
+            {
+                msg.IsBeingEdited = false;
+                msg.UpdatedAt = DateTime.UtcNow;
+                // ✅ مش بنعمل restore للـ status - خلي ApplyStats يحدده
+                NotifyChanged();
+            }
         }
         catch (Exception ex)
         {
+            if (msg != null)
+            {
+                msg.Content = msg.Content; // rollback content
+                msg.IsBeingEdited = false;
+                NotifyChanged();
+            }
             _toasts.Error("Edit failed", ex.Message);
         }
     }
-
     public async Task DeleteMessageAsync(Guid messageId, bool forEveryone)
     {
         try
@@ -2048,75 +2098,83 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
 
     // 1. أضف هذه الدالة المساعدة في نهاية ChatViewModel.cs
-    private void MarkAllPreviousAsRead(MessageModel currentMsg)
-    {
-        var index = Messages.IndexOf(currentMsg);
-        if (index <= 0) return;
-
-        for (int i = 0; i < index; i++)
-        {
-            var prevMsg = Messages[i];
-            // إذا كانت الرسالة مني ولم تكن زرقاء بعد، اجعلها زرقاء
-            if (prevMsg.SenderId == CurrentUserId && prevMsg.PersonalStatus < ClientMessageStatus.Read)
-            {
-                prevMsg.PersonalStatus = ClientMessageStatus.Read;
-                prevMsg.ReadCount = Math.Max(prevMsg.ReadCount, 1);
-            }
-        }
-    }
     // 2. استدعها داخل دالة ApplyStats (التي عدلناها سابقاً)
     private void ApplyStats(MessageModel msg, int total, int delivered, int read)
     {
-        int roomMemberCount = Room?.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
+        int roomMemberCount = Room?.Type == "Group"
+            ? (GroupMembers?.Members.Count ?? 1) - 1
+            : 1;
+
         msg.TotalRecipients = total > 0 ? total : Math.Max(msg.TotalRecipients, roomMemberCount);
-        msg.DeliveredCount = Math.Max(msg.DeliveredCount, delivered);
-        msg.ReadCount = Math.Max(msg.ReadCount, read);
+        msg.DeliveredCount = delivered;
+        msg.ReadCount = read;
 
         if (msg.SenderId == CurrentUserId)
         {
             ClientMessageStatus newStatus;
-            if (msg.ReadCount >= msg.TotalRecipients && msg.TotalRecipients > 0)
+
+            if (Room?.Type == "Private")
             {
-                newStatus = ClientMessageStatus.Read;
-            }
-            else if (msg.DeliveredCount >= 1)
-            {
-                newStatus = ClientMessageStatus.Delivered;
+                if (read >= 1)
+                    newStatus = ClientMessageStatus.Read;        // فاتح الشات ✓✓ أزرق
+                else if (delivered >= 1)
+                    newStatus = ClientMessageStatus.Delivered;   // أونلاين ✓✓ أبيض
+                else
+                    newStatus = ClientMessageStatus.Sent;        // أوفلاين ✓ رمادي
             }
             else
             {
-                newStatus = ClientMessageStatus.Sent;
+                if (read >= total && total > 0)
+                    newStatus = ClientMessageStatus.Read;
+                else if (delivered >= 1)
+                    newStatus = ClientMessageStatus.Delivered;
+                else
+                    newStatus = ClientMessageStatus.Sent;
             }
 
-            if (newStatus != msg.PersonalStatus)
-            {
-                msg.PersonalStatus = newStatus;
-                // ← شيلنا الـ MarkAllPreviousAsRead تمامًا
-            }
+            msg.PersonalStatus = newStatus;
+            Console.WriteLine($"[ApplyStats] status={newStatus}, read={read}, delivered={delivered}, IsPageActive={IsPageActive}");
         }
+
         NotifyChangedThrottled();
     }
     private void OnMessageStatusUpdated(Guid messageId, Guid userId, int statusInt)
     {
+        Console.WriteLine($"[VM] 🔵 OnMessageStatusUpdated ENTERED: msg={messageId}, userId={userId}, status={statusInt}");
         var msg = Messages.FirstOrDefault(m => m.Id == messageId);
-        if (msg == null) return;
-        var newStatus = (ClientMessageStatus)statusInt;
 
-        if (Room?.Type == "Group" && msg.SenderId == CurrentUserId)
+        if (msg == null)
         {
-            msg.Status = (ClientMessageStatus)Math.Max((int)msg.Status, (int)newStatus);
-            NotifyChangedThrottled();
+            Console.WriteLine($"[VM] Message not found!");
             return;
         }
+
+        var newStatus = (ClientMessageStatus)statusInt;
+        Console.WriteLine($"[VM] Old status: {msg.PersonalStatus}, New status: {newStatus}");
 
         if (msg.SenderId == CurrentUserId || userId == CurrentUserId)
         {
             if (newStatus > msg.PersonalStatus)
             {
+                // 1. غير الحالة
                 msg.PersonalStatus = newStatus;
                 msg.ReadCount = Math.Max(msg.ReadCount, 1);
-                // ← شيلنا الـ MarkAllPreviousAsRead
-                NotifyChangedThrottled();
+                Console.WriteLine($"[VM] ✅ Status updated to {newStatus}");
+
+                // 2. Force UI update - طريقتين:
+
+                // الطريقة الأولى: استخدم خاصية مساعدة
+                msg.NotifyPropertyChanged(nameof(MessageModel.PersonalStatus));
+
+                // الطريقة الثانية: Replace في الـ ObservableCollection
+                var index = Messages.IndexOf(msg);
+                if (index >= 0)
+                {
+                    Messages[index] = msg;
+                }
+
+                // 3. Notify changed
+                Changed?.Invoke();
             }
         }
     }
@@ -2228,7 +2286,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             if (Room?.Type == "Private" && message.SenderId != CurrentUserId && IsPageActive)
             {
                 message.PersonalStatus = ClientMessageStatus.Read;
-                message.ShouldForceRead = true;
+                message.IsConfirmedRead = true;
                 _roomsVM?.UpdateLastMessageStatus(_currentRoomId.Value, message.Id, ClientMessageStatus.Read);
             }
 

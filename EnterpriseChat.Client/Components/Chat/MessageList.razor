@@ -116,7 +116,7 @@
                 // ✅ لو الرسالة عندها reply preview، خليها single عشان تبان واضحة
                 if (msg.ReplyInfo != null) pos = "single";
 
-                <MessageBubble @key="@msg.Id"
+                <MessageBubble @key="@($"bubble-{msg.Id}-{(int)msg.PersonalStatus}")"
                                Message="@msg"
                                CurrentUserId="@CurrentUserId"
                                GroupMembers="@GroupMembers"
@@ -158,6 +158,7 @@
     [Parameter] public EventCallback<ReactionPayload> OnReaction { get; set; }
     [Parameter] public EventCallback<Guid> OnReplyRequested { get; set; }
     [Parameter] public EventCallback<Guid> OnScrollToMessage { get; set; }
+    private int _lastRenderHash = 0;
 
     private ElementReference listRef;
     private int lastMessageCount;
@@ -201,42 +202,76 @@
         if (date == today.AddDays(-1)) return "YESTERDAY";
         return date.ToString("MMMM dd, yyyy").ToUpper();
     }
-
-    protected override bool ShouldRender()
-    {
-        var msgHash = string.Join("|", Messages.Select(m => $"{m.Id}:{m.PersonalStatus}:{m.ReadCount}"));
-        var uiHash = $"{OpenReactionMessageId}:{showNewDivider}:{isAtBottom}";
-        if (_lastMessagesHash == msgHash + uiHash) return false;
-        _lastMessagesHash = msgHash + uiHash;
-        return true;
-    }
-
+    
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (Messages.Count == 0 || Messages.Count <= lastMessageCount) return;
-        var atBottom = await CheckIfAtBottom();
-        if (AutoScroll && atBottom)
+        Console.WriteLine($"[MessageList] OnAfterRender, firstRender={firstRender}, Messages.Count={Messages.Count}");
+
+        // ✅ أول مرة ندخل الشات، ننزل لتحت فوراً
+        if (firstRender)
         {
             try
             {
+                await Task.Delay(100); // انتظر شوية عشان الـ DOM يكتمل
                 await Scroll.ScrollToBottomAsync(listRef);
-                showNewDivider = false; newIds.Clear(); _processedNewMessages.Clear();
-                if (Messages.Count > 0) await OnReachedBottom.InvokeAsync(Messages[^1].Id);
-            }
-            catch { }
-        }
-        else
-        {
-            for (int i = lastMessageCount; i < Messages.Count; i++)
-            {
-                var newMsg = Messages[i]; newIds.Add(newMsg.Id);
-                if (newMsg.CreatedAt < DateTime.UtcNow.AddSeconds(-30)) _processedNewMessages.Add(newMsg.Id);
-            }
-            showNewDivider = newIds.Count > 0;
-        }
-        lastMessageCount = Messages.Count;
-    }
+                Console.WriteLine($"[MessageList] First render - scrolled to bottom");
 
+                if (Messages.Count > 0)
+                {
+                    await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[MessageList] Error scrolling on first render: {ex.Message}");
+            }
+
+            lastMessageCount = Messages.Count;
+            return;
+        }
+
+        // ✅ لو في رسائل جديدة ونحن في الأسفل، ننزل لتحت
+        if (Messages.Count > lastMessageCount)
+        {
+            var atBottom = await CheckIfAtBottom();
+
+            if (AutoScroll && atBottom)
+            {
+                try
+                {
+                    await Scroll.ScrollToBottomAsync(listRef);
+                    showNewDivider = false;
+                    newIds.Clear();
+                    _processedNewMessages.Clear();
+
+                    if (Messages.Count > 0)
+                    {
+                        await OnReachedBottom.InvokeAsync(Messages[^1].Id);
+                    }
+
+                    Console.WriteLine($"[MessageList] New messages while at bottom - scrolled");
+                }
+                catch { }
+            }
+            else
+            {
+                // مش في الأسفل - نضيف الـ new divider
+                for (int i = lastMessageCount; i < Messages.Count; i++)
+                {
+                    var newMsg = Messages[i];
+                    newIds.Add(newMsg.Id);
+                    if (newMsg.CreatedAt < DateTime.UtcNow.AddSeconds(-30))
+                    {
+                        _processedNewMessages.Add(newMsg.Id);
+                    }
+                }
+                showNewDivider = newIds.Count > 0;
+                Console.WriteLine($"[MessageList] New messages while not at bottom - showing divider");
+            }
+
+            lastMessageCount = Messages.Count;
+        }
+    }
     private async Task<bool> CheckIfAtBottom()
     {
         if (_isCheckingBottom) return isAtBottom;
@@ -262,7 +297,28 @@
             await OnReachedBottom.InvokeAsync(_lastBottomReportedMessageId);
         }
     }
+    protected override bool ShouldRender()
+    {
+        var hash = 0;
+        foreach (var m in Messages)
+        {
+            hash = HashCode.Combine(
+                hash,
+                m.Id,
+                m.Content,
+                m.IsEdited,
+                m.UpdatedAt?.Ticks ?? 0,
+                (int)m.PersonalStatus
+            );
+        }
 
+        var shouldRender = hash != _lastRenderHash;
+        Console.WriteLine($"[MessageList] ShouldRender={shouldRender}, hashChanged={shouldRender}"); // ✅ log مؤقت
+
+        if (!shouldRender) return false;
+        _lastRenderHash = hash;
+        return true;
+    }
     private async Task ScrollDown()
     {
         await Scroll.ScrollToBottomSmoothAsync(listRef);

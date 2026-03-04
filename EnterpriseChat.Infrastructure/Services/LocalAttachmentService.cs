@@ -68,14 +68,15 @@ public sealed class LocalAttachmentService : IAttachmentService
         await _uow.CommitAsync(ct);
 
         return new AttachmentDto(
-            Id: entity.Id,
-            RoomId: entity.RoomId,
-            UploaderId: entity.UploaderId,
-            FileName: entity.FileName,
-            ContentType: entity.ContentType,
-            Size: entity.Size,
-            DownloadUrl: $"/api/attachments/{entity.Id}",
-            CreatedAt: entity.CreatedAt
-        );
+    Id: entity.Id,
+    RoomId: entity.RoomId,
+    UploaderId: entity.UploaderId,
+    FileName: entity.FileName,
+    ContentType: entity.ContentType,
+    Size: entity.Size,
+    DownloadUrl: $"/api/attachments/{entity.Id}",
+    CreatedAt: entity.CreatedAt,
+    CanDelete: false  // ✅ هنا أضفناها - في وقت الـ upload، المالك هو اللي رفعه فسيتمكن من حذفه لاحقاً
+);
     }
 }

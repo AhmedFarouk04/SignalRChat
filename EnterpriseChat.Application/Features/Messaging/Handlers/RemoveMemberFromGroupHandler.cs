@@ -62,17 +62,19 @@ public sealed class RemoveMemberFromGroupHandler
                 throw new UnauthorizedAccessException("Only owner can remove admins.");
         }
         // --- نهاية التحقق ---
-
+        var removedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
+        var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
+        
+        // 1. تنفيذ العملية (إزالة العضو)
         // 1. تنفيذ العملية (إزالة العضو)
         room.RemoveMember(command.MemberId);
         await _uow.CommitAsync(ct);
 
+        // 2. الأعضاء الحاليين (بعد الإزالة)
         var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+        var remainingMembers = recipients;  // كل الأعضاء المتبقين
 
-        var removedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
-        var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
-
-        // 2. إنشاء وحفظ رسالة النظام
+        // 3. إنشاء وحفظ رسالة النظام (لجميع الأعضاء)
         var systemText = command.MemberId.Value == command.RequesterId.Value
             ? $"{removedName} left the group"
             : $"{removedName} was removed by {requesterName}";
@@ -81,12 +83,12 @@ public sealed class RemoveMemberFromGroupHandler
             room.Id,
             systemText,
             SystemMessageType.MemberRemoved,
-            recipients); // هذا الـ recipients مهم لتحديد من يستلم الرسالة داخل الشات
+            recipients); // رسالة النظام تظهر لكل الأعضاء
 
         await _messages.AddAsync(sysMsg, ct);
         await _uow.CommitAsync(ct);
 
-        // 3. بث رسالة النظام داخل الشات فقط (Chat Area)
+        // 4. بث رسالة النظام داخل الشات
         var msgDto = new MessageDto
         {
             Id = sysMsg.Id.Value,
@@ -98,32 +100,30 @@ public sealed class RemoveMemberFromGroupHandler
         };
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        // 4. [الأهم] تحديث قائمة الغرف (Room List) بدون نص معاينة (Preview)
-        //    - نرسل نفس الـ recipients (كل أعضاء المجموعة)
+        // 5. تحديث قائمة الغرف لكل الأعضاء المتبقين
         var listDto = new RoomListItemDto
         {
             Id = room.Id.Value,
             Name = room.Name,
             Type = room.Type.ToString(),
-            UnreadCount = 0, // رسائل النظام لا تزيد عداد unread في القائمة (حسب متطلباتك)
-            IsMuted = false, // يتم جلب حالة الكتم الحقيقية من قاعدة البيانات
+            UnreadCount = 0,
+            IsMuted = false,
             LastMessageAt = sysMsg.CreatedAt,
-            // ✨✨ الحل السحري هنا ✨✨
-            LastMessagePreview = null, // null => لا يظهر أي نص في الـ Preview
+            LastMessagePreview = null,
             LastMessageId = sysMsg.Id.Value,
             LastMessageSenderId = UserId.System.Value,
-            // بما أن LastMessagePreview = null، LastMessageStatus يمكن أن يكون null أو أي قيمة محايدة
             LastMessageStatus = null
         };
         await _broadcaster.RoomUpsertedAsync(listDto, recipients);
 
-        // 5. إشعار شخصي للعضو الذي تمت إزالته (هذا مهم)
+        // 6. ✅ الأهم: إشعار لكل الأعضاء المتبقين أن العضو الفلاني اتشال
+       
         await _broadcaster.MemberRemovedAsync(
             room.Id,
             command.MemberId,
             command.RequesterId,
             requesterName,
-            new List<UserId> { command.MemberId });
+            recipients);  // ← الآن كل الأعضاء المتبقين هيستقبلوا الحدث
 
         return Unit.Value;
     }

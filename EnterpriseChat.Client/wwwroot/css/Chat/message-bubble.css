@@ -775,10 +775,6 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     color: #34b7f1 !important; /* اللون الأزرق الفاتح زي واتساب */
 }
 
-/* لو عايز لون أزرق أغمق شوية: */
-/* .status-icon.read {
-    color: #3b82f6 !important;
-} */
 
 /* تأكد إن مفيش حاجة بت override اللون */
 .msg.mine .message-status-icon.read .status-icon {
@@ -1959,3 +1955,16 @@ t-radius: 6px !important; /* للـ gray */
 .msg-context-menu, .reactions-hover-wrap {
     z-index: 1000 !important;
 }
+
+/* في ملف الـ CSS بتاعك */
+.status-icon {
+    color: rgba(255, 255, 255, 0.6); /* default - sent */
+}
+
+    .status-icon.delivered {
+        color: rgba(255, 255, 255, 0.9); /* أبيض - delivered */
+    }
+
+    .status-icon.read {
+        color: #4FC3F7; /* أزرق - read */
+    }

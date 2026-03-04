@@ -14,11 +14,13 @@ public class MessageModel : INotifyPropertyChanged
         {
             if (_personalStatus != value)
             {
+                Console.WriteLine($"[MessageModel] PersonalStatus changing from {_personalStatus} to {value}");
                 _personalStatus = value;
-                OnPropertyChanged(); // دي اللي بتخلي الأيقونة تنور أزرق أو تظهر صحين فوراً
+                OnPropertyChanged(nameof(PersonalStatus));
             }
         }
     }
+    public bool IsBeingEdited { get; set; } = false;
 
     private bool _shouldForceRead;
     public bool ShouldForceRead
@@ -32,10 +34,22 @@ public class MessageModel : INotifyPropertyChanged
                 OnPropertyChanged();
 
                 // ✅ لو القيمة اتغيرت لـ true، غير PersonalStatus على طول
-                if (value && PersonalStatus < MessageStatus.Read)
-                {
-                    PersonalStatus = MessageStatus.Read;
-                }
+               
+            }
+        }
+    }
+    // MessageModel.cs - أضف property جديدة
+    private bool _isConfirmedRead; // ← السيرفر أكد إن الشخص قراها فعلاً
+
+    public bool IsConfirmedRead
+    {
+        get => _isConfirmedRead;
+        set
+        {
+            if (_isConfirmedRead != value)
+            {
+                _isConfirmedRead = value;
+                OnPropertyChanged();
             }
         }
     }

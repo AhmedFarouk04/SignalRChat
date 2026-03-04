@@ -41,7 +41,8 @@ public interface IMessageRepository
     CancellationToken ct);
 
 
-  
+
+    Task<Message?> GetByIdAsync(MessageId messageId, CancellationToken cancellationToken = default);
 
     Task<IEnumerable<(Guid MessageId, Guid SenderId)>> GetMessageIdsAndSendersUpToAsync(
     RoomId roomId,

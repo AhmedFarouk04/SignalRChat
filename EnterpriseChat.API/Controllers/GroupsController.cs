@@ -59,7 +59,7 @@ public sealed class GroupsController : BaseController
 
 
         var room = await _mediator.Send(command, ct);
-     
+
 
 
 
@@ -103,7 +103,7 @@ public sealed class GroupsController : BaseController
 
         await _mediator.Send(new LeaveGroupCommand(new RoomId(roomId), requesterId), ct);
 
-       
+
         return NoContent();
     }
 
@@ -155,21 +155,60 @@ public sealed class GroupsController : BaseController
 
         return NoContent();
     }
+    // في EnterpriseChat.API.Controllers.GroupsController
+
     [HttpPut("{roomId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status408RequestTimeout)]
     public async Task<IActionResult> Rename(Guid roomId, [FromBody] RenameGroupRequest request, CancellationToken ct)
     {
+        if (request == null)
+            return BadRequest("Request body is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return BadRequest("Group name is required.");
+
+        if (request.Name.Length > 100)
+            return BadRequest("Group name is too long.");
+
         // حاول تمسك الـ lock لمدة 5 ثواني بس
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(5));
 
         try
         {
-            await _mediator.Send(new RenameGroupCommand(new RoomId(roomId), GetCurrentUserId(), request.Name), cts.Token);
+            await _mediator.Send(new RenameGroupCommand(
+                new RoomId(roomId),
+                GetCurrentUserId(),
+                request.Name.Trim()),
+                cts.Token);
+
             return NoContent();
         }
         catch (OperationCanceledException)
         {
             return StatusCode(408, "Request timeout. Please try again.");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            // سجل الخطأ في السيرفر
+            Console.WriteLine($"[Rename Error] {ex.Message}");
+            return StatusCode(500, "An error occurred while renaming the group.");
         }
     }
     [HttpGet("{roomId:guid}")]

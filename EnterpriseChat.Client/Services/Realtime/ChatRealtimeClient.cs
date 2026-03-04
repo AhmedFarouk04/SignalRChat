@@ -63,7 +63,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     public event Action<Guid, Guid, int>? MessageStatusUpdated;
     public event Action<Guid, Guid, int, bool>? MessageReactionUpdated;
     public event Action<Guid, string>? MessageUpdated;
-    public event Action<Guid>? MessageDeleted;
+    public event Action<Guid, bool>? MessageDeleted;
     public event Action<Guid, bool>? UserBlockedByMeChanged;
     public event Action<Guid, bool>? UserBlockedMeChanged;
     public event Action<Guid>? OnDemandOnlineCheckRequested;
@@ -1071,6 +1071,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             });
         _connection.On<Guid, Guid, int>("MessageStatusUpdated", (messageId, userId, statusInt) =>
         {
+            Console.WriteLine($"[SignalR] 🔵 MessageStatusUpdated RECEIVED: msg={messageId}, userId={userId}, status={statusInt}");
             MessageStatusUpdated?.Invoke(messageId, userId, statusInt);
         });
         _connection.On<Guid, Guid, Guid>("MessageDeliveredToAll", (messageId, senderId, roomId) =>
@@ -1094,9 +1095,11 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         _connection.On<Guid, Guid>("AdminDemoted", (roomId, userId) => AdminDemoted?.Invoke(roomId, userId));
         _connection.On<Guid, Guid>("OwnerTransferred", (roomId, newOwnerId) => OwnerTransferred?.Invoke(roomId, newOwnerId));
         _connection.On<Guid, string>("MessageUpdated", (messageId, newContent) => MessageUpdated?.Invoke(messageId, newContent));
-        _connection.On<Guid>("MessageDeleted", messageId => MessageDeleted?.Invoke(messageId));
-        _connection.On<Guid, Guid?>("MessagePinned", (rid, mid) => MessagePinned?.Invoke(rid, mid));
-        _connection.On<Guid, Guid>("MessageDelivered", (messageId, roomId) => MessageDelivered?.Invoke(messageId, roomId));
+        _connection.On<Guid, bool>("MessageDeleted", (messageId, isForEveryone) =>
+    MessageDeleted?.Invoke(messageId, isForEveryone)); _connection.On<Guid, Guid>("MessageDelivered", (messageId, roomId) => MessageDelivered?.Invoke(messageId, roomId));
+       
+        
+        
         _connection.On<Guid, Guid>("MessageRead", (messageId, roomId) => MessageRead?.Invoke(messageId, roomId));
         _connection.On<DateTime>("Pong", serverTime =>
         {

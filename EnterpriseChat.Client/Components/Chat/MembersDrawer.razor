@@ -66,7 +66,6 @@
             <div class="drawer-section">
                 <div class="section-label">Members List</div>
                 <div style="font-size: 10px; color: #666; margin-bottom: 10px; padding: 5px; background: #111; border-radius: 4px;">
-                  
                 </div>
                 <div class="members-list">
                     @foreach (var u in Members.OrderByDescending(m => m.Id == OwnerId))
@@ -180,7 +179,7 @@
                 <span class="icon">🚪</span> Leave group
             </button>
         </div>
-       </aside>
+    </aside>
 
     @* ===== Leave Modals (ضعهم هنا بالظبط) ===== *@
     @if (showLeaveModal)
@@ -290,6 +289,7 @@
         CloseLeaveModals();
         await HandleDelete();
     }
+    // في MembersDrawer.razor - تحسين HandleRename
     private async Task HandleRename()
     {
         if (string.IsNullOrWhiteSpace(newGroupName) || newGroupName == GroupName)
@@ -299,9 +299,22 @@
         }
 
         isBusy = true;
-        await OnRename.InvokeAsync(newGroupName);
-        isEditingName = false;
-        isBusy = false;
+        try
+        {
+            await OnRename.InvokeAsync(newGroupName);
+            // النجاح: أقفل وضع التعديل
+            isEditingName = false;
+        }
+        catch (Exception ex)
+        {
+            // الفشل: خلي الـ input مفتوح والاسم القديم
+            Toasts.Error("Failed to rename", ex.Message);
+            newGroupName = GroupName; // استرجاع الاسم القديم
+        }
+        finally
+        {
+            isBusy = false;
+        }
     }
     private void OpenLeaveModal()
     {
@@ -363,43 +376,43 @@
         StateHasChanged();
     }
     private void ToggleTransferConfirm(Guid userId)
-{
-    // لو ضغط على نفس الشخص تاني = اقفل
-    if (_memberToTransfer == userId)
     {
-        CloseTransferPopup();
-        return;
+        // لو ضغط على نفس الشخص تاني = اقفل
+        if (_memberToTransfer == userId)
+        {
+            CloseTransferPopup();
+            return;
+        }
+
+        _memberToTransfer = userId;
+
+        // ابدأ تايمر يقفل لوحده
+        _transferCts?.Cancel();
+        _transferCts?.Dispose();
+        _transferCts = new CancellationTokenSource();
+
+        _ = Task.Delay(TransferAutoCloseMs, _transferCts.Token)
+            .ContinueWith(t =>
+            {
+                if (t.IsCanceled || t.IsFaulted) return;
+
+                // اقفل فقط لو لسه نفس الشخص مفتوح
+                if (_memberToTransfer == userId)
+                {
+                    _memberToTransfer = null;
+                    InvokeAsync(StateHasChanged);
+                }
+            }, TaskScheduler.Default);
     }
 
-    _memberToTransfer = userId;
-
-    // ابدأ تايمر يقفل لوحده
-    _transferCts?.Cancel();
-    _transferCts?.Dispose();
-    _transferCts = new CancellationTokenSource();
-
-    _ = Task.Delay(TransferAutoCloseMs, _transferCts.Token)
-        .ContinueWith(t =>
-        {
-            if (t.IsCanceled || t.IsFaulted) return;
-
-            // اقفل فقط لو لسه نفس الشخص مفتوح
-            if (_memberToTransfer == userId)
-            {
-                _memberToTransfer = null;
-                InvokeAsync(StateHasChanged);
-            }
-        }, TaskScheduler.Default);
-}
-
-private void CloseTransferPopup()
-{
-    _memberToTransfer = null;
-    _transferCts?.Cancel();
-    _transferCts?.Dispose();
-    _transferCts = null;
-    StateHasChanged();
-}
+    private void CloseTransferPopup()
+    {
+        _memberToTransfer = null;
+        _transferCts?.Cancel();
+        _transferCts?.Dispose();
+        _transferCts = null;
+        StateHasChanged();
+    }
     [JSInvokable]
     public void OnDocumentClick()
     {

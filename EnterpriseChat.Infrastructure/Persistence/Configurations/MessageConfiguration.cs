@@ -60,5 +60,16 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
             .HasForeignKey(x => x.ReplyToMessageId)
             .OnDelete(DeleteBehavior.SetNull)
             .IsRequired(false);
+
+
+        // Deletions navigation
+        builder.Metadata
+            .FindNavigation(nameof(Message.Deletions))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(x => x.Deletions)
+            .WithOne()
+            .HasForeignKey(d => d.MessageId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

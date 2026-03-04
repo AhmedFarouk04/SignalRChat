@@ -20,7 +20,7 @@ public sealed class MessageDeliveredEventHandler : IDomainEventHandler<MessageDe
         var msg = await _messages.GetByIdAsync(e.MessageId.Value, ct);
         if (msg is null) return;
 
-        // ✅ ابعت للـ sender
-        await _broadcaster.MessageDeliveredAsync(e.MessageId, msg.SenderId);
+        // ✅ التعديل هنا: ضفنا msg.RoomId في الآخر
+        await _broadcaster.MessageDeliveredAsync(e.MessageId, msg.SenderId, msg.RoomId);
     }
 }

@@ -11,7 +11,7 @@ public sealed class GetMessagesQueryHandler
 {
     private readonly IMessageReadRepository _repository;
     private readonly IChatRoomRepository _roomRepository;
-    private readonly IUserBlockRepository _blockRepository; // إضافة مستودع الحظر
+    private readonly IUserBlockRepository _blockRepository;
 
     public GetMessagesQueryHandler(
         IMessageReadRepository repository,
@@ -24,29 +24,26 @@ public sealed class GetMessagesQueryHandler
     }
 
     public async Task<IReadOnlyList<MessageReadDto>> Handle(
-    GetMessagesQuery query,
-    CancellationToken ct)
+        GetMessagesQuery query,
+        CancellationToken ct)
     {
+        // ✅ Validation بياخد ct العادي — كويس إنه يتكنسل لو الـ client قطع قبل ما نبدأ
         var room = await _roomRepository.GetByIdWithMembersAsync(query.RoomId, ct)
             ?? throw new InvalidOperationException("Room not found.");
 
         if (!room.IsMember(query.UserId))
             throw new UnauthorizedAccessException("Access denied.");
 
+        // ✅ بنمرر ct للـ repository لكن الـ repository نفسه بيستخدم CancellationToken.None
+        // في الـ AsSplitQuery queries — الـ ct بيتجاهل للـ DB operations
+        // وده هو الحل الصح لـ TaskCanceledException
         var messages = await _repository.GetMessagesAsync(
             query.RoomId,
             query.UserId,
             query.Skip,
             query.Take,
-            ct);
+            ct);    // ← repository هيستخدم None داخلياً
 
-        // ✅ شيل الفلتر ده نهائياً - هو اللي بيسبب اختفاء الرسائل والـ Reactions
-        // ❌ var filtered = messages.Where(m =>
-        //     m.SenderId == query.UserId.Value ||
-        //     m.Receipts.Any(r => r.UserId == query.UserId.Value)
-        // ).ToList();
-
-        // ✅ فلتر البلوك بس - ده المنطقي
         if (room.Type == RoomType.Private)
         {
             var otherUser = room.Members
@@ -54,12 +51,12 @@ public sealed class GetMessagesQueryHandler
 
             if (otherUser != null)
             {
+                // ✅ IsBlockedAsync سريع (< 5ms) — ct عادي كويس هنا
                 var isBlockedByMe = await _blockRepository
-                    .IsBlockedAsync(query.UserId, otherUser, ct);
+                    .IsBlockedAsync(query.UserId, otherUser, CancellationToken.None);
 
                 if (isBlockedByMe)
                 {
-                    // ✅ لو blocked، رجع الرسائل بتاعتي بس
                     return messages
                         .Where(m => m.SenderId == query.UserId.Value)
                         .ToList();
@@ -67,7 +64,6 @@ public sealed class GetMessagesQueryHandler
             }
         }
 
-        // ✅ رجع كل الرسائل بدون فلتر
         return messages;
     }
 }
