@@ -1,28 +1,7 @@
-```markdown
 # 💬 Enterprise Chat - Real-Time Messaging Platform
 
-<div align="center">
 
-![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)
-![SignalR](https://img.shields.io/badge/SignalR-Real--Time-FF6A00?style=for-the-badge&logo=signalr&logoColor=white)
-![Blazor](https://img.shields.io/badge/Blazor-WASM-512BD4?style=for-the-badge&logo=blazor&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-Caching-DC382D?style=for-the-badge&logo=redis&logoColor=white)
-![SQL Server](https://img.shields.io/badge/SQL-Server-CC2927?style=for-the-badge&logo=microsoft-sql-server&logoColor=white)
 
-[![GitHub Stars](https://img.shields.io/github/stars/AhmedFarouk04/SignalRChat?style=social)](https://github.com/AhmedFarouk04/SignalRChat/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/AhmedFarouk04/SignalRChat?style=social)](https://github.com/AhmedFarouk04/SignalRChat/network/members)
-[![GitHub Issues](https://img.shields.io/github/issues/AhmedFarouk04/SignalRChat)](https://github.com/AhmedFarouk04/SignalRChat/issues)
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
-
-### 🚀 Enterprise-Grade Real-Time Chat Application Built with Clean Architecture
-
-[🎥 Watch Demo Video](https://youtu.be/your-video-link) | [🐛 Report Bug](https://github.com/AhmedFarouk04/SignalRChat/issues) | [✨ Request Feature](https://github.com/AhmedFarouk04/SignalRChat/issues)
-
-![App Screenshot](https://via.placeholder.com/800x400?text=Enterprise+Chat+Screenshot)
-
-</div>
-
----
 
 ## ✨ Features
 
@@ -32,7 +11,7 @@
 | ----------------------- | ------------------------------------------------- |
 | **Real-Time Messaging** | Instant message delivery using SignalR WebSockets |
 | **Typing Indicators**   | See when users are typing with Redis caching      |
-| **Read Receipts**       | ✓ Sent, ✓ Delivered, ✓ Read status                |
+| **Read Receipts**       | ✓ Sent, ✓✓ Delivered, ✓✓ Read status                |
 | **Online Presence**     | Real-time online/offline status with "last seen"  |
 | **Message Reactions**   | 👍 ❤️ 😂 😮 😢 😡 reactions to messages           |
 | **Reply to Messages**   | Threaded conversations with message context       |
@@ -369,24 +348,6 @@ Contributions are welcome! Please follow these steps:
 
 ---
 
-## 📝 License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-## 📧 Contact
-
-**Ahmed Farouk**
-
-[![GitHub](https://img.shields.io/badge/GitHub-AhmedFarouk04-181717?style=for-the-badge&logo=github)](https://github.com/AhmedFarouk04)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?style=for-the-badge&logo=linkedin)](https://linkedin.com/in/ahmed-farouk-04)
-[![Gmail](https://img.shields.io/badge/Email-Contact-EA4335?style=for-the-badge&logo=gmail)](mailto:af7974943@gmail.com)
-
-Project Link: [https://github.com/AhmedFarouk04/SignalRChat](https://github.com/AhmedFarouk04/SignalRChat)
-
----
-
 ## ⭐ Support
 
 If you like this project, please give it a star on GitHub! It helps others discover it.
@@ -398,4 +359,3 @@ If you like this project, please give it a star on GitHub! It helps others disco
 [![Star on GitHub](https://img.shields.io/github/stars/AhmedFarouk04/SignalRChat?style=social)](https://github.com/AhmedFarouk04/SignalRChat/stargazers)
 
 </div>
-```
