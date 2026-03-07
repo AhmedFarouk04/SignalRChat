@@ -5,11 +5,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddMessageReceipts : Migration
+        public partial class AddMessageReceipts : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
                 name: "Status",
@@ -51,8 +49,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 columns: new[] { "UserId", "Status" });
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
                 name: "MessageReceipts");

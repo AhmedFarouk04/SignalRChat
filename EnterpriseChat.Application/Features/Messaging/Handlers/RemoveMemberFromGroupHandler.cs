@@ -37,8 +37,7 @@ public sealed class RemoveMemberFromGroupHandler
 
     public async Task<Unit> Handle(RemoveMemberFromGroupCommand command, CancellationToken ct)
     {
-        // --- التحقق من الصلاحيات والمدخلات (نفس الكود) ---
-        if (command.RoomId.Value == Guid.Empty)
+                if (command.RoomId.Value == Guid.Empty)
             throw new ArgumentException("RoomId is required.");
         if (command.MemberId.Value == Guid.Empty)
             throw new ArgumentException("MemberId cannot be empty.");
@@ -61,21 +60,15 @@ public sealed class RemoveMemberFromGroupHandler
             if (target.IsAdmin)
                 throw new UnauthorizedAccessException("Only owner can remove admins.");
         }
-        // --- نهاية التحقق ---
-        var removedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
+                var removedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
         var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
         
-        // 1. تنفيذ العملية (إزالة العضو)
-        // 1. تنفيذ العملية (إزالة العضو)
-        room.RemoveMember(command.MemberId);
+                        room.RemoveMember(command.MemberId);
         await _uow.CommitAsync(ct);
 
-        // 2. الأعضاء الحاليين (بعد الإزالة)
-        var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
-        var remainingMembers = recipients;  // كل الأعضاء المتبقين
-
-        // 3. إنشاء وحفظ رسالة النظام (لجميع الأعضاء)
-        var systemText = command.MemberId.Value == command.RequesterId.Value
+                var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+        var remainingMembers = recipients;  
+                var systemText = command.MemberId.Value == command.RequesterId.Value
             ? $"{removedName} left the group"
             : $"{removedName} was removed by {requesterName}";
 
@@ -83,13 +76,11 @@ public sealed class RemoveMemberFromGroupHandler
             room.Id,
             systemText,
             SystemMessageType.MemberRemoved,
-            recipients); // رسالة النظام تظهر لكل الأعضاء
-
+            recipients); 
         await _messages.AddAsync(sysMsg, ct);
         await _uow.CommitAsync(ct);
 
-        // 4. بث رسالة النظام داخل الشات
-        var msgDto = new MessageDto
+                var msgDto = new MessageDto
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
@@ -100,8 +91,7 @@ public sealed class RemoveMemberFromGroupHandler
         };
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        // 5. تحديث قائمة الغرف لكل الأعضاء المتبقين
-        var listDto = new RoomListItemDto
+                var listDto = new RoomListItemDto
         {
             Id = room.Id.Value,
             Name = room.Name,
@@ -109,22 +99,20 @@ public sealed class RemoveMemberFromGroupHandler
             UnreadCount = 0,
             IsMuted = false,
             LastMessageAt = sysMsg.CreatedAt,
-            LastMessagePreview = null,
+            LastMessagePreview = systemText,
             LastMessageId = sysMsg.Id.Value,
             LastMessageSenderId = UserId.System.Value,
             LastMessageStatus = null
         };
         await _broadcaster.RoomUpsertedAsync(listDto, recipients);
 
-        // 6. ✅ الأهم: إشعار لكل الأعضاء المتبقين أن العضو الفلاني اتشال
-       
+               
         await _broadcaster.MemberRemovedAsync(
             room.Id,
             command.MemberId,
             command.RequesterId,
             requesterName,
-            recipients);  // ← الآن كل الأعضاء المتبقين هيستقبلوا الحدث
-
+            recipients);  
         return Unit.Value;
     }
 }

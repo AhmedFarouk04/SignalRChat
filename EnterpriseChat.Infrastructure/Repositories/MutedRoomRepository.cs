@@ -56,8 +56,7 @@ public sealed class MutedRoomRepository : IMutedRoomRepository
         var ids = await _context.MutedRooms
             .AsNoTracking()
             .Where(x => x.UserId == userId)
-            .Select(x => x.RoomId.Value) // حسب نوع RoomId عندك
-            .ToListAsync(ct);
+            .Select(x => x.RoomId.Value)             .ToListAsync(ct);
 
         return ids.ToHashSet();
     }

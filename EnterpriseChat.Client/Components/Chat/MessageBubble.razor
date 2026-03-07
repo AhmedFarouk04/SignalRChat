@@ -10,152 +10,155 @@
 
 @inject ChatViewModel VM
 @inject MenuStateService MenuState
-@implements IAsyncDisposable
 @implements IDisposable
 @inject IJSRuntime JS
 
 @if (Message != null)
 {
-    var _ = Message;
-    var personalStatus = Message.PersonalStatus; @* ← force capture القيمة الحالية *@
-
-    @if (IsMenuOpen || IsReactionOpen)
+    if (Message.IsSystemMessage || Message.SenderId == Guid.Empty)
     {
-        @* دي طبقة شفافة بتغطي الشاشة كلها أول ما المنيو أو الإيموجي يفتحوا *@
-        <div class="menu-backdrop-overlay" @onclick="CloseAllPopups"></div>
-    }
-    <div class="msg-selection-wrapper @(IsMine ? "mine-wrapper" : "theirs-wrapper") @(VM.IsSelectionMode ? "selection-active" : "")"
-         @onclick="() => { if (VM.IsSelectionMode) VM.ToggleMessageSelection(Message.Id); }">
-
-        @if (VM.IsSelectionMode && !Message.IsDeleted)
-        {
-            <div class="custom-checkbox @(VM.SelectedMessageIds.Contains(Message.Id) ? "selected" : "")">
-                @if (VM.SelectedMessageIds.Contains(Message.Id))
-                {
-                    <span class="check-mark">✓</span>
-                }
+        <div class="system-message-container" style="display: flex; justify-content: center; width: 100%; margin: 16px 0;">
+            <div class="system-message-pill" style="background-color: rgba(255, 255, 255, 0.08); color: #94a3b8; padding: 6px 14px; border-radius: 12px; font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">
+                @Message.Content
             </div>
+        </div>
+    }
+    else
+    {
+                var personalStatus = Message.PersonalStatus;
+
+        @if (IsMenuOpen)
+        {
+            <div class="menu-backdrop-overlay" @onclick="CloseAllPopups"></div>
         }
 
-        <div class="msg @(IsMine ? "mine" : "theirs") @GroupPosClass @(IsNew ? "new" : "") @(IsMenuOpen ? "menu-active" : "") @(IsReactionOpen ? "reactions-open" : "")"
-             id="@($"message-{Message.Id}")">
+        <div class="msg-selection-wrapper @(IsMine ? "mine-wrapper" : "theirs-wrapper") @(VM.IsSelectionMode ? "selection-active" : "")"
+             @onclick="() => { if (VM.IsSelectionMode) VM.ToggleMessageSelection(Message.Id); }">
 
-            @if (!Message.IsDeleted)
+            @if (VM.IsSelectionMode && !Message.IsDeleted)
             {
-                <button class="quick-react-btn" type="button" @onclick:stopPropagation="true" @onclick="ToggleReactions">🙂</button>
+                <div class="custom-checkbox @(VM.SelectedMessageIds.Contains(Message.Id) ? "selected" : "")">
+                    @if (VM.SelectedMessageIds.Contains(Message.Id))
+                    {
+                        <span class="check-mark">✓</span>
+                    }
+                </div>
             }
 
-            <div class="msg-body @(Message.IsDeleted ? "deleted" : "")">
-
-                @* الاسم جوا البابل - فوق على الشمال زي WhatsApp *@
-                @if (GroupMembers.Count > 0 && !IsMine && GroupPosClass != "g-mid" && GroupPosClass != "g-end")
-                {
-                    var sender = GroupMembers.FirstOrDefault(m => m.Id == Message.SenderId);
-                    var senderName = sender?.DisplayName ?? "Unknown";
-                    var userColor = GetUserColor(senderName);
-
-                    <div class="message-sender-name" style="@($"color: {userColor} !important")">
-                        @senderName
-                    </div>
-                }
+            <div class="msg @(IsMine ? "mine" : "theirs") @GroupPosClass @(IsNew ? "new" : "") @(IsMenuOpen ? "menu-active" : "") @(IsReactionOpen ? "reactions-open" : "")"
+                 id="@($"message-{Message.Id}")">
 
                 @if (!Message.IsDeleted)
                 {
-                    <button class="msg-options-btn" type="button" @onclick:stopPropagation="true" @onclick="ToggleMenu">
-                        <svg viewBox="0 0 18 18" width="18" height="18"><path fill="currentColor" d="M3.3 4.6L9 10.3l5.7-5.7 1.6 1.6L9 13.5 1.7 6.2l1.6-1.6z"></path></svg>
-                    </button>
+                    <button class="quick-react-btn" type="button" @onclick:stopPropagation="true" @onclick="ToggleReactions">🙂</button>
                 }
 
-                @if (Message.ReplyInfo != null && !Message.IsDeleted)
-                {
-                    <div class="reply-preview" @onclick="OnReplyPreviewClick">
-                        <div class="reply-header"><span>@(Message.ReplyInfo.SenderId == CurrentUserId ? "You" : Message.ReplyInfo.SenderName)</span></div>
-                        <div class="reply-content">@(Message.ReplyInfo.IsDeleted ? "Deleted" : Message.ReplyInfo.ContentPreview)</div>
-                    </div>
-                }
-
-                <div class="msg-text" dir="auto">
-                    @if (Message.IsDeleted)
+                <div class="msg-body @(Message.IsDeleted ? "deleted" : "")">
+                    @if (GroupMembers.Count > 0 && !IsMine && GroupPosClass != "g-mid" && GroupPosClass != "g-end")
                     {
-                        <em class="deleted-message">🚫 Deleted</em>
+                        var sender = GroupMembers.FirstOrDefault(m => m.Id == Message.SenderId);
+                        var senderName = sender?.DisplayName ?? "Unknown";
+                        var userColor = GetUserColor(senderName);
+
+                        <div class="message-sender-name" style="@($"color: {userColor} !important")">
+                            @senderName
+                        </div>
                     }
-                    else
-                    {
-                        <span>@Message.Content</span>
-                        @if (Message.IsEdited)
-                        {
-                            <span class="edited-badge">(edited)</span>
-                        }
-                    }
-                </div>
-
-                <div class="message-meta" dir="ltr">
-                    <span class="message-time">@Message.CreatedAt.ToLocalTime().ToString("h:mm tt")</span>
-
-                  
-
-                    @if (IsMine)
-                    {
-                        <span class="message-status-icon @GetStatusClass()">
-                            @if (Message.PersonalStatus == ClientMessageStatus.Read)
-                            {
-                                <span class="status-icon read" style="color:#4FC3F7 !important;">✓✓</span>
-                            }
-                            else if (Message.PersonalStatus == ClientMessageStatus.Delivered)
-                            {
-                                <span class="status-icon delivered">✓✓</span>
-                            }
-                            else
-                            {
-                                <span class="status-icon sent">✓</span>
-                            }
-                        </span>
-                    }
-                </div>
-            </div>
-
-            @if (Message.Reactions?.Counts != null && Message.Reactions.Counts.Any())
-            {
-                <div class="msg-reaction-chip" @onclick:stopPropagation="true"
-                     @onclick="() => OnOpenReactionDetails.InvokeAsync(Message.Id)">
-                    @foreach (var kvp in Message.Reactions.Counts.OrderByDescending(x => x.Value).Take(3))
-                    {
-                        <span class="reaction-emoji">@GetReactionEmoji(kvp.Key)</span>
-                    }
-                    <span class="reaction-count">@Message.Reactions.Counts.Values.Sum()</span>
-                </div>
-            }
-
-            @if (IsMenuOpen)
-            {
-                <div class="msg-context-menu" @onclick:stopPropagation="true">
-                    <button class="menu-item" @onclick="async () => { CloseMenu(); await OnReplyClick(); }">↩️ Reply</button>
 
                     @if (!Message.IsDeleted)
                     {
-                        <button class="menu-item" @onclick="HandlePinClick">
-                            @(VM.IsMessagePinned(Message.Id) ? "📌 Unpin" : "📌 Pin")
+                        <button class="msg-options-btn" type="button" @onclick:stopPropagation="true" @onclick="ToggleMenu">
+                            <svg viewBox="0 0 18 18" width="18" height="18"><path fill="currentColor" d="M3.3 4.6L9 10.3l5.7-5.7 1.6 1.6L9 13.5 1.7 6.2l1.6-1.6z"></path></svg>
                         </button>
-
-                        @* ✅ زرار Forward الجديد *@
-                        <button class="menu-item" @onclick="HandleForwardClick">➤ Forward</button>
                     }
-                    @if (IsMine && !Message.IsDeleted && CanEdit)
+
+                    @if (Message.ReplyInfo != null && !Message.IsDeleted)
                     {
-                        <button class="menu-item" @onclick="() => { CloseMenu(); OnEditRequested.InvokeAsync(Message); }">✏️ Edit</button>
+                        <div class="reply-preview" @onclick="OnReplyPreviewClick">
+                            <div class="reply-header"><span>@(Message.ReplyInfo.SenderId == CurrentUserId ? "You" : Message.ReplyInfo.SenderName)</span></div>
+                            <div class="reply-content">@(Message.ReplyInfo.IsDeleted ? "Deleted" : Message.ReplyInfo.ContentPreview)</div>
+                        </div>
                     }
 
-                    <button class="menu-item delete" @onclick="HandleDeleteClick">🗑️ Delete</button>
+                    <div class="msg-text" dir="auto">
+                        @if (Message.IsDeleted)
+                        {
+                            <em class="deleted-message">🚫 Deleted</em>
+                        }
+                        else
+                        {
+                            <span>@Message.Content</span>
+                            @if (Message.IsEdited)
+                            {
+                                <span class="edited-badge">(edited)</span>
+                            }
+                        }
+                    </div>
+
+                    <div class="message-meta" dir="ltr">
+                        <span class="message-time">@Message.CreatedAt.ToLocalTime().ToString("h:mm tt")</span>
+                        @if (IsMine)
+                        {
+                            <span class="message-status-icon @GetStatusClass()">
+                                @if (Message.PersonalStatus == ClientMessageStatus.Read)
+                                {
+                                    <span class="status-icon read" style="color:#4FC3F7 !important;">✓✓</span>
+                                }
+                                else if (Message.PersonalStatus == ClientMessageStatus.Delivered)
+                                {
+                                    <span class="status-icon delivered">✓✓</span>
+                                }
+                                else
+                                {
+                                    <span class="status-icon sent">✓</span>
+                                }
+                            </span>
+                        }
+                    </div>
                 </div>
-            }
-            @if (IsReactionOpen)
-            {
-                <div class="reactions-hover-wrap" @onclick:stopPropagation="true">
-                    <ReactionsPanel MessageId="@Message.Id" Reactions="@Message.Reactions" OnReaction="HandleReaction" />
-                </div>
-            }
+
+                @* Reactions logic remains same... *@
+                @if (Message.Reactions?.Counts != null && Message.Reactions.Counts.Any())
+                {
+                    <div class="msg-reaction-chip" @onclick:stopPropagation="true"
+                         @onclick="() => OnOpenReactionDetails.InvokeAsync(Message.Id)">
+                        @foreach (var kvp in Message.Reactions.Counts.OrderByDescending(x => x.Value).Take(3))
+                        {
+                            <span class="reaction-emoji">@GetReactionEmoji(kvp.Key)</span>
+                        }
+                        <span class="reaction-count">@Message.Reactions.Counts.Values.Sum()</span>
+                    </div>
+                }
+
+                @* Context Menu remains same... *@
+                @if (IsMenuOpen)
+                {
+                    <div class="msg-context-menu" @onclick:stopPropagation="true">
+                        <button class="menu-item" @onclick="async () => { CloseMenu(); await OnReplyClick(); }">↩️ Reply</button>
+                        @if (!Message.IsDeleted)
+                        {
+                            <button class="menu-item" @onclick="HandlePinClick">
+                                @(VM.IsMessagePinned(Message.Id) ? "📌 Unpin" : "📌 Pin")
+                            </button>
+                            <button class="menu-item" @onclick="HandleForwardClick">➤ Forward</button>
+                        }
+                        @if (IsMine && !Message.IsDeleted && CanEdit)
+                        {
+                            <button class="menu-item" @onclick="() => { CloseMenu(); OnEditRequested.InvokeAsync(Message); }">✏️ Edit</button>
+                        }
+                        <button class="menu-item delete" @onclick="HandleDeleteClick">🗑️ Delete</button>
+                    </div>
+                }
+
+                @if (IsReactionOpen)
+                {
+                    <div class="reactions-hover-wrap" @onclick:stopPropagation="true">
+                        <ReactionsPanel MessageId="@Message.Id" Reactions="@Message.Reactions" OnReaction="HandleReaction" />
+                    </div>
+                }
+            </div>
         </div>
-    </div>
+    }
 }
 
 @code {
@@ -176,7 +179,6 @@
     [Parameter] public EventCallback<MessageModel> OnDeleteRequested { get; set; }
     private MessageModel? _prevMessage;
 
-    private DotNetObjectReference<MessageBubble>? _clickObjRef;
     protected override bool ShouldRender() => true;
 
     private bool IsMenuOpen => MenuState.OpenMenuMessageId == Message?.Id;
@@ -188,12 +190,10 @@
     {
        
         MenuState.PropertyChanged += OnMenuStateChanged;
-        VM.SelectionModeChanged += OnSelectionModeChanged; // ✅ أضف ده
-   
+        VM.SelectionModeChanged += OnSelectionModeChanged;    
     }
     private void OnMenuStateChanged(object? s, PropertyChangedEventArgs e) => InvokeAsync(StateHasChanged);
-    private void OnSelectionModeChanged() => InvokeAsync(StateHasChanged); // ✅ أضف ده
-
+    private void OnSelectionModeChanged() => InvokeAsync(StateHasChanged); 
     private void HandleForwardClick()
     {
         CloseMenu();
@@ -207,8 +207,7 @@
 
         Console.WriteLine($"[Bubble] PropertyChanged: {e.PropertyName}, PersonalStatus={Message.PersonalStatus}");
 
-        // استخدم InvokeAsync مباشرة بدون Task.Yield
-        _ = InvokeAsync(StateHasChanged);
+                _ = InvokeAsync(StateHasChanged);
     }
 
     protected override void OnParametersSet()
@@ -227,8 +226,7 @@
 
     public void Dispose()
     {
-        // ✅ واحدة بس
-        if (_prevMessage != null)
+                if (_prevMessage != null)
             _prevMessage.PropertyChanged -= OnMessagePropertyChanged;
 
         MenuState.PropertyChanged -= OnMenuStateChanged;
@@ -239,8 +237,7 @@
     {
         if (!IsMenuOpen)
         {
-            await OnToggleReaction.InvokeAsync(Guid.Empty); // اقفل الإيموجي الأول
-            MenuState.OpenMenuMessageId = Message?.Id;
+            await OnToggleReaction.InvokeAsync(Guid.Empty);             MenuState.OpenMenuMessageId = Message?.Id;
         }
         else { CloseMenu(); }
     }
@@ -249,16 +246,19 @@
 
     private async Task ToggleReactions()
     {
+        Console.WriteLine($"[ToggleReactions] called, IsReactionOpen={IsReactionOpen}");
         if (!IsReactionOpen)
         {
-            CloseMenu(); // اقفل المنيو الأول
+            CloseMenu();
             await OnToggleReaction.InvokeAsync(Message!.Id);
         }
-        else { await OnToggleReaction.InvokeAsync(Guid.Empty); }
+        else
+        {
+            await OnToggleReaction.InvokeAsync(Guid.Empty);
+        }
     }
 
-    // الدالة السحرية اللي هتقفل كل حاجة لما تضغط برا
-    private async Task CloseAllPopups()
+        private async Task CloseAllPopups()
     {
         CloseMenu();
         await OnToggleReaction.InvokeAsync(Guid.Empty);
@@ -294,48 +294,9 @@
 
     private string GetStatusTooltip() => "";
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_clickObjRef != null)
-        {
-            await JS.InvokeVoidAsync("unregisterClickHandler");
-            _clickObjRef.Dispose();
-            _clickObjRef = null;
-        }
-       
-    }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && Message != null)
-        {
-            _clickObjRef = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("registerClickHandler", _clickObjRef);
-        }
-    }
-
-    [JSInvokable]
-    public async Task OnDocumentClick()
-    {
-        bool needsRefresh = false;
-
-        if (IsMenuOpen)
-        {
-            MenuState.CloseMenu();
-            needsRefresh = true;
-        }
-
-        if (IsReactionOpen)
-        {
-            await OnToggleReaction.InvokeAsync(Guid.Empty);
-            needsRefresh = true;
-        }
-
-        if (needsRefresh)
-        {
-            await InvokeAsync(StateHasChanged);
-        }
-    }
+  
+   
     private void HandlePinClick()
     {
         CloseMenu();

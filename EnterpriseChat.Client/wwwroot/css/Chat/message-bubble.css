@@ -2,7 +2,7 @@
    ENTERPRISE CHAT - MESSAGE BUBBLES (FIXED)
    ============================================ */
 
-/* ------- الحاوية الرئيسية للرسائل ------- */
+
 .chat-messages {
     display: flex;
     flex-direction: column;
@@ -14,7 +14,7 @@
 
 
     
-/* ------- الـ Checkbox (يظهر فقط في وضع التحديد) ------- */
+
 .selection-active .custom-checkbox {
     display: flex !important;
     opacity: 1 !important;
@@ -45,9 +45,9 @@
 
 
 
-/* ------- جسم الفقاعة (Bubble) ------- */
 
-/* ألوان الرسائل */
+
+
 .msg.mine .msg-body {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: #fff;
@@ -59,7 +59,7 @@
     border: 1px solid rgba(75, 85, 99, 0.4);
 }
 
-/* ------- رسالة محذوفة ------- */
+
 .deleted-message {
     color: rgba(148, 163, 184, 0.6) !important;
     font-style: italic;
@@ -68,7 +68,7 @@
     gap: 6px;
 }
 
-/* ------- الميتا بيانات (الوقت والحالة) ------- */
+
 .message-meta {
     display: inline-flex;
     align-items: center;
@@ -122,7 +122,7 @@
     opacity: 0.85;
 }
 
-/* ------- زر الخيارات (ثلاث نقاط) ------- */
+
 .msg-options-btn {
     position: absolute;
     top: 2px;
@@ -141,7 +141,7 @@
     opacity: 1;
 }
 
-/* ------- زر الـ Quick Reaction ------- */
+
 .quick-react-btn {
     position: absolute;
     top: 50%;
@@ -172,7 +172,7 @@
     right: -40px;
 }
 
-/* ------- تأثير الـ Highlight ------- */
+
 .highlight-flash {
     animation: flash-pulse 2s ease-out;
     position: relative;
@@ -197,7 +197,7 @@
     }
 }
 
-/* ------- بقية الأنماط (ماركداون، etc) ------- */
+
 .msg-text,
 .markdown-content {
     display: inline;
@@ -301,7 +301,7 @@
         box-shadow: none;
     }
 
-/* ------- مودال الإعادة التوجيه ------- */
+
 .forward-modal-overlay {
     position: fixed;
     top: 0;
@@ -501,7 +501,7 @@
         box-shadow: none;
     }
 
-/* ------- Animations ------- */
+
 @keyframes slideUp {
     from {
         transform: translateY(100%);
@@ -536,7 +536,7 @@
     }
 }
 
-/* ------- Responsive ------- */
+
 @media (max-width: 768px) {
     .forward-action-bar {
         height: 60px;
@@ -598,16 +598,16 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     border-radius: 18px !important;
 }
 
-    /* إخفاء جميع الذيول */
+    
     html body .chat-messages .msg .msg-body::after {
         display: none !important;
     }
 
 
-/* ====== قائمة السياق (Context Menu) ====== */
+
 .msg-context-menu {
     position: absolute;
-    top: calc(100% + 5px); /* تظهر أسفل الفقاعة مباشرة مع مسافة 5px */
+    top: calc(100% + 5px); 
     right: 0;
     background: #1e293b;
     border: 1px solid rgba(255,255,255,0.1);
@@ -619,13 +619,13 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     animation: fadeIn 0.2s ease;
 }
 
-/* تنسيق للرسائل التي تظهر على اليسار (theirs) */
+
 .msg.theirs .msg-context-menu {
     right: auto;
     left: 0;
 }
 
-/* عناصر القائمة */
+
 .msg-context-menu .menu-item {
     display: block;
     width: 100%;
@@ -652,34 +652,34 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         }
 
 .msg {
-    position: relative; /* مهم لتحديد موضع القائمة المطلقة */
+    position: relative; 
 }
 .quick-react-btn {
     top: 50%;
     transform: translateY(-50%);
     pointer-events: auto;
-    z-index: 1001; /* ليكون فوق أي عناصر أخرى */
+    z-index: 1001; 
 }
 
-/* ضمان مساحة كافية لظهور الزر بشكل مناسب */
 
-/* عندما تكون القائمة مفتوحة، نرفع الرسالة بالكامل فوق أي رسالة تانية */
+
+
 .msg.menu-active {
-    z-index: 1000 !important; /* رقم عالي يضمن ظهورها فوق الكل */
+    z-index: 1000 !important; 
 }
 
-/* تأكد من أن القائمة نفسها واخدة z-index عالي وموضع مطلق */
+
 .msg-context-menu {
     position: absolute;
     z-index: 1001;
-    /* باقي تنسيقات المنيو بتاعتك (الخلفية، الحدود، الخ) */
+    
     background: var(--bg-panel, #1e293b);
     border: 1px solid rgba(255,255,255,0.1);
     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     border-radius: 12px;
     overflow: hidden;
     min-width: 150px;
-    /* تحديد مكان الظهور (يمين للـ mine وشمال للـ theirs) */
+    
     top: 30px;
 }
 
@@ -693,17 +693,17 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 .chat-messages {
     display: flex;
     flex-direction: column;
-    padding: 15px 20px; /* TECH LEAD: زيادة padding لمساحة أفضل */
-    gap: 7px; /* TECH LEAD: 7px أنظف وأحدث */
+    padding: 15px 20px; 
+    gap: 7px; 
     width: 100%;
     overflow-x: hidden;
 }
 
-/* 2. التأكد من هوامش الرسايل */
+
 .msg.mine {
     align-self: flex-end;
-    /* ندي هوامش بسيطة لضمان عدم الالتصاق */
-    margin-left: 15%; /* عشان الرسالة ما تفرشش بعرض الشاشة كله */
+    
+    margin-left: 15%; 
 }
 
 .msg.theirs {
@@ -711,43 +711,43 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     margin-right: 25%;
 }
 
-/* 3. لمسة احترافية لوضع الاختيار (Selection Mode) */
+
 .selection-active .msg {
-    /* لما نفتح الاختيار، بنزود الإزاحة شمال عشان الـ Checkbox */
+    
     margin-left: 45px !important;
-    /* وبنلغي الـ margin-left الـ 15% عشان ما تبقاش الرسالة ضيقة أوي */
+    
 }
 .read-count {
-    color: #38bdf8; /* لون أزرق زي الـ Read */
+    color: #38bdf8; 
     font-size: 0.85em;
     margin-left: 3px;
     font-weight: 600;
 }
 
 .delivered-count {
-    color: #6b7280; /* رمادي للـ Delivered */
+    color: #6b7280; 
     font-size: 0.85em;
     margin-left: 3px;
 }
 .status-read {
     color: #4fc3f7;
 }
-/* زرقاء واتساب */
+
 .status-delivered {
     color: #ffffff;
 }
-/* أبيض/رمادي فاتح */
+
 .status-partial-read {
     color: #81d4fa;
 }
-/* أفتح شوية للـ partial */
+
 .read-count,
 .delivered-count {
     font-size: 0.75em;
     margin-left: 3px;
     vertical-align: super;
 }
-/* تحسين شكل الميتا في الجروبات */
+
 .message-status-icon {
     display: inline-flex;
     align-items: center;
@@ -755,14 +755,14 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 }
 
 .read-count {
-    font-size: 9px; /* صغر الحجم شوية */
+    font-size: 9px; 
     font-weight: 700;
     line-height: 1;
-    /* بدل super استخدم transform لو محتاج رفعة بسيطة */
+    
     transform: translateY(-1px);
 }
 
-/* ========== أيقونات الحالة ========== */
+
 .status-icon.sent {
     color: rgba(255, 255, 255, 0.7) !important;
 }
@@ -772,11 +772,11 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 }
 
 .status-icon.read {
-    color: #34b7f1 !important; /* اللون الأزرق الفاتح زي واتساب */
+    color: #34b7f1 !important; 
 }
 
 
-/* تأكد إن مفيش حاجة بت override اللون */
+
 .msg.mine .message-status-icon.read .status-icon {
     color: #34b7f1 !important;
 }
@@ -793,11 +793,11 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 }
 
 .message-status-icon.delivered .status-icon {
-    color: #ffffff !important; /* لون أبيض واضح للصحيين */
+    color: #ffffff !important; 
     opacity: 1;
 }
 
-/* ===== Typing Dots (خاص وجروب) ===== */
+
 .typing-dots-only {
     display: inline-flex;
     gap: 3px;
@@ -820,7 +820,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
             animation-delay: 0.4s;
         }
 
-/* ===== Typing Indicator Container (جوا الشات) ===== */
+
 .typing-indicator-container {
     min-height: 28px;
     padding: 4px 16px;
@@ -830,21 +830,21 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     z-index: 5;
 }
 
-/* ===== Typing Indicator (جوا الشات) ===== */
+
 .typing-indicator {
     display: flex;
     align-items: center;
     gap: 6px;
 }
 
-/* اسم المستخدم في الجروب */
+
 .typing-names {
     font-size: 0.78rem;
     color: #9ca3af;
     font-style: italic;
 }
 
-/* النقط في الجروب جوا الشات */
+
 .dots {
     display: inline-flex;
     gap: 4px;
@@ -867,7 +867,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
             animation-delay: 0.4s;
         }
 
-/* ===== Typing Text (برا في Rooms) ===== */
+
 .typing-group-text {
     font-size: 0.78rem;
     color: #60a5fa;
@@ -877,7 +877,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     text-overflow: ellipsis;
 }
 
-/* ===== Animation ===== */
+
 @keyframes typingBounce {
     0%, 80%, 100% {
         transform: scale(0.6);
@@ -890,25 +890,25 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     }
 }
 
-/* أنماط نافذة تأكيد الإزالة (Confirm Popup) */
+
 .confirm-remove-popup {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #1e293b; /* نفس لون خلفية الـ Drawer */
-    border: 1px solid rgba(239, 68, 68, 0.5); /* حد أحمر خفيف */
+    background: #1e293b; 
+    border: 1px solid rgba(239, 68, 68, 0.5); 
     border-radius: 20px;
     padding: 4px 12px 4px 16px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     animation: fadeInScale 0.2s ease-out;
-    transform-origin: right center; /* يظهر من ناحية الزر */
+    transform-origin: right center; 
     white-space: nowrap;
 }
 
     .confirm-remove-popup span {
         font-size: 13px;
         font-weight: 500;
-        color: #fca5a5; /* أحمر فاتح للنص */
+        color: #fca5a5; 
         margin-right: 4px;
     }
 
@@ -925,7 +925,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 }
 
 .mini-btn.confirm-yes {
-    background: #ef4444; /* أحمر غامق */
+    background: #ef4444; 
     color: white;
 }
 
@@ -944,7 +944,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         color: #e5e7eb;
     }
 
-/* أنيميشن بسيط للظهور */
+
 @keyframes fadeInScale {
     from {
         opacity: 0;
@@ -957,22 +957,22 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     }
 }
 
-/* للتأكد من أن الأزرار في الـ Actions لا تسبب التصاق */
+
 .member-actions {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap; /* يسمح للنافذة بالنزول لسطر جديد إذا كانت المساحة ضيقة */
+    flex-wrap: wrap; 
     justify-content: flex-end;
 }
 
-/* تحسين موضع نافذة التأكيد */
+
 .member-actions {
     position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: nowrap; /* منع الالتفاف */
+    flex-wrap: nowrap; 
 }
 
 .confirm-remove-popup {
@@ -1007,7 +1007,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     }
 }
 
-/* تحسين شكل الأزرار المصغرة */
+
 .mini-btn.confirm-yes,
 .mini-btn.confirm-no {
     width: 24px;
@@ -1044,7 +1044,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         transform: scale(1.1);
     }
 
-/* إضافة تأثيرات حركية للزر الأصلي */
+
 .action-icon-btn.danger {
     transition: all 0.2s ease;
 }
@@ -1060,7 +1060,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     transition: background 0.2s ease;
 }
 
-/* تحسين موضع نافذة التأكيد */
+
 .member-actions {
     position: relative;
     display: flex;
@@ -1100,7 +1100,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     }
 }
 
-/* تحسين شكل الأزرار المصغرة */
+
 .mini-btn.confirm-yes,
 .mini-btn.confirm-no {
     width: 28px;
@@ -1141,7 +1141,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         border-color: rgba(255, 255, 255, 0.2);
     }
 
-/* تأثير خلفية للعنصر الذي في حالة التأكيد */
+
 .member-item:has(.confirm-remove-popup) {
     background: rgba(239, 68, 68, 0.05);
     border-radius: 8px;
@@ -1150,7 +1150,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     margin: -4px -8px;
 }
 
-/* تحسين الزر الأصلي */
+
 .action-icon-btn.danger {
     transition: all 0.2s ease;
     position: relative;
@@ -1167,7 +1167,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         transform: scale(0.95);
     }
 
-/* إضافة عد تنازلي بصري بسيط (اختياري) */
+
 .confirm-remove-popup::after {
     content: '';
     position: absolute;
@@ -1191,11 +1191,11 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     }
 }
 
-/* منع تأثير العد التنازلي إذا أردت */
+
 .confirm-remove-popup.no-timer::after {
     display: none;
 }
-/* ========== Admin Badge ========== */
+
 .badge.admin {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     color: #000;
@@ -1209,7 +1209,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* ========== Admin Star Buttons ========== */
+
 .action-icon-btn.admin-active {
     color: #fbbf24;
     background: rgba(251, 191, 36, 0.1);
@@ -1234,14 +1234,14 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         transform: scale(1.1);
     }
 
-/* تحسين شكل النجمة */
+
 .star-icon {
     font-size: 16px;
     line-height: 1;
     display: inline-block;
 }
 
-/* تأثير نبض خفيف عند تغيير الحالة */
+
 @keyframes adminPulse {
     0% {
         transform: scale(1);
@@ -1261,7 +1261,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     animation: adminPulse 0.5s ease;
 }
 
-/* تحسين شكل الأزرار بشكل عام */
+
 .action-icon-btn {
     width: 32px;
     height: 32px;
@@ -1289,14 +1289,14 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
             color: #a78bfa;
         }
 
-/* تحسين spacing بين العناصر */
+
 .member-badges {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     margin-top: 2px;
 }
-/* تحسين شكل النجمة */
+
 .action-icon-btn.admin-active {
     color: #fbbf24 !important;
     background: rgba(251, 191, 36, 0.15) !important;
@@ -1307,7 +1307,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
-/* Badge Admin */
+
 .badge.admin {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     color: #000;
@@ -1315,10 +1315,10 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     font-size: 10px;
     padding: 2px 8px;
     border-radius: 12px;
-    /* نافذة تأكيد نقل الملكية */
+    
 }
 
-/* ===== Transfer Ownership (Nice Popover) ===== */
+
 
 .transfer-wrapper {
     position: relative;
@@ -1326,7 +1326,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     align-items: center;
 }
 
-/* click trap لإغلاق البوب اوفر عند الضغط برا */
+
 .confirm-click-trap {
     position: fixed;
     inset: 0;
@@ -1334,14 +1334,14 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     z-index: 3000;
 }
 
-/* highlight للتاج وقت الفتح */
+
 .action-icon-btn.transfer.is-active {
     background: rgba(139, 92, 246, 0.18);
     box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25) inset;
     transform: translateY(-1px);
 }
 
-/* البوب اوفر نفسه */
+
 .transfer-popover {
     position: absolute;
     right: 0;
@@ -1357,7 +1357,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     animation: tpPop .14s ease-out;
 }
 
-    /* سهم صغير */
+    
     .transfer-popover::after {
         content: "";
         position: absolute;
@@ -1432,7 +1432,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
    LEAVE GROUP MODALS
    =========================== */
 
-/* Overlay */
+
 .leave-modal-overlay {
     position: fixed;
     inset: 0;
@@ -1445,7 +1445,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     animation: lmFade 160ms ease-out;
 }
 
-/* Modal Card */
+
 .leave-modal {
     width: min(420px, 92vw);
     background: rgba(15, 23, 42, 0.92);
@@ -1456,7 +1456,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     animation: lmPop 180ms ease-out;
 }
 
-/* Header */
+
 .leave-modal-header {
     padding: 16px 18px;
     display: flex;
@@ -1488,7 +1488,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         transform: translateY(-1px);
     }
 
-/* Body */
+
 .leave-modal-body {
     padding: 16px 18px 8px;
     color: #cbd5e1;
@@ -1502,7 +1502,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         color: #94a3b8;
     }
 
-/* Footer Buttons */
+
 .leave-modal-footer {
     padding: 14px 18px 16px;
     display: flex;
@@ -1521,7 +1521,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     transition: transform .15s ease, filter .15s ease, background .15s ease;
 }
 
-    /* Cancel */
+    
     .leave-btn2.cancel {
         background: rgba(255,255,255,0.06);
         color: #cbd5e1;
@@ -1533,7 +1533,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
             transform: translateY(-1px);
         }
 
-    /* Confirm (normal leave) */
+    
     .leave-btn2.confirm {
         background: linear-gradient(135deg, #38bdf8, #2563eb);
         color: #fff;
@@ -1544,7 +1544,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
             filter: brightness(1.08);
         }
 
-/* Owner variant */
+
 .leave-modal.owner {
     border-color: rgba(139, 92, 246, 0.25);
 }
@@ -1553,7 +1553,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         color: #e9d5ff;
     }
 
-/* Owner action button */
+
 .leave-btn2.owner-action {
     background: rgba(139, 92, 246, 0.16);
     color: #e9d5ff;
@@ -1565,7 +1565,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         transform: translateY(-1px);
     }
 
-/* Delete action */
+
 .leave-btn2.danger {
     background: rgba(239, 68, 68, 0.12);
     color: #fecaca;
@@ -1577,7 +1577,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
         transform: translateY(-1px);
     }
 
-/* Animations */
+
 @keyframes lmFade {
     from {
         opacity: 0;
@@ -1600,22 +1600,22 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     }
 }
 
-/* الحاوية الأساسية */
+
 .system-message-container {
     display: flex;
     justify-content: center;
     width: 100%;
-    margin: 12px 0 !important; /* مسافة كافية عشان العين ترتاح */
+    margin: 12px 0 !important; 
 }
 
 .system-message {
     background-color: rgba(255, 255, 255, 0.03) !important;
     display: inline-flex !important;
-    align-items: center !important; /* سنترة هندسية دقيقة */
+    align-items: center !important; 
     justify-content: center;
-    /* تثبيت الارتفاع هو الضمان الوحيد للتماثل */
+    
     height: 22px !important;
-    padding: 0 14px !important; /* بادينج أفقي فقط */
+    padding: 0 14px !important; 
 
     border-radius: 11px !important;
     border: 1px solid rgba(255, 255, 255, 0.05) !important;
@@ -1624,19 +1624,19 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 }
 
 .system-text {
-    font-size: 10px !important; /* صغر الخط شوية للفخامة */
+    font-size: 10px !important; 
     color: rgba(148, 163, 184, 0.6) !important;
     font-weight: 600;
-    /* السحر هنا: توحيد حالة الأحرف بيخلي المسافات متساوية دايماً */
+    
     text-transform: uppercase !important;
     letter-spacing: 0.5px;
-    line-height: normal !important; /* سيب المتصفح يوزع المساحة براحته جوه الـ Flex */
+    line-height: normal !important; 
     display: block !important;
-    /* شيلنا الـ transform عشان الـ flex center كفاية */
+    
 }
 
-/* امسح الـ first-letter خالص لأنه هو اللي بيبوظ التماثل */
-    /* تعديل بسيط: أول حرف بس كابيتال */
+
+    
     .system-text::first-letter {
         text-transform: uppercase;
     }
@@ -1650,7 +1650,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 
 
 
-/* مسافة بين الرسائل + الـ reaction */
+
 .chat-messages {
     gap: 6px !important;
 }
@@ -1659,7 +1659,7 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     margin-bottom: 26px !important;
 }
 
-/* ضمان إن الـ mine والـ theirs ياخدوا نفس الـ max-width */
+
 .msg.mine,
 .msg.theirs {
     max-width: 72% !important;
@@ -1667,7 +1667,6 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     margin-right: 0 !important;
 }
 
-/* ============= TECH LEAD - COMPACT BUBBLES FIX v1.2 (Short Arabic) ============= */
 
 
 
@@ -1675,21 +1674,22 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
 
 
 
-/* مسافات أفضل */
+
+
 .chat-messages {
     gap: 7px !important;
 }
 
-/* ضمان إن الـ meta مش بتأثر على العرض */
+
 .message-meta {
     margin-top: 4px !important;
 }
-/* ============= TECH LEAD - FINAL COMPACT BUBBLES v1.3 (Arabic RTL Fix) ============= */
+
 
 .msg {
     max-width: 65% !important;
     width: fit-content !important;
-    align-self: flex-end !important; /* مهم جدًا للـ mine في RTL */
+    align-self: flex-end !important; 
 }
 
     .msg.theirs {
@@ -1697,15 +1697,15 @@ html body .chat-messages .msg.theirs.g-end .msg-body {
     }
 
 
-/* Tail خفيف (يخلي الشكل أكثر طبيعية) */
-t-radius: 6px !important; /* للـ gray */
+
+t-radius: 6px !important; 
 }
 
-/* مسافة نهائية */
+
 .chat-messages {
     gap: 8px !important;
 }
-/* TECH LEAD - Simple Curved Tail v1 (WhatsApp-like) */
+
 
 
 
@@ -1714,30 +1714,30 @@ t-radius: 6px !important; /* للـ gray */
 
 
 .msg.mine .msg-body {
-    border-bottom-right-radius: 4px !important; /* يساعد الtail */
+    border-bottom-right-radius: 4px !important; 
 }
 
 .msg.theirs .msg-body {
     border-bottom-left-radius: 4px !important;
 }
-/* داخل MessageBubble.razor.css أو App.razor.css */
 
-/* عرض أقل في الجروب، خاصة للرسائل الواردة */
+
+
 .group-chat .msg.theirs {
-    max-width: 68% !important; /* أو 65% لو عايز أضيق أكتر */
+    max-width: 68% !important; 
 }
 
 .group-chat .msg.mine {
-    max-width: 72% !important; /* الرسائل اللي منك ممكن تبقى أوسع شوية */
+    max-width: 72% !important; 
 }
 
-/* لو مش عندك class="group-chat" على الحاوية، ممكن تعتمد على وجود GroupMembers */
-.msg:has(+ .message-sender-name) { /* رسالة ليها اسم فوقها = جروب */
+
+.msg:has(+ .message-sender-name) { 
     max-width: 68% !important;
 }
-/* ============== FIX FINAL: Message Bubbles + Sender Name ============== */
 
-/* 1. Wrapper للرسائل */
+
+
 .msg-selection-wrapper {
     display: flex;
     align-items: flex-start;
@@ -1760,7 +1760,7 @@ t-radius: 6px !important; /* للـ gray */
         justify-content: flex-start;
     }
 
-/* 2. الـ Message Container */
+
 .msg {
     max-width: 65%;
     min-width: 0;
@@ -1780,7 +1780,7 @@ t-radius: 6px !important; /* للـ gray */
         align-items: flex-start;
     }
 
-/* 3. الـ Bubble Body */
+
 .msg-body {
     position: relative;
     display: inline-block;
@@ -1797,7 +1797,7 @@ t-radius: 6px !important; /* للـ gray */
     border-radius: 18px;
 }
 
-/* 4. ألوان البابل */
+
 .msg.mine .msg-body {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: #fff;
@@ -1809,7 +1809,7 @@ t-radius: 6px !important; /* للـ gray */
     border: 1px solid rgba(75, 85, 99, 0.4);
 }
 
-/* 5. اسم المرسل جوا البابل */
+
 .message-sender-name {
     font-size: 12.5px;
     font-weight: 600;
@@ -1826,12 +1826,12 @@ t-radius: 6px !important; /* للـ gray */
     letter-spacing: 0.2px;
 }
 
-/* 6. Padding مخصوص لما يكون فيه اسم */
+
 .msg.theirs .msg-body:has(.message-sender-name) {
     padding-top: 8px !important;
 }
 
-/* 7. إخفاء الاسم في الرسائل المتتالية */
+
 .msg.theirs.g-mid .message-sender-name,
 .msg.theirs.g-end .message-sender-name {
     display: none !important;
@@ -1842,7 +1842,7 @@ t-radius: 6px !important; /* للـ gray */
     padding-top: 10px !important;
 }
 
-/* 8. Tail (ذيل الرسالة) */
+
 .msg.mine .msg-body::after,
 .msg.theirs .msg-body::after {
     content: "";
@@ -1876,7 +1876,7 @@ t-radius: 6px !important; /* للـ gray */
     border-bottom-left-radius: 4px !important;
 }
 
-/* 9. المسافات */
+
 .chat-messages {
     display: flex;
     flex-direction: column;
@@ -1889,10 +1889,10 @@ t-radius: 6px !important; /* للـ gray */
 .msg:has(.msg-reaction-chip) {
     margin-bottom: 20px;
 }
-/* تعديل اتجاه النص عشان الاسم يبقى على الشمال */
+
 .msg.theirs .msg-body {
-    text-align: left; /* مهم جداً */
-    direction: ltr; /* عشان الاسم يبقى يسار */
+    text-align: left; 
+    direction: ltr; 
 }
 
 .message-sender-name {
@@ -1900,12 +1900,12 @@ t-radius: 6px !important; /* للـ gray */
     direction: ltr !important;
 }
 
-/* النص العربي يرجع RTL */
+
 .msg-text {
     direction: rtl;
     text-align: right;
 }
-/* طبقة شفافة تغطي الشاشة بالكامل خلف القوائم المفتوحة */
+
 .menu-backdrop {
     position: fixed;
     top: 0;
@@ -1913,29 +1913,29 @@ t-radius: 6px !important; /* للـ gray */
     width: 100vw;
     height: 100vh;
     background: transparent;
-    z-index: 998; /* أقل من الـ menu بواحد */
+    z-index: 998; 
     cursor: default;
 }
 
-/* تعديل الـ z-index للقوائم لضمان ظهورها فوق الطبقة */
+
 .msg-context-menu, .reactions-hover-wrap {
     z-index: 999 !important;
 }
 .msg-context-menu {
-    /* ... كودك الحالي ... */
+    
     position: absolute;
-    top: 100%; /* تظهر أسفل الـ bubble */
+    top: 100%; 
     z-index: 1000;
-    /* أضف هذا لضمان عدم خروج القائمة عن الشاشة في الرسائل الأخيرة */
+    
     transform-origin: top;
 }
 
-/* إذا كانت الرسالة "mine" (يمين) اجعل القائمة تفتح من اليمين */
+
 .msg.mine .msg-context-menu {
     right: 0;
 }
 
-/* إذا كانت الرسالة "theirs" (يسار) اجعل القائمة تفتح من اليسار */
+
 .msg.theirs .msg-context-menu {
     left: 0;
 }
@@ -1946,25 +1946,25 @@ t-radius: 6px !important; /* للـ gray */
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: transparent; /* شفافة تماماً */
-    z-index: 990; /* أقل من المنيو بس أعلى من الشات */
+    background: transparent; 
+    z-index: 990; 
     cursor: default;
 }
 
-/* تأكد إن المنيو والإيموجي الـ z-index بتاعهم أعلى من 990 */
+
 .msg-context-menu, .reactions-hover-wrap {
     z-index: 1000 !important;
 }
 
-/* في ملف الـ CSS بتاعك */
+
 .status-icon {
-    color: rgba(255, 255, 255, 0.6); /* default - sent */
+    color: rgba(255, 255, 255, 0.6); 
 }
 
     .status-icon.delivered {
-        color: rgba(255, 255, 255, 0.9); /* أبيض - delivered */
+        color: rgba(255, 255, 255, 0.9); 
     }
 
     .status-icon.read {
-        color: #4FC3F7; /* أزرق - read */
+        color: #4FC3F7; 
     }

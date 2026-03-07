@@ -27,7 +27,6 @@ namespace EnterpriseChat.API.Presence
                         await redisPresence.CleanupStaleConnectionsAsync();
                     }
 
-                    // ✅ زود الوقت لـ 30 ثانية بدل 10
                     await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
                 }
                 catch (Exception ex)

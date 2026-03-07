@@ -12,7 +12,18 @@ public sealed class RoomFlagsStore
     private readonly Dictionary<Guid, int> _unreadByRoom = new();
     private readonly Dictionary<Guid, MessageStatus> _lastMessageStatus = new();
     private readonly Dictionary<Guid, string> _reactionPreviews = new();
+    private readonly HashSet<Guid> _clearedRooms = new();
 
+    public void SetRoomCleared(Guid roomId)
+    {
+        _clearedRooms.Add(roomId);
+    }
+
+    public bool GetRoomCleared(Guid roomId)
+        => _clearedRooms.Contains(roomId);
+
+        public void UnsetRoomCleared(Guid roomId)
+        => _clearedRooms.Remove(roomId);
     public void SetLastReactionPreview(Guid roomId, string preview)
         => _reactionPreviews[roomId] = preview;
 
@@ -24,8 +35,7 @@ public sealed class RoomFlagsStore
     private Guid? _activeRoomId;
     public Guid? ActiveRoomId => _activeRoomId;
 
-    // ✅ Lock objects للتأكد من الـ thread safety
-    private readonly object _blockedByMeLock = new();
+        private readonly object _blockedByMeLock = new();
     private readonly object _blockedMeLock = new();
     private readonly object _mutedLock = new();
 
@@ -68,16 +78,14 @@ public sealed class RoomFlagsStore
         var userId = await currentUser.GetUserIdAsync();
         if (!userId.HasValue) return;
 
-        // muted rooms
-        var muted = await mod.GetMutedAsync();
+                var muted = await mod.GetMutedAsync();
         lock (_mutedLock)
         {
             foreach (var m in muted)
                 _mutedRooms[m.RoomId] = true;
         }
 
-        // ✅ blocked by me
-        var blocked = await mod.GetBlockedAsync();
+                var blocked = await mod.GetBlockedAsync();
         lock (_blockedByMeLock)
         {
             _blockedByMe.Clear();
@@ -215,11 +223,9 @@ public sealed class RoomFlagsStore
     {
         if (count < 0) count = 0;
 
-        // ✅ لا تجبر unread=0 للغرف النشطة إذا كانت رسالة نظام
-        if (_activeRoomId.HasValue && _activeRoomId.Value == roomId)
+                if (_activeRoomId.HasValue && _activeRoomId.Value == roomId)
         {
-            // للرسائل العادية بس اللي بنخليها 0
-            if (count > 0)
+                        if (count > 0)
             {
                 Console.WriteLine($"[Flags] Forcing unread=0 for active room {roomId}");
                 count = 0;
@@ -279,8 +285,7 @@ public sealed class RoomFlagsStore
         Console.WriteLine($"[Flags] SetBlockedUsers(by me): +{added.Count} -{removed.Count}");
     }
 
-    // ✅ دالة جديدة للتحقق السريع مع الـ Logging
-    public (bool blockedByMe, bool blockedMe) GetBlockStatus(Guid userId)
+        public (bool blockedByMe, bool blockedMe) GetBlockStatus(Guid userId)
     {
         var byMe = GetBlockedByMe(userId);
         var me = GetBlockedMe(userId);

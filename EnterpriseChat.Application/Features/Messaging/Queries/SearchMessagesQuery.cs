@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 
 namespace EnterpriseChat.Application.Features.Messaging.Queries
 {
-    // EnterpriseChat.Application/Features/Messaging/Queries/SearchMessagesQuery.cs
     public record SearchMessagesQuery(Guid RoomId, Guid UserId, string SearchTerm, int Take = 50)
         : IRequest<IReadOnlyList<MessageReadDto>>;
 }

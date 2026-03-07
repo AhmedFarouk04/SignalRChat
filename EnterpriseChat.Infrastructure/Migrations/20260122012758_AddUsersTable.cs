@@ -5,11 +5,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddUsersTable : Migration
+        public partial class AddUsersTable : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
                 name: "Attachments",
@@ -58,8 +56,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 column: "DisplayName");
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
                 name: "Attachments");

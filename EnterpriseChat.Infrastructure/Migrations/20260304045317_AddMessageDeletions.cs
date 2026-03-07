@@ -5,11 +5,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddMessageDeletions : Migration
+        public partial class AddMessageDeletions : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
                 name: "FK_Messages_Messages_ReplyToMessageId",
@@ -48,8 +46,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
     onDelete: ReferentialAction.NoAction);
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
                 name: "FK_Messages_Messages_ReplyToMessageId",

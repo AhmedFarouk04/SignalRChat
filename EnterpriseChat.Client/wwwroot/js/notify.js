@@ -1,82 +1,92 @@
 ﻿let audio = null;
 let audioUrl = null;
+let _unlocked = false; // ✅ track state
 
 export function initNotifySound(url) {
-  audioUrl = url;
-  try {
-    audio = new Audio(url);
-    audio.preload = "auto";
-    console.log("[notify] Sound initialized with URL:", url);
-  } catch (e) {
-    console.error("[notify] Failed to create audio:", e);
-  }
-}
-
-export async function resetNotify() {
-  if (audio) {
-    audio.pause();
-    audio.currentTime = 0;
-  }
-  audio = null;
-  
-  if (audioUrl) {
+    audioUrl = url;
     try {
-      audio = new Audio(audioUrl);
-      audio.preload = "auto";
+        audio = new Audio(url);
+        audio.preload = "auto";
+        audio.load(); // ✅ force load
+
+        // تجهيز أوبجيكت الصوت للفك
+        audio.muted = true;
+
+        console.log("[notify] Sound initialized:", url);
     } catch (e) {
-      console.error("[notify] Failed to recreate audio:", e);
+        console.error("[notify] Init failed:", e);
     }
-  }
 }
 
-export async function unlockNotify() {
-  if (!audio) {
-    console.log("[notify] Audio not initialized");
-    return false;
-  }
-  
-  try {
-    audio.muted = true;
-    await audio.play();
-    audio.pause();
-    audio.currentTime = 0;
-    audio.muted = false;
-    console.log("[notify] Sound unlocked successfully");
-    return true;
-  } catch (e) {
-    console.log("[notify] Unlock blocked:", e);
-    return false;
-  }
+// الدالة دي اللي هترتبط مباشرة بالكليك في index.html
+export function unlockNotify() {
+    if (!audio) {
+        console.log("[notify] Not initialized");
+        return false;
+    }
+    if (_unlocked) {
+        return true;
+    }
+    try {
+        // لازم يحصلوا ورا بعض بدون await عشان المتصفح يرضى بيهم كـ User Gesture
+        audio.muted = true;
+        audio.volume = 0;
+
+        var playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                audio.pause();
+                audio.currentTime = 0;
+                audio.muted = false; // نرجع الصوت لطبيعته
+                audio.volume = 1;
+                _unlocked = true;
+                console.log("[notify] ✅ Unlocked successfully via user gesture");
+            }).catch(error => {
+                console.log("[notify] ❌ Unlock failed:", error.message);
+                _unlocked = false;
+            });
+        }
+        return true;
+    } catch (e) {
+        console.log("[notify] ❌ Unlock exception:", e.message);
+        _unlocked = false;
+        return false;
+    }
 }
 
 export async function playNotify() {
-  if (!audio) {
-    console.log("[notify] Audio not initialized, trying to reinitialize");
-    return false;
-  }
-  
-  try {
-    audio.currentTime = 0;
-    await audio.play();
-    console.log("[notify] Sound played successfully");
-    return true;
-  } catch (e) {
-    console.log("[notify] Play blocked:", e);
-    
-    // Try to unlock and play again
-    try {
-      audio.muted = true;
-      await audio.play();
-      audio.pause();
-      audio.currentTime = 0;
-      audio.muted = false;
-      
-      await audio.play();
-      console.log("[notify] Sound played after unlock");
-      return true;
-    } catch (retryError) {
-      console.log("[notify] Retry failed:", retryError);
-      return false;
+    if (!audio) {
+        console.log("[notify] Not initialized");
+        return false;
     }
-  }
+
+    if (!_unlocked) {
+        console.log("[notify] ❌ Cannot play - waiting for user interaction to unlock");
+        return false;
+    }
+
+    try {
+        audio.currentTime = 0;
+        audio.volume = 1;
+        audio.muted = false; // نتأكد إن الميوت مفكوك
+        await audio.play();
+        console.log("[notify] ✅ Played successfully");
+        return true;
+    } catch (e) {
+        console.log("[notify] ❌ Play failed:", e.message);
+        _unlocked = false; // لو فشل نرجع نقفله تاني
+        return false;
+    }
+}
+
+export async function resetNotify() {
+    if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+    }
+    _unlocked = false;
+    audio = null;
+    if (audioUrl) {
+        initNotifySound(audioUrl);
+    }
 }

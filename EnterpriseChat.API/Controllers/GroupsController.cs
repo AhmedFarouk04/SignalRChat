@@ -45,12 +45,11 @@ public sealed class GroupsController : BaseController
         var creatorId = GetSafeCurrentUserId();
 
         var members = request.Members
-      .Where(x => x != Guid.Empty && x != creatorId.Value)  // فلتر empty + duplicate creator
+      .Where(x => x != Guid.Empty && x != creatorId.Value)  
       .Distinct()
       .Select(x => new UserId(x))
       .ToList();
 
-        // ✅ جديد: ولّد RoomId على server دايمًا
 
         var command = new CreateGroupChatCommand(
             request.Name.Trim(),
@@ -117,8 +116,7 @@ public sealed class GroupsController : BaseController
         return NoContent();
     }
 
-    // GET api/groups/{roomId}/admins
-    [HttpGet("{roomId}/admins")]
+        [HttpGet("{roomId}/admins")]
     public async Task<IActionResult> GetAdmins(Guid roomId, CancellationToken ct)
     {
         var admins = await _mediator.Send(
@@ -128,8 +126,7 @@ public sealed class GroupsController : BaseController
         return Ok(new { admins });
     }
 
-    // POST api/groups/{roomId}/admins/{userId}
-    [HttpPost("{roomId}/admins/{userId}")]
+        [HttpPost("{roomId}/admins/{userId}")]
     public async Task<IActionResult> PromoteAdmin(Guid roomId, Guid userId, CancellationToken ct)
     {
         await _mediator.Send(new PromoteGroupAdminCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
@@ -137,8 +134,7 @@ public sealed class GroupsController : BaseController
 
         return NoContent();
     }
-    // DELETE api/groups/{roomId}/admins/{userId}
-    [HttpDelete("{roomId}/admins/{userId}")]
+        [HttpDelete("{roomId}/admins/{userId}")]
     public async Task<IActionResult> DemoteAdmin(Guid roomId, Guid userId, CancellationToken ct)
     {
         await _mediator.Send(new DemoteGroupAdminCommand(new RoomId(roomId), new UserId(userId), GetCurrentUserId()), ct);
@@ -146,8 +142,7 @@ public sealed class GroupsController : BaseController
 
         return NoContent();
     }
-    // POST api/groups/{roomId}/owner/{userId}
-    [HttpPost("{roomId:guid}/owner/{userId:guid}")]
+        [HttpPost("{roomId:guid}/owner/{userId:guid}")]
     public async Task<IActionResult> TransferOwnership(Guid roomId, Guid userId, CancellationToken ct)
     {
         await _mediator.Send(new TransferGroupOwnershipCommand(new RoomId(roomId), GetCurrentUserId(), new UserId(userId)), ct);
@@ -155,7 +150,6 @@ public sealed class GroupsController : BaseController
 
         return NoContent();
     }
-    // في EnterpriseChat.API.Controllers.GroupsController
 
     [HttpPut("{roomId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -174,7 +168,6 @@ public sealed class GroupsController : BaseController
         if (request.Name.Length > 100)
             return BadRequest("Group name is too long.");
 
-        // حاول تمسك الـ lock لمدة 5 ثواني بس
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(5));
 
@@ -206,7 +199,6 @@ public sealed class GroupsController : BaseController
         }
         catch (Exception ex)
         {
-            // سجل الخطأ في السيرفر
             Console.WriteLine($"[Rename Error] {ex.Message}");
             return StatusCode(500, "An error occurred while renaming the group.");
         }
@@ -232,8 +224,7 @@ public sealed class GroupsController : BaseController
             ct));
     }
 
-    // POST api/groups/{roomId}/members/bulk
-    [HttpPost("{roomId}/members/bulk")]
+        [HttpPost("{roomId}/members/bulk")]
     public async Task<IActionResult> AddMembersBulk(Guid roomId, [FromBody] List<Guid> userIds, CancellationToken ct)
     {
         if (userIds == null || !userIds.Any())
@@ -253,7 +244,6 @@ public sealed class GroupsController : BaseController
     }
     private UserId GetSafeCurrentUserId()
     {
-        // جرب أكتر من Claim شائع في JWT
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                        ?? User.FindFirst("sub")?.Value
                        ?? User.FindFirst("UserId")?.Value;
@@ -265,7 +255,7 @@ public sealed class GroupsController : BaseController
             throw new UnauthorizedAccessException("User ID cannot be empty. Please login again.");
         }
 
-        return new UserId(userGuid);   // أو UserId.From(userGuid) حسب كودك
+        return new UserId(userGuid);   
     }
 
 }

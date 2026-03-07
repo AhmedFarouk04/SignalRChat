@@ -37,8 +37,7 @@ public sealed class NotificationSoundService
             if (!_isInitialized)
                 await InitializeAsync();
 
-            // ✅ استخدم notifyUnlock مش unlockNotify
-            var result = await _js.InvokeAsync<bool>("notifyUnlock");
+                        var result = await _js.InvokeAsync<bool>("notifyUnlock");
             _isUnlocked = result;
 
             Console.WriteLine($"[NotificationSound] Unlock result: {result}");
@@ -65,8 +64,7 @@ public sealed class NotificationSoundService
 
             if (_isUnlocked)
             {
-                // ✅ استخدم notifyPlay مش playNotify
-                var result = await _js.InvokeAsync<bool>("notifyPlay");
+                                var result = await _js.InvokeAsync<bool>("notifyPlay");
                 Console.WriteLine($"[NotificationSound] Play result: {result}");
                 return result;
             }

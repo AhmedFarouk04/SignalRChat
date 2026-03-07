@@ -137,8 +137,7 @@
         {
             foreach (var file in e.GetMultipleFiles())
             {
-                // حد آمن للحجم (غيّره حسب API)
-                const long maxBytes = 25 * 1024 * 1024;
+                                const long maxBytes = 25 * 1024 * 1024;
 
                 await using var stream = file.OpenReadStream(maxAllowedSize: maxBytes);
                 await AttachmentsApi.UploadAsync(
@@ -169,11 +168,9 @@
 
         try
         {
-            // ✅ هنا الحل: نجيب ApiFile من الـ API client
-            var file = await AttachmentsApi.DownloadAsync(attachmentId);
+                        var file = await AttachmentsApi.DownloadAsync(attachmentId);
 
-            // ✅ نستخدم Downloader بالـ ApiFile (حل CS1503)
-            await Downloader.DownloadAsync(file);
+                        await Downloader.DownloadAsync(file);
         }
         catch (Exception ex)
         {

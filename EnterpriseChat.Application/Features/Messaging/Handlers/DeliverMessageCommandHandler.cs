@@ -31,12 +31,10 @@ public sealed class DeliverMessageCommandHandler : IRequestHandler<DeliverMessag
 
     public async Task<Unit> Handle(DeliverMessageCommand command, CancellationToken ct)
     {
-        // 1. جلب الرسالة
-        var msg = await _messageRepo.GetByIdAsync(command.MessageId.Value, ct);
+                var msg = await _messageRepo.GetByIdAsync(command.MessageId.Value, ct);
         if (msg is null) return Unit.Value;
 
-        // 2. جلب سجل الاستلام
-        var receipt = await _receiptRepo.GetAsync(command.MessageId, command.UserId, ct);
+                var receipt = await _receiptRepo.GetAsync(command.MessageId, command.UserId, ct);
 
         if (receipt is null)
         {
@@ -45,40 +43,31 @@ public sealed class DeliverMessageCommandHandler : IRequestHandler<DeliverMessag
             if (receipt is null) return Unit.Value;
         }
 
-        // 3. التحقق من الحالة الحالية
-        if (receipt.Status >= MessageStatus.Delivered) return Unit.Value;
+                if (receipt.Status >= MessageStatus.Delivered) return Unit.Value;
 
-        // 4. تحديث الحالة وحفظها
-        receipt.MarkDelivered();
+                receipt.MarkDelivered();
         await _uow.CommitAsync(ct);
 
-        // 5. جلب الإحصائيات المحدثة
-        var stats = await _receiptRepo.GetMessageStatsAsync(command.MessageId, ct);
+                var stats = await _receiptRepo.GetMessageStatsAsync(command.MessageId, ct);
         Console.WriteLine($"[DeliverMessage] ✅ Delivered: msg={command.MessageId.Value} user={command.UserId.Value} d={stats.DeliveredCount} r={stats.ReadCount}");
 
-        // 6. جلب أعضاء الغرفة (مهم جداً)
-        var roomMembers = await _messageRepo.GetRoomMemberIdsAsync(msg.RoomId, ct);
+                var roomMembers = await _messageRepo.GetRoomMemberIdsAsync(msg.RoomId, ct);
         var allMembers = roomMembers.ToList();
 
-        // ✅ التأكد من إضافة الـ Sender نفسه للقائمة
-        if (!allMembers.Contains(msg.SenderId))
+                if (!allMembers.Contains(msg.SenderId))
         {
             allMembers.Add(msg.SenderId);
         }
 
-        // 7. 🔥 الأهم: بث التحديث لكل أعضاء الغرفة (خصوصاً الـ sender)
-        // استخدم MessageStatusUpdated لكل عضو على حدة
-        foreach (var memberId in allMembers)
+                        foreach (var memberId in allMembers)
         {
             await _broadcaster.MessageStatusUpdatedAsync(
                 command.MessageId,
                 command.UserId,
                 MessageStatus.Delivered,
-                new List<UserId> { memberId }); // نبعت لكل member لوحده
-        }
+                new List<UserId> { memberId });         }
 
-        // 8. تحديث عدادات الرسالة للكل
-        await _broadcaster.MessageReceiptStatsUpdatedAsync(
+                await _broadcaster.MessageReceiptStatsUpdatedAsync(
             command.MessageId.Value,
             msg.RoomId.Value,
             stats.TotalRecipients,

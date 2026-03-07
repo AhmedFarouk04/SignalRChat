@@ -10,8 +10,7 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
 {
     public void Configure(EntityTypeBuilder<ChatRoom> builder)
     {
-        // 1. تعريف الـ Comparers الموحدة للـ Nullable Types
-        var messageIdNullableComparer = new ValueComparer<MessageId?>(
+                var messageIdNullableComparer = new ValueComparer<MessageId?>(
             (l, r) => (l == null && r == null) || (l != null && r != null && l.Value == r.Value),
             v => v == null ? 0 : v.Value.GetHashCode(),
             v => v == null ? null : new MessageId(v.Value));
@@ -23,8 +22,7 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
 
         builder.ToTable("ChatRooms");
 
-        // Primary Key
-        builder.HasKey(x => x.Id);
+                builder.HasKey(x => x.Id);
         builder.Property(x => x.Id)
             .HasConversion(v => v.Value, v => new RoomId(v))
             .Metadata.SetValueComparer(new ValueComparer<RoomId>(
@@ -36,8 +34,7 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
         builder.Property(x => x.Type).IsRequired();
         builder.Property(x => x.CreatedAt).IsRequired();
 
-        // ✅ PinnedMessageId - التعديل الأساسي
-        builder.Property(x => x.PinnedMessageId)
+                builder.Property(x => x.PinnedMessageId)
             .HasConversion(
                 v => v != null ? v.Value : (Guid?)null,
                 v => v.HasValue ? new MessageId(v.Value) : null)
@@ -45,13 +42,11 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
 
         builder.Property(x => x.PinnedUntilUtc).IsRequired(false);
 
-        // ✅ OwnerId
-        builder.Property(x => x.OwnerId)
+                builder.Property(x => x.OwnerId)
             .HasConversion(v => v != null ? v.Value : (Guid?)null, v => v.HasValue ? new UserId(v.Value) : null)
             .Metadata.SetValueComparer(userIdNullableComparer);
 
-        // ✅ Last Message Fields
-        builder.Property(x => x.LastMessageId)
+                builder.Property(x => x.LastMessageId)
             .HasConversion(v => v != null ? v.Value : (Guid?)null, v => v.HasValue ? MessageId.From(v.Value) : null)
             .Metadata.SetValueComparer(messageIdNullableComparer);
 
@@ -59,13 +54,11 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
             .HasConversion(v => v != null ? v.Value : (Guid?)null, v => v.HasValue ? new UserId(v.Value) : null)
             .Metadata.SetValueComparer(userIdNullableComparer);
 
-        // ✅ Last Reaction Fields
-        builder.Property(x => x.LastReactionTargetUserId)
+                builder.Property(x => x.LastReactionTargetUserId)
             .HasConversion(v => v != null ? v.Value : (Guid?)null, v => v.HasValue ? new UserId(v.Value) : null)
             .Metadata.SetValueComparer(userIdNullableComparer);
 
-        // ✅ Navigations
-        builder.Metadata.FindNavigation(nameof(ChatRoom.Members))!
+                builder.Metadata.FindNavigation(nameof(ChatRoom.Members))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasMany(x => x.Members)

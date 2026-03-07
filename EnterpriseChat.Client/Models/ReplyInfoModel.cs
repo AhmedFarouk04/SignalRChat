@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Client/Models/ReplyInfoModel.cs
-namespace EnterpriseChat.Client.Models;
+﻿namespace EnterpriseChat.Client.Models;
 
 public class ReplyInfoModel
 {

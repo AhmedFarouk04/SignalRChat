@@ -46,8 +46,7 @@ public sealed class AuthService : IAuthService
 
         var unameLower = username.ToLowerInvariant();
 
-        // confirmed only -> conflict
-        var usernameConfirmedExists = await _db.Users
+                var usernameConfirmedExists = await _db.Users
             .AnyAsync(u => u.EmailConfirmed && u.Username.ToLower() == unameLower, ct);
         if (usernameConfirmedExists) throw new AuthException(409, "Username already exists.");
 
@@ -55,25 +54,21 @@ public sealed class AuthService : IAuthService
             .AnyAsync(u => u.EmailConfirmed && u.Email.ToLower() == email, ct);
         if (emailConfirmedExists) throw new AuthException(409, "Email already exists.");
 
-        // pending reuse logic
-        var pending = await _db.Users.FirstOrDefaultAsync(u =>
+                var pending = await _db.Users.FirstOrDefaultAsync(u =>
             !u.EmailConfirmed && (u.Email.ToLower() == email || u.Username.ToLower() == unameLower), ct);
 
         if (pending is not null)
         {
-            // pending for same email => reuse & resend (if cooldown passed)
-            if (string.Equals(pending.Email, email, StringComparison.OrdinalIgnoreCase))
+                        if (string.Equals(pending.Email, email, StringComparison.OrdinalIgnoreCase))
             {
                 await TrySendOtpAsync(pending, ct);
                 return new RegisterResponse { Email = pending.Email };
             }
 
-            // pending username but different email => username is effectively reserved
-            throw new AuthException(409, "Username already exists.");
+                        throw new AuthException(409, "Username already exists.");
         }
 
-        // create new pending user
-        var passwordHash = _hasher.Hash(password);
+                var passwordHash = _hasher.Hash(password);
         var user = new ChatUser(Guid.NewGuid(), username, email, passwordHash);
 
         var otp = OtpUtils.GenerateOtp();
@@ -124,8 +119,7 @@ public sealed class AuthService : IAuthService
             throw new AuthException(400, "Invalid code.");
         }
 
-        // extra safety
-        var emailTaken = await _db.Users.AnyAsync(u =>
+                var emailTaken = await _db.Users.AnyAsync(u =>
             u.EmailConfirmed && u.Email.ToLower() == user.Email.ToLower() && u.Id != user.Id, ct);
         if (emailTaken) throw new AuthException(409, "Email already exists.");
 

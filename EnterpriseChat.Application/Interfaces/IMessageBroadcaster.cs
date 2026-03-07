@@ -10,31 +10,28 @@ public interface IMessageBroadcaster
     Task MessageDeliveredAsync(MessageId messageId, UserId userId, RoomId roomId);
     Task MessageReadAsync(MessageId messageId, UserId userId, RoomId roomId);
     Task RoomUpdatedAsync(RoomUpdatedDto update, IEnumerable<UserId> users);
+    Task RoomRestoredAsync(RoomId roomId, UserId userId);
+    Task BroadcastRoomUpserted(Guid userId, RoomListItemDto room);
 
-    // Rooms realtime
     Task RoomUpsertedAsync(RoomListItemDto room, IEnumerable<UserId> users);
 
-    // Group membership realtime
     Task MemberAddedAsync(RoomId roomId, UserId memberId, string displayName, IEnumerable<UserId> users);
     Task MemberRemovedAsync(RoomId roomId, UserId memberId, UserId? removerId, string? removerName, IEnumerable<UserId> users);
     Task MemberRemovedAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users);
     Task MemberLeftAsync(RoomId roomId, UserId memberId, IEnumerable<UserId> users);
-
-    // ✅ NEW: remove room from someone’s rooms list
+    Task ChatDeletedForUserAsync(RoomId roomId, UserId userId);
+    Task ChatClearedAsync(RoomId roomId, IEnumerable<UserId> recipients, bool forEveryone);
     Task RemovedFromRoomAsync(RoomId roomId, UserId userId);
     Task BroadcastToRoomGroupAsync(Guid roomId, MessageDto message);
 
     Task RemovedFromRoomAsync(RoomId roomId, IEnumerable<UserId> users);
 
-    // ✅ NEW: group deleted
     Task GroupDeletedAsync(RoomId roomId, IEnumerable<UserId> users);
 
-    // ✅ NEW: admin / ownership
     Task AdminPromotedAsync(RoomId roomId, UserId userId, IEnumerable<UserId> users);
     Task AdminDemotedAsync(RoomId roomId, UserId userId, IEnumerable<UserId> users);
     Task OwnerTransferredAsync(RoomId roomId, UserId newOwnerId, IEnumerable<UserId> users);
 
-    // ✅ تعديل: نرسل roomId بدلاً من targetUserId (للبث للغرفة)
     Task MessageReceiptStatsUpdatedAsync(
     Guid messageId,
     Guid roomId,

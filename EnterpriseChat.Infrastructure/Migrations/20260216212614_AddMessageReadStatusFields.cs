@@ -5,11 +5,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddMessageReadStatusFields : Migration
+        public partial class AddMessageReadStatusFields : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
                 name: "IX_MessageReceipts_UserId_Status",
@@ -58,8 +56,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 columns: new[] { "UserId", "Status", "RoomId" });
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
                 name: "IX_MessageReceipts_RoomId",

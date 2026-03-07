@@ -32,8 +32,7 @@ public sealed class GroupsApi
         return dto ?? throw new InvalidOperationException("Invalid create group response.");
     }
 
-    // في GroupsApi.cs
-    public async Task UpdateGroupAsync(Guid roomId, string name, CancellationToken ct = default)
+        public async Task UpdateGroupAsync(Guid roomId, string name, CancellationToken ct = default)
     {
         try
         {
@@ -42,8 +41,7 @@ public sealed class GroupsApi
         catch (Exception ex)
         {
             Console.WriteLine($"[GroupsApi] Update failed: {ex.Message}");
-            throw; // Important: رجع الخطأ عشان نقدر نتعامل معاه
-        }
+            throw;         }
     }
     public Task DeleteGroupAsync(Guid roomId, CancellationToken ct = default)
         => _api.DeleteAsync(ApiEndpoints.DeleteGroup(roomId), ct);
@@ -71,8 +69,7 @@ public sealed class GroupsApi
 
     public async Task AddMembersBulkAsync(Guid roomId, List<Guid> userIds, CancellationToken ct = default)
     {
-        // فحص أمني لمنع إرسال طلب بـ ID فارغ
-        if (roomId == Guid.Empty)
+                if (roomId == Guid.Empty)
         {
             throw new Exception("RoomId is missing from the request context.");
         }

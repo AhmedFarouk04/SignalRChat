@@ -22,8 +22,7 @@ public sealed class ChatHub : Hub
     private readonly IRoomPresenceService _roomPresence;
     private readonly ITypingService _typing;
     private readonly IMessageRepository _messageRepository;
-    private readonly IUserBlockRepository _blockRepository;  // ← أضف ده
-    private static readonly ConcurrentDictionary<string, DateTime> _typingBroadcastGate = new();
+    private readonly IUserBlockRepository _blockRepository;      private static readonly ConcurrentDictionary<string, DateTime> _typingBroadcastGate = new();
     private static readonly ConcurrentDictionary<string, byte> _joinedRooms = new();
     private readonly IServiceScopeFactory _scopeFactory;
 
@@ -48,8 +47,7 @@ public sealed class ChatHub : Hub
         _scopeFactory = scopeFactory;
     }
 
-    // ✅ ChatHub.cs - الجزء المُصلح من OnConnectedAsync
-    public override async Task OnConnectedAsync()
+        public override async Task OnConnectedAsync()
     {
         var userId = GetUserId();
         var connectionId = Context.ConnectionId;
@@ -58,8 +56,7 @@ public sealed class ChatHub : Hub
 
         await _presence.UserConnectedAsync(userId, connectionId);
 
-        // ✅ 1. إرسال حدث UserOnline لكل المستخدمين المرتبطين
-        try
+                try
         {
             var visibleUsers = await GetVisibleOnlineUsersForMe(userId);
             foreach (var target in visibleUsers)
@@ -77,8 +74,7 @@ public sealed class ChatHub : Hub
             Console.WriteLine($"[ChatHub] Error broadcasting online status: {ex.Message}");
         }
 
-        // ✅ 2. انضمام المستخدم لكل "روماته" في SignalR
-        try
+                try
         {
             var rooms = await _roomRepository.GetForUserAsync(userId, CancellationToken.None);
             foreach (var room in rooms)
@@ -91,18 +87,15 @@ public sealed class ChatHub : Hub
             Console.WriteLine($"[ChatHub] Error joining rooms: {ex.Message}");
         }
 
-        // ✅ 3. 🔥 Auto-delivery مع Scope منفصل
-        _ = Task.Run(async () =>
+                _ = Task.Run(async () =>
         {
             try
             {
                 Console.WriteLine($"[Auto-Delivery] 🔍 Creating scope for user {userId.Value}");
 
-                // إنشاء Scope جديد
-                using var scope = _scopeFactory.CreateScope();
+                                using var scope = _scopeFactory.CreateScope();
 
-                // الحصول على services جديدة من الـ scope
-                var roomRepository = scope.ServiceProvider.GetRequiredService<IChatRoomRepository>();
+                                var roomRepository = scope.ServiceProvider.GetRequiredService<IChatRoomRepository>();
                 var messageRepository = scope.ServiceProvider.GetRequiredService<IMessageRepository>();
                 var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
@@ -143,12 +136,10 @@ public sealed class ChatHub : Hub
     {
         if (isBlocked)
         {
-            // ✅ عند البلوك: إبلاغ الطرفين فوراً بأن الطرف الآخر أوفلاين
-            await Clients.User(blockerId.ToString()).SendAsync("UserOffline", blockedId);
+                        await Clients.User(blockerId.ToString()).SendAsync("UserOffline", blockedId);
             await Clients.User(blockedId.ToString()).SendAsync("UserOffline", blockerId);
 
-            // ✅ إرسال تحديث Last Seen للمحظور
-            var lastSeen = await _presence.GetLastSeenAsync(new UserId(blockedId));
+                        var lastSeen = await _presence.GetLastSeenAsync(new UserId(blockedId));
             if (lastSeen.HasValue)
             {
                 await Clients.User(blockerId.ToString()).SendAsync("UserLastSeenUpdated", blockedId, lastSeen.Value);
@@ -156,8 +147,7 @@ public sealed class ChatHub : Hub
         }
         else
         {
-            // ✅ عند فك البلوك: اطلب من الطرفين التحقق من الحالة الحقيقية
-            await Clients.User(blockerId.ToString()).SendAsync("CheckUserOnline", blockedId);
+                        await Clients.User(blockerId.ToString()).SendAsync("CheckUserOnline", blockedId);
             await Clients.User(blockedId.ToString()).SendAsync("CheckUserOnline", blockerId);
         }
     }
@@ -166,8 +156,7 @@ public sealed class ChatHub : Hub
     {
         try
         {
-            // ✅ حماية: لو مفيش User في الـ Context، ارجع default آمن
-            var meRaw = Context.User?.FindFirst("sub")?.Value
+                        var meRaw = Context.User?.FindFirst("sub")?.Value
                      ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
                      ?? Context.User?.FindFirst("nameid")?.Value;
 
@@ -237,8 +226,7 @@ public sealed class ChatHub : Hub
     }
     public async Task PinMessage(Guid roomId, Guid? messageId)
     {
-        // هنا ممكن تضيف Logic للتأكد إن اللي بيثبت هو الـ Owner
-        await Clients.Group(roomId.ToString()).SendAsync("MessagePinned", roomId, messageId);
+                await Clients.Group(roomId.ToString()).SendAsync("MessagePinned", roomId, messageId);
     }
     public async Task Heartbeat()
     {
@@ -246,17 +234,14 @@ public sealed class ChatHub : Hub
         {
             var userId = GetUserId();
 
-            // تحديث الـ TTL مع كل Heartbeat - بشكل آمن
-            await _presence.UpdateHeartbeatAsync(userId);
+                        await _presence.UpdateHeartbeatAsync(userId);
 
-            // إرسال تأكيد للمستخدم
-            await Clients.Caller.SendAsync("HeartbeatAck", DateTime.UtcNow);
+                        await Clients.Caller.SendAsync("HeartbeatAck", DateTime.UtcNow);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Heartbeat] Error: {ex.Message}");
-            // حتى لو فشل، نبعت Ack عشان الـ Client يفضل شغال
-            await Clients.Caller.SendAsync("HeartbeatAck", DateTime.UtcNow);
+                        await Clients.Caller.SendAsync("HeartbeatAck", DateTime.UtcNow);
         }
     }
     public async Task Ping()
@@ -265,11 +250,9 @@ public sealed class ChatHub : Hub
         {
             var userId = GetUserId();
 
-            // ✅ تحديث Heartbeat - بشكل آمن
-            try
+                        try
             {
-                // محاولة تحديث Heartbeat لو الـ service بيدعمه
-                if (_presence is RedisPresenceService redisPresence)
+                                if (_presence is RedisPresenceService redisPresence)
                 {
                     await redisPresence.UpdateHeartbeatAsync(userId);
                 }
@@ -279,14 +262,12 @@ public sealed class ChatHub : Hub
                 Console.WriteLine($"[Ping] Heartbeat update failed: {ex.Message}");
             }
 
-            // ✅ إرسال Pong
-            await Clients.Caller.SendAsync("Pong", DateTime.UtcNow);
+                        await Clients.Caller.SendAsync("Pong", DateTime.UtcNow);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Ping] Error: {ex.Message}");
-            // حتى لو فشل، نبعت Pong عشان الـ Client يفضل شغال
-            await Clients.Caller.SendAsync("Pong", DateTime.UtcNow);
+                        await Clients.Caller.SendAsync("Pong", DateTime.UtcNow);
         }
     }
     public async Task AdminPromoted(Guid roomId, Guid userId)
@@ -298,8 +279,7 @@ public sealed class ChatHub : Hub
     {
         await Clients.Group(roomId.ToString()).SendAsync("AdminDemoted", roomId, userId);
     }
-    // ✅ دالة للتحقق من صحة الاتصالات
-    public async Task CheckUserConnection(Guid userId)
+        public async Task CheckUserConnection(Guid userId)
     {
         var targetId = new UserId(userId);
         var isOnline = await _presence.IsOnlineAsync(targetId);
@@ -323,20 +303,17 @@ public sealed class ChatHub : Hub
 
             Console.WriteLine($"[ChatHub] User {userId} disconnected, connection: {connectionId}");
 
-            // ✅ تحقق إذا كان لسه في connections تانية قبل إرسال Offline
-            var remainingConnections = await _presence.GetUserConnectionsCountAsync(userId);
+                        var remainingConnections = await _presence.GetUserConnectionsCountAsync(userId);
 
             await _presence.UserDisconnectedAsync(userId, connectionId);
 
-            // ✅ إذا لسه في connections تانية، منبعتهاش Offline
-            if (remainingConnections > 1)
+                        if (remainingConnections > 1)
             {
                 Console.WriteLine($"[ChatHub] User {userId} still has {remainingConnections - 1} connections, not sending offline");
                 return;
             }
 
-            // ✅ هنا فقط نبعت Offline لو ده آخر connection
-            var visibleUsers = await GetVisibleOnlineUsersForMe(userId);
+                        var visibleUsers = await GetVisibleOnlineUsersForMe(userId);
             var lastSeen = DateTime.UtcNow;
 
             foreach (var target in visibleUsers)
@@ -353,8 +330,7 @@ public sealed class ChatHub : Hub
 
         await base.OnDisconnectedAsync(exception);
     }
-    // حط هذا السطر في أي مكان داخل الكلاس
-    public async Task MemberRemoved(Guid roomId, Guid userId, string removerName)
+        public async Task MemberRemoved(Guid roomId, Guid userId, string removerName)
     {
         await Clients.Group(roomId.ToString())
             .SendAsync("MemberRemoved", roomId, userId, removerName);
@@ -369,22 +345,18 @@ public sealed class ChatHub : Hub
             var room = await _roomRepository.GetByIdAsync(roomId);
             if (room == null) throw new HubException("Room not found");
 
-            // ✅ انضمام للـ SignalR group
-            await Groups.AddToGroupAsync(Context.ConnectionId, roomIdStr);
+                        await Groups.AddToGroupAsync(Context.ConnectionId, roomIdStr);
 
-            // ✅ تسجيل الحضور في Redis
-            var isFirstJoin = await _roomPresence.IsUserInRoomAsync(roomId, userId);
+                        var isFirstJoin = await _roomPresence.IsUserInRoomAsync(roomId, userId);
             if (!isFirstJoin)
             {
                 await _roomPresence.JoinRoomAsync(roomId, userId);
             }
 
-            // ✅ إرسال count محدث للآخرين
-            var count = await _roomPresence.GetOnlineCountAsync(roomId);
+                        var count = await _roomPresence.GetOnlineCountAsync(roomId);
             await Clients.OthersInGroup(roomIdStr).SendAsync("RoomPresenceUpdated", roomId.Value, count);
 
-            // ✅ 🔥 NEW: إرسال قائمة المستخدمين اللي بيكتبوا حالياً للمستخدم الجديد
-            var typingUsers = await _typing.GetTypingUsersAsync(roomId);
+                        var typingUsers = await _typing.GetTypingUsersAsync(roomId);
             if (typingUsers.Any())
             {
                 var typingUserIds = typingUsers.Select(u => u.Value).ToList();
@@ -392,8 +364,7 @@ public sealed class ChatHub : Hub
                 Console.WriteLine($"[JoinRoom] 📋 Sent {typingUsers.Count} typing users to new joiner in room {roomId.Value}");
             }
 
-            // ✅ تأكيد أن المستخدم أونلاين
-            await Clients.Caller.SendAsync("UserOnline", userId.Value);
+                        await Clients.Caller.SendAsync("UserOnline", userId.Value);
         }
         catch (Exception ex)
         {
@@ -425,16 +396,13 @@ public sealed class ChatHub : Hub
             var userId = GetUserId();
             var roomId = new RoomId(roomGuid);
 
-            // ✅ 1. التحقق من وجود الغرفة
-            var room = await _roomRepository.GetByIdAsync(roomId);
+                        var room = await _roomRepository.GetByIdAsync(roomId);
             if (room is null) return;
 
-            // ✅ 2. التحقق من عضوية المستخدم في الغرفة
-            var isMember = room.IsMember(userId);
+                        var isMember = room.IsMember(userId);
             if (!isMember) return;
 
-            // ✅ 3. لو الغرفة خاصة، تحقق من البلوك
-            if (room.Type == RoomType.Private)
+                        if (room.Type == RoomType.Private)
             {
                 var otherUserId = room.GetMemberIds().FirstOrDefault(id => id != userId);
                 if (otherUserId != null)
@@ -442,8 +410,7 @@ public sealed class ChatHub : Hub
                     var isBlocked = await _blockRepository.IsBlockedAsync(userId, otherUserId) ||
                                    await _blockRepository.IsBlockedAsync(otherUserId, userId);
 
-                    // ✅ لو في بلوك، منرسلش حدث Typing خالص
-                    if (isBlocked)
+                                        if (isBlocked)
                     {
                         Console.WriteLine($"[Typing] 🚫 Blocked private room {roomId.Value}, not sending typing event");
                         return;
@@ -451,28 +418,22 @@ public sealed class ChatHub : Hub
                 }
             }
 
-            // ✅ 4. Throttling: منع الإرسال المتكرر
-            var gateKey = $"{roomIdStr}:{userId.Value}";
+                        var gateKey = $"{roomIdStr}:{userId.Value}";
             var now = DateTime.UtcNow;
 
             if (_typingBroadcastGate.TryGetValue(gateKey, out var last) &&
                 (now - last).TotalMilliseconds < 1000)
             {
-                // ✅ بس لسه بنحدث TTL في Redis حتى لو منبعتهوش للآخرين
-                await _typing.StartTypingAsync(roomId, userId, TimeSpan.FromSeconds(4));
+                                await _typing.StartTypingAsync(roomId, userId, TimeSpan.FromSeconds(4));
                 return;
             }
 
-            // ✅ 5. تحديث الـ Redis
-            var isFirst = await _typing.StartTypingAsync(roomId, userId, TimeSpan.FromSeconds(4));
+                        var isFirst = await _typing.StartTypingAsync(roomId, userId, TimeSpan.FromSeconds(4));
 
-            // ✅ 6. تحديث الـ gate
-            _typingBroadcastGate[gateKey] = now;
+                        _typingBroadcastGate[gateKey] = now;
 
-            // ✅ 7. إرسال للآخرين فقط (مش لنفس المستخدم)
-            await Clients.OthersInGroup(roomIdStr).SendAsync("TypingStarted", roomId.Value, userId.Value);
-            // ✅ بعت للـ User مباشرة لو Private (حتى لو مش في الـ Group)
-            if (room.Type == RoomType.Private)
+                        await Clients.OthersInGroup(roomIdStr).SendAsync("TypingStarted", roomId.Value, userId.Value);
+                        if (room.Type == RoomType.Private)
             {
                 var otherUserId = room.GetMemberIds().FirstOrDefault(id => id != userId);
                 if (otherUserId != null)
@@ -483,8 +444,7 @@ public sealed class ChatHub : Hub
             }
             else if (room.Type == RoomType.Group)
             {
-                // ✅ بعت لكل أعضاء الجروب مباشرةً (حتى اللي مش في الـ Group)
-                foreach (var memberId in room.GetMemberIds())
+                                foreach (var memberId in room.GetMemberIds())
                 {
                     if (memberId == userId) continue;
                     await Clients.User(memberId.Value.ToString())
@@ -499,8 +459,7 @@ public sealed class ChatHub : Hub
         }
     }
 
-    // ========== دالة TypingStop المعدلة ==========
-    public async Task TypingStop(string roomIdStr)
+        public async Task TypingStop(string roomIdStr)
     {
         try
         {
@@ -512,11 +471,9 @@ public sealed class ChatHub : Hub
 
             await _typing.StopTypingAsync(roomId, userId);
 
-            // ✅ إرسال للآخرين فقط
-           
+                       
             await Clients.OthersInGroup(roomIdStr).SendAsync("TypingStopped", roomId.Value, userId.Value);
-            // ✅ بعت للـ User مباشرة لو Private
-            var roomForStop = await _roomRepository.GetByIdAsync(roomId);
+                        var roomForStop = await _roomRepository.GetByIdAsync(roomId);
             if (roomForStop?.Type == RoomType.Private)
             {
                 var otherUserId = roomForStop.GetMemberIds().FirstOrDefault(id => id != userId);
@@ -528,8 +485,7 @@ public sealed class ChatHub : Hub
             }
             else if (roomForStop?.Type == RoomType.Group)
             {
-                // ✅ بعت لكل أعضاء الجروب مباشرةً
-                foreach (var memberId in roomForStop.GetMemberIds())
+                                foreach (var memberId in roomForStop.GetMemberIds())
                 {
                     if (memberId == userId) continue;
                     await Clients.User(memberId.Value.ToString())
@@ -544,8 +500,7 @@ public sealed class ChatHub : Hub
         }
     }
 
-    // ========== دالة جديدة: جلب كل المستخدمين اللي بيكتبوا في Room ==========
-    public async Task<IReadOnlyList<Guid>> GetTypingUsers(string roomIdStr)
+        public async Task<IReadOnlyList<Guid>> GetTypingUsers(string roomIdStr)
     {
         try
         {
@@ -573,8 +528,7 @@ public sealed class ChatHub : Hub
 
     public async Task MarkRoomRead(Guid roomId, Guid lastMessageId)
     {
-        // إنشاء Scope مستقل يضمن عدم تداخل الـ DbContext
-        using var scope = _scopeFactory.CreateScope();
+                using var scope = _scopeFactory.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
         await mediator.Send(new MarkRoomReadCommand(
@@ -592,22 +546,19 @@ public sealed class ChatHub : Hub
 
             Console.WriteLine($"[ChatHub] GetOnlineUsers - Total online from presence: {allOnline.Count}");
 
-            // ✅ حتى لو مفيش مستخدمين، رجع على الأقل المستخدم الحالي لو هو أونلاين
-            var visible = new List<Guid>();
+                        var visible = new List<Guid>();
 
             foreach (var u in allOnline)
             {
                 try
                 {
-                    // لو المستخدم هو أنا، ضيفه دايماً (لازم أشوف نفسي في القائمة)
-                    if (u == me)
+                                        if (u == me)
                     {
                         visible.Add(u.Value);
                         continue;
                     }
 
-                    // التحقق من Block
-                    var blocked = await _blockRepository.IsBlockedAsync(me, u);
+                                        var blocked = await _blockRepository.IsBlockedAsync(me, u);
                     if (!blocked)
                     {
                         visible.Add(u.Value);
@@ -619,8 +570,7 @@ public sealed class ChatHub : Hub
                 }
             }
 
-            // ✅ تأكيد: لو القائمة فاضية، رجع على الأقل المستخدم الحالي
-            if (visible.Count == 0 && allOnline.Contains(me))
+                        if (visible.Count == 0 && allOnline.Contains(me))
             {
                 visible.Add(me.Value);
                 Console.WriteLine($"[ChatHub] Added current user {me.Value} to online list (fallback)");
@@ -632,8 +582,7 @@ public sealed class ChatHub : Hub
         catch (Exception ex)
         {
             Console.WriteLine($"[ChatHub] GetOnlineUsers error: {ex.Message}");
-            // ✅ في حالة الخطأ، رجع قائمة فاضية بس متأكد إن المستخدم الحالي موجود
-            try
+                        try
             {
                 var me = GetUserId();
                 var isOnline = await _presence.IsOnlineAsync(me);
@@ -678,10 +627,36 @@ public sealed class ChatHub : Hub
 
         await _mediator.Send(command);
 
-        // ✅ ممنوع تبعت MessageReceived هنا (ولا Group ولا Users)
-    }
+            }
 
-    
+        public async Task JoinNewRoom(string roomIdStr)
+    {
+        try
+        {
+            if (!Guid.TryParse(roomIdStr, out var roomGuid))
+                return;
+
+            var userId = GetUserId();
+            var roomId = new RoomId(roomGuid);
+
+                        var room = await _roomRepository.GetByIdWithMembersAsync(roomId, CancellationToken.None);
+            if (room == null) return;
+
+            bool isMember = room.Members.Any(m => m.UserId == userId);
+            if (!isMember)
+            {
+                Console.WriteLine($"[JoinNewRoom] ❌ User {userId.Value} is not a member of room {roomGuid}");
+                return;
+            }
+
+                        await Groups.AddToGroupAsync(Context.ConnectionId, roomIdStr);
+            Console.WriteLine($"[JoinNewRoom] ✅ User {userId.Value} joined SignalR group for room {roomGuid}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[JoinNewRoom] Error: {ex.Message}");
+        }
+    }
     private UserId GetUserId()
 {
     var raw =
@@ -698,24 +673,21 @@ public sealed class ChatHub : Hub
     {
         var allOnline = await _presence.GetOnlineUsersAsync();
 
-        // لو الـ context مش متاح، ارجع كل الـ online (بدون فلتر بلوك)
-        try
+                try
         {
             var result = new List<UserId>();
             foreach (var u in allOnline)
             {
                 if (u == me) continue;
 
-                // حاول بس لو الـ context شغال
-                var blocked = await _blockRepository.IsBlockedAsync(me, u, Context.ConnectionAborted);
+                                var blocked = await _blockRepository.IsBlockedAsync(me, u, Context.ConnectionAborted);
                 if (!blocked) result.Add(u);
             }
             return result;
         }
         catch (TaskCanceledException)
         {
-            // في حالة disconnect، ارجع كل الناس (مش مهم الفلتر دقيق هنا)
-            return allOnline.Where(u => u != me).ToList();
+                        return allOnline.Where(u => u != me).ToList();
         }
         catch (Exception ex)
         {

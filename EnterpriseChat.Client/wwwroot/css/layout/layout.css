@@ -1,7 +1,7 @@
 ﻿.app-layout {
     display: flex;
     height: 100vh;
-    overflow: hidden; /* خليها hidden عشان double scroll متعملش */
+    overflow: hidden; 
 }
 
 .sidebar {
@@ -11,7 +11,7 @@
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border-subtle);
-    overflow-y: auto; /* ✅ جديد: لو الsidebar طويل (future) يscroll */
+    overflow-y: auto; 
 }
 
 .main {
@@ -19,18 +19,18 @@
     display: flex;
     flex-direction: column;
     background: var(--bg-app);
-    overflow: hidden; /* خليها hidden */
+    overflow: hidden; 
 }
 
 .content {
     flex: 1;
-    /*padding: 16px;*/
+    
     overflow-y: auto;  
     display: flex;
     flex-direction: column;
 }
 
-/* Mobile */
+
 @media (max-width: 860px) {
     .sidebar {
         display: none;
@@ -40,15 +40,15 @@
         padding: 12px;
     }
 }
-/* تأثير الزجاج الاحترافي للرسالة المثبتة */
+
 .pinned-banner {
-    position: sticky; /* يفضل استخدام sticky لضمان بقائها تحت الـ TopBar */
+    position: sticky; 
     top: 0;
-    z-index: 80; /* أقل من الـ Popups وأعلى من الرسائل */
-    background: rgba(15, 23, 42, 0.75); /* لون داكن شفاف */
-    backdrop-filter: blur(12px); /* جوهر تأثير الزجاج - التغبيش */
+    z-index: 80; 
+    background: rgba(15, 23, 42, 0.75); 
+    backdrop-filter: blur(12px); 
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08); /* خط سفلي خفيف جداً */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08); 
     padding: 10px 18px;
     display: flex;
     align-items: center;
@@ -59,18 +59,18 @@
 }
 
     .pinned-banner:hover {
-        background: rgba(30, 41, 59, 0.85); /* تفتيح بسيط عند الوقوف بالماوس */
+        background: rgba(30, 41, 59, 0.85); 
     }
 
-/* أيقونة الدبوس */
+
 .pin-icon {
     font-size: 16px;
-    filter: drop-shadow(0 0 5px var(--accent-main)); /* توهج خفيف حول الدبوس */
+    filter: drop-shadow(0 0 5px var(--accent-main)); 
 }
 
 .pin-content {
     flex: 1;
-    min-width: 0; /* ضروري لعمل الـ ellipsis */
+    min-width: 0; 
 }
 
 .pin-label {
@@ -91,7 +91,7 @@
     opacity: 0.9;
 }
 
-/* زر إغلاق الـ Pin */
+
 .close-pin {
     background: transparent;
     border: none;
@@ -110,7 +110,7 @@
         color: #ef4444;
     }
 
-/* أنيميشن الظهور السلس */
+
 @keyframes slideDown {
     from {
         transform: translateY(-100%);

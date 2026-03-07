@@ -18,8 +18,7 @@ public sealed class AttachmentsApi
         string contentType,
         CancellationToken ct = default)
     {
-        // field name غالباً "file"
-        return _api.PostMultipartAsync<AttachmentDto>(
+                return _api.PostMultipartAsync<AttachmentDto>(
             ApiEndpoints.UploadAttachment(roomId),
             fieldName: "file",
             content: stream,

@@ -10,7 +10,7 @@ public sealed class GetGroupMembersQueryHandler
 {
     private readonly IChatRoomRepository _roomRepository;
     private readonly IRoomAuthorizationService _auth;
-    private readonly IUserLookupService _users; // ✅ موجود عندك
+    private readonly IUserLookupService _users; 
 
     public GetGroupMembersQueryHandler(
         IChatRoomRepository roomRepository,
@@ -42,8 +42,7 @@ public sealed class GetGroupMembersQueryHandler
             var displayName = await _users.GetDisplayNameAsync(id, ct)
                 ?? $"User {id.ToString("N")[..6]}";
 
-            // ✅ هنا نجيب قيمة IsAdmin من الـ Member entity
-            var isAdmin = m.IsAdmin; // 👈 هذا هو المفتاح
+            var isAdmin = m.IsAdmin; 
 
             members.Add(new GroupMemberDto(id, displayName, isAdmin));
         }

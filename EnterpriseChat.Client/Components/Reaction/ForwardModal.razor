@@ -67,8 +67,7 @@
     [Parameter] public EventCallback OnClose { get; set; }
     private string searchTerm = "";
     private List<Guid> selectedRoomIds = new();
-    private List<RoomListItemModel> _rooms = new(); // ✅ local list
-
+    private List<RoomListItemModel> _rooms = new(); 
     private IEnumerable<RoomListItemModel> FilteredRooms =>
         _rooms.Where(r => string.IsNullOrEmpty(searchTerm) ||
                          (r.Name?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
@@ -76,18 +75,15 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        // ✅ كل ما الـ Modal يفتح، جيب الـ Rooms
-        if (IsOpen)
+                if (IsOpen)
         {
-            // لو RoomsVM فيه data خدها
-            if (RoomsVM.Rooms.Any())
+                        if (RoomsVM.Rooms.Any())
             {
                 _rooms = RoomsVM.Rooms.ToList();
             }
             else
             {
-                // لو فاضية، حمّل من API
-                await RoomsVM.LoadAsync();
+                                await RoomsVM.LoadAsync();
                 _rooms = RoomsVM.Rooms.ToList();
             }
         }

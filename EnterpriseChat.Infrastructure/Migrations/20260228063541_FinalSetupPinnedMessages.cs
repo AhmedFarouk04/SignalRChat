@@ -5,14 +5,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class FinalSetupPinnedMessages : Migration
+        public partial class FinalSetupPinnedMessages : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // 2. تعديل الحقول (Preview)
-            migrationBuilder.AlterColumn<string>(
+                        migrationBuilder.AlterColumn<string>(
                 name: "LastReactionPreview",
                 table: "ChatRooms",
                 type: "nvarchar(200)",
@@ -32,8 +29,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 oldType: "nvarchar(max)",
                 oldNullable: true);
 
-            // 3. إنشاء جدول الـ PinnedMessages
-            migrationBuilder.CreateTable(
+                        migrationBuilder.CreateTable(
                 name: "PinnedMessages",
                 columns: table => new
                 {
@@ -60,8 +56,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                         principalColumn: "Id");
                 });
 
-            // 4. 🔥 الخطوة السحرية: إعادة إضافة الـ Foreign Key المفقود للرسائل
-            migrationBuilder.AddForeignKey(
+                        migrationBuilder.AddForeignKey(
                 name: "FK_Messages_ChatRooms_RoomId",
                 table: "Messages",
                 column: "RoomId",
@@ -69,8 +64,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Cascade);
 
-            // 5. إنشاء الـ Indexes
-            migrationBuilder.CreateIndex(
+                        migrationBuilder.CreateIndex(
                 name: "IX_PinnedMessages_MessageId",
                 table: "PinnedMessages",
                 column: "MessageId");
@@ -85,8 +79,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 table: "PinnedMessages",
                 columns: new[] { "RoomId", "MessageId" },
                 unique: true);
-        }        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+        }                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
                 name: "PinnedMessages");

@@ -13,7 +13,7 @@
         right: -40px;
     }
 
-    /* reactions panel width protection */
+    
     .reaction-actions {
         max-width: min(420px, calc(100vw - 110px));
     }

@@ -18,16 +18,14 @@ public sealed class UnitOfWork : IUnitOfWork
         _dispatcher = dispatcher;
     }
 
-    // في Infrastructure/Persistence/UnitOfWork.cs
-    public async Task CommitAsync(CancellationToken cancellationToken = default)
+        public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         Console.WriteLine($"[UOW] ========== CommitAsync START ==========");
         Console.WriteLine($"[UOW] Time: {DateTime.UtcNow:HH:mm:ss.fff}");
 
         try
         {
-            // 1. شوف إيه اللي بيتغير قبل الحفظ
-            var entries = _context.ChangeTracker.Entries()
+                        var entries = _context.ChangeTracker.Entries()
                 .Where(e => e.State == EntityState.Added ||
                            e.State == EntityState.Modified ||
                            e.State == EntityState.Deleted)
@@ -39,8 +37,7 @@ public sealed class UnitOfWork : IUnitOfWork
             {
                 Console.WriteLine($"[UOW]   - {entry.Entity.GetType().Name}: {entry.State}");
 
-                // لو الـ entity هي ChatRoom، اعرض التفاصيل
-                if (entry.Entity is ChatRoom room)
+                                if (entry.Entity is ChatRoom room)
                 {
                     var originalName = entry.OriginalValues.GetValue<string>(nameof(ChatRoom.Name));
                     var currentName = entry.CurrentValues.GetValue<string>(nameof(ChatRoom.Name));
@@ -52,18 +49,15 @@ public sealed class UnitOfWork : IUnitOfWork
                 }
             }
 
-            // 2. جرب الحفظ
-            Console.WriteLine($"[UOW] Calling SaveChangesAsync...");
-            var result = await _context.SaveChangesAsync(CancellationToken.None); // مؤقتاً بنستخدم None
-            Console.WriteLine($"[UOW] SaveChangesAsync returned: {result}");
+                        Console.WriteLine($"[UOW] Calling SaveChangesAsync...");
+            var result = await _context.SaveChangesAsync(CancellationToken.None);             Console.WriteLine($"[UOW] SaveChangesAsync returned: {result}");
 
             if (result == 0 && entries.Any())
             {
                 Console.WriteLine($"[UOW] ⚠️ WARNING: No rows affected but {entries.Count} entities were tracked!");
             }
 
-            // 3. domain events زي ما انت عامل
-            var domainEvents = _context.ChangeTracker
+                        var domainEvents = _context.ChangeTracker
                 .Entries()
                 .Where(e => e.Entity is Message)
                 .SelectMany(e => ((Message)e.Entity).DomainEvents)

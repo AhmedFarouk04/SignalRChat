@@ -22,8 +22,7 @@ public class NotificationManager
 
     public void SetCurrentPage(string page, Guid? roomId = null, Guid? currentUserId = null)
     {
-        // ✅ لو الصفحة اتغيرت من chat لحاجة تانية، نحدث الحالة
-        bool wasChatPage = _isChatPage;
+                bool wasChatPage = _isChatPage;
 
         _currentPage = page;
         _isChatPage = page == "chat";
@@ -31,8 +30,7 @@ public class NotificationManager
         if (roomId.HasValue)
             _currentRoomId = roomId.Value;
         else
-            _currentRoomId = Guid.Empty; // ✅ لو مفيش roomId، نفضيها
-
+            _currentRoomId = Guid.Empty; 
         if (currentUserId.HasValue)
             _currentUserId = currentUserId.Value;
 
@@ -43,58 +41,37 @@ public class NotificationManager
     {
         try
         {
-            // 1. التأكد من وجود رسالة
-            if (message == null)
-                return false;
+            if (message == null) return false;
 
             Console.WriteLine($"[Notification] Checking message {message.Id} in room {message.RoomId}");
-            Console.WriteLine($"[Notification] Current page: {_currentPage}, isChatPage: {_isChatPage}, currentRoom: {_currentRoomId}");
 
-            // 2. مش في صفحة الشات - يشتغل
-            if (!_isChatPage)
-            {
-                Console.WriteLine($"[Notification] NOT in chat page, PLAYING sound");
-                return true;
-            }
-
-            // 3. في صفحة الشات ونفس الغرفة - ما يشتغلش
-            if (_isChatPage && _currentRoomId == message.RoomId && _currentRoomId != Guid.Empty)
-            {
-                Console.WriteLine($"[Notification] In chat page and same room, NOT playing sound");
-                return false;
-            }
-
-            // 4. في صفحة الشات لكن غرفة مختلفة - يشتغل
-            if (_isChatPage && _currentRoomId != message.RoomId)
-            {
-                Console.WriteLine($"[Notification] In chat page but different room, PLAYING sound");
-                return true;
-            }
-
-            // 5. رسالة من نفسي
-            if (_currentUserId != Guid.Empty && message.SenderId == _currentUserId)
+                        if (_currentUserId != Guid.Empty && message.SenderId == _currentUserId)
             {
                 Console.WriteLine($"[Notification] My own message, NOT playing sound");
                 return false;
             }
 
-            // 6. الغرفة مكتومة
-            if (_flagsStore.GetMuted(message.RoomId))
+                        if (_isChatPage && _currentRoomId == message.RoomId && _currentRoomId != Guid.Empty)
             {
-                Console.WriteLine($"[Notification] Error: {{ex.Message}}");
+                Console.WriteLine($"[Notification] In same chat room, NOT playing sound");
                 return false;
             }
 
-            // 7. المستخدم محظور
-            if (_flagsStore.GetBlockedByMe(message.SenderId) ||
-                _flagsStore.GetBlockedMe(message.SenderId))
+                        if (_flagsStore.GetBlockedByMe(message.SenderId) || _flagsStore.GetBlockedMe(message.SenderId))
             {
                 Console.WriteLine($"[Notification] User is blocked, NOT playing sound");
                 return false;
             }
 
-            // 8. افتراضياً نشتغل
-            Console.WriteLine($"[Notification] Default: playing sound");
+                                    bool isMuted = _flagsStore.GetMuted(message.RoomId);
+
+            if (isMuted)
+            {
+                Console.WriteLine($"[Notification] Room is MUTED (from cache), NOT playing sound");
+                return false;
+            }
+
+                        Console.WriteLine($"[Notification] PLAYING sound");
             return true;
         }
         catch (Exception ex)
@@ -103,7 +80,6 @@ public class NotificationManager
             return false;
         }
     }
-
     public async Task TryPlayNotification(MessageModel message)
     {
         try

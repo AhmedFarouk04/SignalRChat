@@ -4,11 +4,9 @@
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddPinnedMessageConfig : Migration
+        public partial class AddPinnedMessageConfig : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateIndex(
                 name: "IX_PinnedMessages_RoomId",
@@ -16,8 +14,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 column: "RoomId");
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
                 name: "IX_PinnedMessages_RoomId",

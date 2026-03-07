@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Application/Services/ReactionsService.cs
-using EnterpriseChat.Application.DTOs;
+﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Enums;
@@ -67,8 +66,7 @@ public sealed class ReactionsService
             CurrentUserId = currentUserId.Value
         };
 
-        // Tabs
-        dto.Tabs.Add(new ReactionTabDto
+                dto.Tabs.Add(new ReactionTabDto
         {
             Type = null,
             Count = reactions.Count
@@ -83,8 +81,7 @@ public sealed class ReactionsService
             });
         }
 
-        // Entries
-        foreach (var reaction in reactions)
+                foreach (var reaction in reactions)
         {
             var user = await _userDirectory.GetUserSummaryAsync(reaction.UserId, ct);
             dto.Entries.Add(new ReactionEntryDto

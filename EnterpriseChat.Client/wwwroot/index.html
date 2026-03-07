@@ -37,8 +37,7 @@
         import { registerClickHandler, unregisterClickHandler } from './js/clickHandler.js';
         import './js/chat-utils.js';
 
-        // ✅ تعيين الدوال على window
-        window.chatInsertNewline = chatInput.chatInsertNewline || chatInsertNewline;
+                window.chatInsertNewline = chatInput.chatInsertNewline || chatInsertNewline;
         window.chatFocus = window.focusElement || chatInput.focusEl || chatInput.focus;
 
         window.scrollToBottom = scrollToBottom;
@@ -51,16 +50,12 @@
 
         window.downloadFileFromStream = downloadFileFromStream;
 
-        // ✅ الأهم: تعيين دوال الصوت على window
-        window.initNotifySound = initNotifySound;
+                window.initNotifySound = initNotifySound;
         window.notifyUnlock = unlockNotify;
         window.notifyPlay = playNotify;
+                window.initNotifySound('/sounds/notify.mp3');
 
-        // ✅ تهيئة الصوت فوراً
-        window.initNotifySound('/sounds/notify.mp3');
-
-        // ✅ دوال التمرير
-        window.scrollToMessage = (id) => {
+                window.scrollToMessage = (id) => {
             const el = document.getElementById(id);
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -76,6 +71,21 @@
                 }, 2000);
             }
         };
+                function tryUnlockAudio() {
+            if (window.isAudioUnlocked) return;
+
+            console.log('[notify] Attempting auto-unlock on user interaction...');
+                        window.notifyUnlock();
+            window.isAudioUnlocked = true;
+
+                        document.removeEventListener('click', tryUnlockAudio);
+            document.removeEventListener('keydown', tryUnlockAudio);
+            document.removeEventListener('touchstart', tryUnlockAudio);
+        }
+
+        document.addEventListener('click', tryUnlockAudio);
+        document.addEventListener('keydown', tryUnlockAudio);
+        document.addEventListener('touchstart', tryUnlockAudio);
     </script>
 </body>
 </html>

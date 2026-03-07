@@ -50,9 +50,9 @@ public sealed class RoomsController : BaseController
         await _mediator.Send(new PinMessageCommand(
             new RoomId(roomId),
             dto.MessageId.HasValue ? new MessageId(dto.MessageId.Value) : null,
-            new UserId(GetCurrentUserId()),  // ✅ PinnedBy
+            new UserId(GetCurrentUserId()),  
             duration,
-            dto.UnpinMessageId));            // ✅ UnpinMessageId
+            dto.UnpinMessageId));           
 
         return Ok();
     }
@@ -70,5 +70,33 @@ public sealed class RoomsController : BaseController
             .ToList();
 
         return Ok(pins);
+    }
+        [HttpDelete("{roomId:guid}/chat")]
+    public async Task<IActionResult> DeleteChat(Guid roomId, CancellationToken ct)
+    {
+        if (roomId == Guid.Empty)
+            return BadRequest("RoomId is required.");
+
+        await _mediator.Send(
+            new DeleteChatCommand(new RoomId(roomId), GetCurrentUserId()),
+            ct);
+
+        return NoContent();
+    }
+
+        [HttpPost("{roomId:guid}/chat/clear")]
+    public async Task<IActionResult> ClearChat(
+        Guid roomId,
+        [FromQuery] bool forEveryone = false,
+        CancellationToken ct = default)
+    {
+        if (roomId == Guid.Empty)
+            return BadRequest("RoomId is required.");
+
+        await _mediator.Send(
+            new ClearChatCommand(new RoomId(roomId), GetCurrentUserId(), forEveryone),
+            ct);
+
+        return NoContent();
     }
 }

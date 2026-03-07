@@ -14,8 +14,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         builder.HasKey(x => x.Id);
 
-        // ✅ حذف الـ Value Converters من هنا لأنها في DbContext
-        builder.Property(x => x.Id).IsRequired();
+                builder.Property(x => x.Id).IsRequired();
         builder.Property(x => x.RoomId).IsRequired();
         builder.Property(x => x.SenderId).IsRequired();
 
@@ -26,8 +25,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 
-        // ✅ Receipts navigation
-        builder.Metadata
+                builder.Metadata
             .FindNavigation(nameof(Message.Receipts))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
@@ -46,24 +44,20 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         .HasDefaultValue(false);
 
         builder.Property(x => x.SystemMessageType)
-            .HasConversion<string>();   // عشان يتحفظ string في الـ DB
-
-        // Index عشان الـ queries تكون سريعة
-        builder.HasIndex(x => new { x.RoomId, x.IsSystemMessage, x.CreatedAt });
+            .HasConversion<string>();   
+                builder.HasIndex(x => new { x.RoomId, x.IsSystemMessage, x.CreatedAt });
 
         builder.Property(x => x.ReplyToMessageId)
     .IsRequired(false);
 
-        // Self-referencing relationship
-        builder.HasOne(x => x.ReplyToMessage)
+                builder.HasOne(x => x.ReplyToMessage)
             .WithMany()
             .HasForeignKey(x => x.ReplyToMessageId)
             .OnDelete(DeleteBehavior.SetNull)
             .IsRequired(false);
 
 
-        // Deletions navigation
-        builder.Metadata
+                builder.Metadata
             .FindNavigation(nameof(Message.Deletions))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 

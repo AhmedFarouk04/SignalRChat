@@ -1,6 +1,8 @@
 ﻿@using EnterpriseChat.Client.Models
 @using Microsoft.AspNetCore.Components.Routing
 
+@inject EnterpriseChat.Client.ViewModels.RoomsViewModel RoomsVM
+
 <li>
     <NavLink class="room-link"
              ActiveClass="active"
@@ -65,7 +67,7 @@
                 {
                     var sender = GetSenderInfo();
 
-                    @* 1. عرض علامة الصح (Status) لو أنا المرسل *@
+                    @* 1. عرض علامة الصح لو أنا المرسل وفقط في الرسايل العادية *@
                     @if (IsMyLastMessage && Room.LastMessageStatus.HasValue && Room.LastMessageSenderId != Guid.Empty)
                     {
                         <span class="room-last-status @GetStatusClass(Room.LastMessageStatus.Value)">
@@ -74,13 +76,14 @@
                         <span>&nbsp;</span>
                     }
 
-                    @* 2. عرض اسم المرسل *@
+                    @* 2. عرض اسم المرسل (فقط لو موجود ومش رسالة نظام) *@
                     @if (!string.IsNullOrEmpty(sender.name))
                     {
-                        <span class="message-sender" style="font-weight: bold; color: #aaa;">@sender.name: </span>
+                        <span class="message-sender" style="font-weight: 600; color: #ece5dd; opacity: 0.9;">@sender.name: </span>
                     }
 
-                    <span class="@(Room.LastMessageSenderId == Guid.Empty ? "system-message-preview" : "")">
+                    @* 3. نص الرسالة *@
+                    <span class="@(Room.LastMessageSenderId == Guid.Empty ? "system-message-preview" : "message-text-preview")">
                         @Truncate(Room.LastMessagePreview, 60)
                     </span>
                 }
@@ -96,6 +99,7 @@
     [Parameter] public bool IsTyping { get; set; }
     [Parameter] public Guid CurrentUserId { get; set; }
     [Parameter] public string? TypingText { get; set; }
+    private static readonly Dictionary<Guid, string> _knownMemberNames = new();
     private bool IsMyLastMessage => Room.LastMessageSenderId == CurrentUserId;
     private static string GetStatusClass(MessageStatus status) => status switch
     {
@@ -143,25 +147,32 @@
 
         return Room.Name.Substring(0, 1).ToUpper();
     }
+    public static void SeedName(Guid userId, string name)
+    {
+        if (!string.IsNullOrWhiteSpace(name))
+            _knownMemberNames[userId] = name;
+    }
 
 
     private (string? name, string? color) GetSenderInfo()
     {
         if (Room.LastMessageSenderId == null || Room.LastMessageSenderId == Guid.Empty)
             return (null, null);
-
         if (Room.Type == "Private")
-            return (null, null); // ✅ الخاص: مفيش اسم خالص
+            return (null, null);
 
-        if (Room.LastMessageSenderId == CurrentUserId)
-            return ("You", null);
+        var senderId = Room.LastMessageSenderId.Value;
+        if (senderId == CurrentUserId) return ("You", null);
 
-        if (Room.MemberNames != null && Room.MemberNames.TryGetValue(Room.LastMessageSenderId.Value, out var name))
+                if (Room.MemberNames?.TryGetValue(senderId, out var name) == true && !string.IsNullOrWhiteSpace(name))
             return (name.Split(' ')[0], null);
 
-        return ("Unknown", null);
-    }
+                var known = RoomsVM.GetKnownMemberName(senderId);
+        if (!string.IsNullOrWhiteSpace(known))
+            return (known.Split(' ')[0], null);
 
+        return (null, null);
+    }
     private static string Truncate(string? text, int max)
     {
         if (string.IsNullOrWhiteSpace(text)) return string.Empty;

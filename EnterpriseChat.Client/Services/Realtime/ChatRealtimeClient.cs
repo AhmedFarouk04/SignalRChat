@@ -12,8 +12,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     private readonly HttpClient _http;
     private readonly RoomFlagsStore _flags;
     private readonly ICurrentUser _currentUser;
-    private Guid? _cachedUserId; // Cache للـ UserId
-    public event Action<Guid, Guid>? TypingStarted;
+    private Guid? _cachedUserId;     public event Action<Guid, Guid>? TypingStarted;
     public event Action<Guid, Guid>? TypingStopped;
     private HubConnection? _connection;
     private CancellationTokenSource? _typingCts;
@@ -39,7 +38,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
     public ChatRealtimeState State { get; } = new();
     public event Action<Guid, List<Guid>>? InitialTypingUsersReceived;
-   
+    public event Action<Guid>? ChatDeleted;
+    public event Action<Guid, bool>? ChatCleared;
     public event Action<MessageModel>? MessageReceived;
     public event Action<Guid, bool>? RoomMuteChanged;
     public event Action<Guid>? UserOnline;
@@ -86,8 +86,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         _currentUser = currentUser;
     }
 
-    // دالة مساعدة لجلب الـ UserId الحالي بشكل آمن
-
+    
     public async Task NotifyMemberRoleChangedAsync(Guid roomId, Guid userId, bool isAdmin)
     {
         if (_connection is null || _connection.State != HubConnectionState.Connected)
@@ -98,9 +97,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
         try
         {
-            // السيرفر لازم يكون عنده ميثود بنفس الاسم ده: UpdateMemberRole
-            // أو غير الاسم لـ NotifyMemberRoleChanged حسب ما هو مكتوب عندك في الـ Hub على السيرفر
-            await _connection.InvokeAsync("UpdateMemberRole", roomId, userId, isAdmin);
+                                    await _connection.InvokeAsync("UpdateMemberRole", roomId, userId, isAdmin);
             Console.WriteLine($"[SignalR] Role change notification sent for user {userId}");
         }
         catch (Exception ex)
@@ -126,8 +123,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         }
     }
 
-    // دالة مساعدة للتحقق من حالة البلوك
-    private bool IsUserBlocked(Guid userId)
+        private bool IsUserBlocked(Guid userId)
     {
         return _flags.GetBlockedByMe(userId) || _flags.GetBlockedMe(userId);
     }
@@ -230,8 +226,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 State.IsConnected = false;
                 _failedPings = 0;
 
-                // ✅ NEW: clear presence source of truth فورًا
-                State.OnlineUsers = new List<Guid>();
+                                State.OnlineUsers = new List<Guid>();
 
                 try { Disconnected?.Invoke(); }
                 catch (Exception ex) { Console.WriteLine($"[SignalR] Error invoking Disconnected event: {ex.Message}"); }
@@ -245,8 +240,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 State.IsConnected = false;
                 _failedPings = 0;
 
-                // ✅ NEW
-                State.OnlineUsers = new List<Guid>();
+                                State.OnlineUsers = new List<Guid>();
 
                 try { Disconnected?.Invoke(); }
                 catch (Exception ex) { Console.WriteLine($"[SignalR] Error invoking Disconnected event: {ex.Message}"); }
@@ -267,8 +261,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 {
                     var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers", CancellationToken.None);
 
-                    // ✅ NEW: فلترة blocked
-                    State.OnlineUsers = (onlineUsers ?? new List<Guid>())
+                                        State.OnlineUsers = (onlineUsers ?? new List<Guid>())
                         .Where(uid => !_flags.GetBlockedByMe(uid) && !_flags.GetBlockedMe(uid))
                         .ToList();
 
@@ -277,8 +270,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[SignalR] Failed to get online users after reconnect: {ex.Message}");
-                    // ✅ لو فشل snapshot، نخليها فاضية بدل stale
-                    State.OnlineUsers = new List<Guid>();
+                                        State.OnlineUsers = new List<Guid>();
                 }
 
                 if (_currentRoomId.HasValue)
@@ -402,8 +394,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     {
         try
         {
-            // ✅ التحقق من الاتصال أولاً
-            if (!await EnsureConnectionReadyAsync())
+                        if (!await EnsureConnectionReadyAsync())
             {
                 Console.WriteLine("[GetUserOnlineStatus] Connection not ready");
                 return new { IsOnline = false, LastSeen = (DateTime?)null, IsBlocked = false };
@@ -453,8 +444,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 if (_typingUsersByRoom.ContainsKey(roomId))
                     _typingUsersByRoom.Remove(roomId);
             }
-            // ✅ NEW: Refresh snapshot after join
-            try
+                        try
             {
                 var onlineUsers = await _connection.InvokeAsync<List<Guid>>("GetOnlineUsers", CancellationToken.None);
 
@@ -464,8 +454,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
                 State.OnlineUsers = filtered;
 
-                // ✅ optional: ابعت snapshot event عشان الـ VM يبني presence فورًا
-                InitialOnlineUsersReceived?.Invoke(filtered);
+                                InitialOnlineUsersReceived?.Invoke(filtered);
 
                 Console.WriteLine($"[SignalR] Online users snapshot after JoinRoom: {filtered.Count}");
             }
@@ -523,8 +512,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 await _connection.InvokeAsync("LeaveRoom", roomId.ToString());
             }
 
-            // ✅ تنظيف الـ typing users لهذه الغرفة
-            lock (_typingUsersByRoom)
+                        lock (_typingUsersByRoom)
             {
                 if (_typingUsersByRoom.ContainsKey(roomId))
                     _typingUsersByRoom.Remove(roomId);
@@ -584,20 +572,17 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
         try
         {
-            // ✅ التحقق من أن الـ roomId صالح
-            if (roomId == Guid.Empty) return;
+                        if (roomId == Guid.Empty) return;
 
             var now = DateTime.UtcNow;
 
-            // ✅ Throttling: مرة كل 300ms
-            if (now - _lastTypingSent > _typingDebounce)
+                        if (now - _lastTypingSent > _typingDebounce)
             {
                 _lastTypingSent = now;
                 await _connection.InvokeAsync("TypingStart", roomId.ToString());
             }
 
-            // ✅ Auto-stop بعد 1.2 ثانية
-            _typingCts?.Cancel();
+                        _typingCts?.Cancel();
             _typingCts = new CancellationTokenSource();
             var token = _typingCts.Token;
 
@@ -625,8 +610,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     }
     private void RegisterHandlers()
     {
-        // ✅ HANDLER: MessageReceived
-        _connection!.On<MessageDto>("MessageReceived", async dto =>
+                _connection!.On<MessageDto>("MessageReceived", async dto =>
         {
             Console.WriteLine($"[SignalR] 🟢 MESSAGE RECEIVED! ID: {dto.Id}");
             var st = (Client.Models.MessageStatus)dto.Status;
@@ -644,7 +628,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 IsDeleted = dto.IsDeleted,
                 ReadCount = dto.ReadCount,
                 DeliveredCount = dto.DeliveredCount,
-                TotalRecipients = dto.TotalRecipients
+                TotalRecipients = dto.TotalRecipients,
+                IsSystemMessage = dto.IsSystemMessage || dto.SenderId == Guid.Empty
             };
 
             if (dto.ReplyInfo != null)
@@ -662,8 +647,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
             MessageReceived?.Invoke(message);
 
-            // ✅ أضف ده - بعت Delivered للسيرفر فوراً لو الرسالة مش بتاعتي
-            var currentUserId = await GetCurrentUserIdAsync();
+                        var currentUserId = await GetCurrentUserIdAsync();
             if (currentUserId.HasValue && dto.SenderId != currentUserId.Value)
             {
                 try
@@ -676,10 +660,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 }
             }
         });
-        // ✅ HANDLER: UserOnline - مع فلترة صارمة
-        // في ChatRealtimeClient.cs - داخل RegisterHandlers()
-        // ✅ HANDLER: UserOnline - مع التحقق المباشر من الـ Server
-        _connection.On<Guid>("UserOnline", async (userId) =>
+                                _connection.On<Guid>("UserOnline", async (userId) =>
         {
             try
             {
@@ -690,8 +671,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     return;
                 }
 
-                // التحقق المحلي من الفلاغ
-                var (blockedByMe, blockedMe) = _flags.GetBlockStatus(userId);
+                                var (blockedByMe, blockedMe) = _flags.GetBlockStatus(userId);
 
                 if (blockedByMe || blockedMe)
                 {
@@ -699,13 +679,11 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     return;
                 }
 
-                // ✅ التحقق من الاتصال قبل محاولة الاستدعاء
-                if (!await EnsureConnectionReadyAsync())
+                                if (!await EnsureConnectionReadyAsync())
                 {
                     Console.WriteLine($"[SignalR] UserOnline: Connection not ready for server check");
 
-                    // إذا كان الاتصال غير جاهز، نعتمد على التحقق المحلي فقط
-                    var set = State.OnlineUsers.ToHashSet();
+                                        var set = State.OnlineUsers.ToHashSet();
                     if (!set.Contains(userId))
                     {
                         set.Add(userId);
@@ -715,8 +693,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     return;
                 }
 
-                // ✅ التحقق من الـ Server بأمان
-                try
+                                try
                 {
                     var serverStatus = await _connection.InvokeAsync<object>("GetUserOnlineStatus", userId);
                     if (serverStatus != null)
@@ -734,8 +711,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[SignalR] Server check failed (non-critical): {ex.Message}");
-                    // نكمل عادي ونعتمد على التحقق المحلي
-                }
+                                    }
 
                 var now = DateTime.UtcNow;
                 if (now - _lastUserOnlineEvent < _eventThrottle)
@@ -775,8 +751,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             }
         });
 
-        // ✅ HANDLER: InitialOnlineUsers
-        _connection.On<List<Guid>>("InitialOnlineUsers", async (onlineUsers) =>
+                _connection.On<List<Guid>>("InitialOnlineUsers", async (onlineUsers) =>
         {
             try
             {
@@ -815,9 +790,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             }
         });
 
-        // ✅ HANDLER: CheckUserOnline - الحل الجذري للمشكلة
-        // ✅ HANDLER: CheckUserOnline - مع حماية كاملة
-        _connection.On<Guid>("CheckUserOnline", async (userId) =>
+                        _connection.On<Guid>("CheckUserOnline", async (userId) =>
         {
             try
             {
@@ -830,8 +803,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     return;
                 }
 
-                // التحقق من البلوك
-                if (IsUserBlocked(userId))
+                                if (IsUserBlocked(userId))
                 {
                     Console.WriteLine($"[SignalR] CheckUserOnline: User {userId} is BLOCKED. Ensuring offline state.");
                     var set = State.OnlineUsers.ToHashSet();
@@ -844,8 +816,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     return;
                 }
 
-                // ✅ التحقق من الاتصال قبل الاستدعاء
-                if (!await EnsureConnectionReadyAsync())
+                                if (!await EnsureConnectionReadyAsync())
                 {
                     Console.WriteLine($"[SignalR] CheckUserOnline: Connection not ready");
                     return;
@@ -898,11 +869,21 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             {
                 Console.WriteLine($"[CheckUserOnline] Failed: {ex.Message}");
             }
-        });        // باقي الـ Handlers كما هي...
-        _connection.On<Guid, bool>("RoomMuteChanged", (rid, muted) =>
+        });                _connection.On<Guid, bool>("RoomMuteChanged", (rid, muted) =>
         {
             _flags.SetMuted(rid, muted);
             RoomMuteChanged?.Invoke(rid, muted);
+        });
+        _connection.On<Guid>("ChatDeleted", roomId =>
+        {
+            Console.WriteLine($"[SignalR] 🗑️ ChatDeleted: Room={roomId}");
+            ChatDeleted?.Invoke(roomId);
+        });
+
+        _connection.On<Guid, bool>("ChatCleared", (roomId, forEveryone) =>
+        {
+            Console.WriteLine($"[SignalR] 🧹 ChatCleared: Room={roomId}, ForEveryone={forEveryone}");
+            ChatCleared?.Invoke(roomId, forEveryone);
         });
         _connection.On<Guid, List<Guid>>("InitialTypingUsers", (roomId, userIds) =>
         {
@@ -910,8 +891,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             {
                 Console.WriteLine($"[SignalR] 📋 InitialTypingUsers: Room={roomId}, Count={userIds.Count}");
 
-                // فلترة البلوك
-                var filtered = userIds.Where(uid => !IsUserBlocked(uid)).ToList();
+                                var filtered = userIds.Where(uid => !IsUserBlocked(uid)).ToList();
 
                 lock (_typingUsersByRoom)
                 {
@@ -920,8 +900,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
                 InitialTypingUsersReceived?.Invoke(roomId, filtered);
 
-                // إرسال الأحداث بشكل فردي
-                foreach (var uid in filtered)
+                                foreach (var uid in filtered)
                 {
                     TypingStarted?.Invoke(roomId, uid);
                 }
@@ -935,15 +914,13 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         {
             try
             {
-                // ✅ التحقق من البلوك
-                if (IsUserBlocked(userId))
+                                if (IsUserBlocked(userId))
                 {
                     Console.WriteLine($"[SignalR] 🚫 TypingStarted BLOCKED: User={userId}");
                     return;
                 }
 
-                // ✅ تخزين الـ typing user
-                lock (_typingUsersByRoom)
+                                lock (_typingUsersByRoom)
                 {
                     if (!_typingUsersByRoom.ContainsKey(roomId))
                         _typingUsersByRoom[roomId] = new HashSet<Guid>();
@@ -963,8 +940,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
         {
             try
             {
-                // ✅ إزالة من التخزين
-                lock (_typingUsersByRoom)
+                                lock (_typingUsersByRoom)
                 {
                     if (_typingUsersByRoom.ContainsKey(roomId))
                     {
@@ -982,16 +958,17 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 Console.WriteLine($"[SignalR] Error in TypingStopped: {ex.Message}");
             }
         }); _connection.On<Guid>("RemovedFromRoom", roomId => RemovedFromRoom?.Invoke(roomId));
-        _connection.On<RoomUpdatedModel>("RoomUpdated", upd => RoomUpdated?.Invoke(upd));
-        _connection.On<RoomListItemDto>("RoomUpserted", dto => RoomUpserted?.Invoke(dto));
+        _connection.On<RoomUpdatedModel>("RoomUpdated", upd =>
+        {
+            Console.WriteLine($"[SignalR] 🔴🔴🔴 RoomUpdated RECEIVED: Room={upd.RoomId}, IsMuted={upd.IsMuted}");
+            RoomUpdated?.Invoke(upd);
+        }); _connection.On<RoomListItemDto>("RoomUpserted", dto => RoomUpserted?.Invoke(dto));
         _connection.On<Guid, int>("RoomPresenceUpdated", (roomId, count) => RoomPresenceUpdated?.Invoke(roomId, count));
         _connection.On<Guid, bool>("UserBlockedByMeChanged", (uid, blocked) =>
         {
             Console.WriteLine($"[SignalR] 🔒 UserBlockedByMeChanged received: {uid}, blocked={blocked}");
-            // تحديث الفلاغ فوراً
-            _flags.SetBlockedByMe(uid, blocked);
-            // إذا كان بلوك جديد، نزيل المستخدم من قائمة المتصلين فوراً
-            if (blocked)
+                        _flags.SetBlockedByMe(uid, blocked);
+                        if (blocked)
             {
                 var set = State.OnlineUsers.ToHashSet();
                 if (set.Contains(uid))
@@ -1010,9 +987,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             {
                 Console.WriteLine($"[SignalR] 👑 MemberRoleChanged: Room={roomId}, User={userId}, IsAdmin={isAdmin}");
 
-                // تحديث الفلاغ في الـ RoomFlagsStore (اختياري)
-                // _flags.SetUserAdminStatus(userId, isAdmin);
-
+                                
                 MemberRoleChanged?.Invoke(roomId, userId, isAdmin);
             }
             catch (Exception ex)
@@ -1024,8 +999,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             Console.WriteLine($"[SignalR] 🔒 UserBlockedMeChanged received: {uid}, blocked={blocked}");
             _flags.SetBlockedMe(uid, blocked);
 
-            // NEW: Add symmetric logic for when someone blocks me
-            if (blocked)
+                        if (blocked)
             {
                 var set = State.OnlineUsers.ToHashSet();
                 if (set.Contains(uid))
@@ -1036,16 +1010,13 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     Console.WriteLine($"[SignalR] 🔴 Removed user who blocked me {uid} from online list immediately");
                 }
 
-                // **NEW: Force refresh of online users to sync after flag update**
-                // This re-calls GetOnlineUsersAsync with the new flags, ensuring filtered to 1
-                _ = Task.Run(async () =>
+                                                _ = Task.Run(async () =>
                 {
                     try
                     {
                         await GetOnlineUsersAsync();
                         Console.WriteLine($"[UserBlockedMeChanged] Forced online users refresh after block");
-                        // Optional: Re-invoke UserOffline to trigger VM/UI update
-                        UserOffline?.Invoke(uid);
+                                                UserOffline?.Invoke(uid);
                     }
                     catch (Exception ex)
                     {
@@ -1053,9 +1024,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                     }
                 });
 
-                // Remove the GetUserOnlineStatus call to avoid null ref error
-                // If needed later, fix server-side first
-            }
+                                            }
 
             UserBlockedMeChanged?.Invoke(uid, blocked);
         });
@@ -1152,8 +1121,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
 
             Console.WriteLine($"[EnsureConnectionReady] Connection state: {_connection.State}, waiting...");
 
-            // انتظر حتى يكتمل الاتصال
-            for (int i = 0; i < 10; i++)
+                        for (int i = 0; i < 10; i++)
             {
                 await Task.Delay(100);
                 if (_connection?.State == HubConnectionState.Connected)

@@ -22,12 +22,12 @@
 @import "components/toast.css";
 @import "pages/auth-page.css";
 
-/* Hide Blazor default error UI */
+
 #blazor-error-ui {
     display: none !important;
 }
 
-/* ===== Blazor WASM loading screen ===== */
+
 #app {
     min-height: 100vh;
 }
@@ -79,9 +79,9 @@
     }
 }
 
-/* ===== COMMON COMPONENTS (نقلنا الكلاسات المتكررة هنا) ===== */
 
-/* User Row Component */
+
+
 .user-row {
     display: flex;
     align-items: center;
@@ -142,11 +142,11 @@
     text-overflow: ellipsis;
 }
 
-/* Mini Button Component */
+
 .mini-btn {
     border: 1px solid rgba(56,189,248,0.35);
     background: rgba(56,189,248,0.12);
-    padding: 8px 12px; /* قللنا شوية */
+    padding: 8px 12px; 
     border-radius: 12px;
     color: #e2e8f0;
     cursor: pointer;
@@ -168,7 +168,7 @@
         cursor: not-allowed;
     }
 
-/* Attachments Bar */
+
 .attach-bar {
     display: flex;
     gap: 10px;
@@ -177,7 +177,7 @@
     flex-wrap: wrap;
 }
 
-/* Rooms Links Style Fix */
+
 .rooms-list a,
 .rooms-list a:visited,
 .rooms-list a:hover,
@@ -186,14 +186,14 @@
     color: inherit !important;
 }
 
-/* Accessibility Improvements */
+
 :focus-visible {
     outline: 2px solid var(--accent-main);
     outline-offset: 2px;
     border-radius: var(--radius-md);
 }
 
-/* Mobile optimizations */
+
 @media (max-width: 768px) {
     .user-avatar {
         width: 36px;
@@ -208,4 +208,18 @@
         padding: 6px 10px;
         font-size: 12px;
     }
+}
+.menu-backdrop-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: transparent;
+    z-index: 998; 
+    cursor: default;
+}
+
+.reactions-hover-wrap {
+    z-index: 999 !important; 
 }

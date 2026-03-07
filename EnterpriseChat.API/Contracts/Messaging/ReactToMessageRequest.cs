@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.API/Contracts/Messaging/ReactToMessageRequest.cs
-using EnterpriseChat.Domain.Enums;
+﻿using EnterpriseChat.Domain.Enums;
 
 namespace EnterpriseChat.API.Contracts.Messaging;
 

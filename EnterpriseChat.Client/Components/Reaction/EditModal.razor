@@ -45,12 +45,10 @@
     private string editedContent = string.Empty;
     private Guid _openedForMessageId = Guid.Empty;
     private string _originalContent = string.Empty;
-    private bool _isSaving = false; // ✅ منع أي تدخل أثناء الحفظ
-
+    private bool _isSaving = false; 
     protected override void OnParametersSet()
     {
-        // ✅ فقط set لما modal يفتح لأول مرة - وبس
-        if (Message != null && IsOpen && !_isSaving && _openedForMessageId != Message.Id)
+                if (Message != null && IsOpen && !_isSaving && _openedForMessageId != Message.Id)
         {
             _openedForMessageId = Message.Id;
             _originalContent = Message.Content;
@@ -62,8 +60,7 @@
     {
         if (string.IsNullOrWhiteSpace(editedContent) || Message == null) return;
 
-        // ✅ Trim هنا برضو
-        var trimmedContent = editedContent.Trim();
+                var trimmedContent = editedContent.Trim();
 
         if (string.IsNullOrWhiteSpace(trimmedContent)) return;
         if (trimmedContent == _originalContent.Trim()) return;
@@ -71,8 +68,7 @@
         var updatedMessage = new MessageModel
         {
             Id = Message.Id,
-            Content = trimmedContent, // ✅ trimmed
-        };
+            Content = trimmedContent,         };
 
         _isSaving = true;
         await OnSave.InvokeAsync(updatedMessage);

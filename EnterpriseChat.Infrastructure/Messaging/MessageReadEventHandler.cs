@@ -20,7 +20,6 @@ public sealed class MessageReadEventHandler : IDomainEventHandler<MessageReadEve
         var msg = await _messages.GetByIdAsync(e.MessageId.Value, ct);
         if (msg is null) return;
 
-        // ✅ التعديل هنا: ضفنا msg.RoomId في الآخر
-        await _broadcaster.MessageReadAsync(e.MessageId, msg.SenderId, msg.RoomId);
+                await _broadcaster.MessageReadAsync(e.MessageId, msg.SenderId, msg.RoomId);
     }
 }

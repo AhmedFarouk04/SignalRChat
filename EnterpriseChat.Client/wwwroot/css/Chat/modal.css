@@ -61,7 +61,7 @@
         font-size: 11px;
         opacity: 0.6;
     }
-/* ReplacePinModal - نفس ستايل PinDurationModal */
+
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -117,7 +117,7 @@
     font-weight: 600;
     cursor: pointer;
 }
-/* ✅ إصلاح Pin Badge في TopBar */
+
 .pin-indicator-group {
     display: flex;
     align-items: center;
@@ -135,7 +135,7 @@
     background: rgba(56, 189, 248, 0.15);
     padding: 2px 7px;
     border-radius: 10px;
-    min-width: 32px; /* ✅ عرض minimum */
+    min-width: 32px; 
     text-align: center;
     display: inline-block;
 }
@@ -147,7 +147,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0; /* ✅ مهم عشان ellipsis يشتغل */
+    min-width: 0; 
 }
 
 .pinned-msg-bar {
@@ -159,10 +159,10 @@
     padding: 8px 16px;
     gap: 12px;
     cursor: pointer;
-    overflow: hidden; /* ✅ يمنع الـ overflow */
+    overflow: hidden; 
 }
 
-/* Edit Modal */
+
 .modal-overlay {
     position: fixed;
     top: 0;

@@ -6,6 +6,7 @@
 
 <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>e3be9831-01ba-43f3-a7fd-f0f1b2503875</UserSecretsId>
   </PropertyGroup>    <ItemGroup>
     <PackageReference Include="MailKit" Version="4.14.1" />
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />

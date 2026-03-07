@@ -67,9 +67,10 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
         {
             return Unit.Value;
         }
-
-        // 1. إرسال الغرفة للعضو الجديد فقط
-        var roomDtoForNewMember = new RoomListItemDto
+        var addedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
+        var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
+        var systemText = $"{addedName} was added by {requesterName}";
+                var roomDtoForNewMember = new RoomListItemDto
         {
             Id = room.Id.Value,
             Name = room.Name,
@@ -77,17 +78,14 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
             UnreadCount = 0,
             IsMuted = false,
             LastMessageAt = DateTime.UtcNow,
-            LastMessagePreview = null,
+            LastMessagePreview = systemText,
             LastMessageId = null,
             LastMessageSenderId = null,
             LastMessageStatus = null
         };
         await _broadcaster.RoomUpsertedAsync(roomDtoForNewMember, new[] { command.MemberId });
 
-        var addedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
-        var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
-        var systemText = $"{addedName} was added by {requesterName}";
-
+        
         var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
 
         var sysMsg = Message.CreateSystemMessage(
@@ -99,20 +97,17 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
         await _messages.AddAsync(sysMsg, ct);
         await _uow.CommitAsync(ct);
 
-        // 2. بث الرسالة داخل الشات (بتظهر جوه المحادثة)
-        var msgDto = new MessageDto
+                var msgDto = new MessageDto
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = Guid.Empty,  // ✅ System ID
-            Content = systemText,
+            SenderId = Guid.Empty,              Content = systemText,
             CreatedAt = sysMsg.CreatedAt,
             IsSystemMessage = true
         };
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        // 3. تحديث القائمة بدون Preview (مثل الـ Bulk Handler)
-        await _broadcaster.RoomUpsertedAsync(new RoomListItemDto
+                await _broadcaster.RoomUpsertedAsync(new RoomListItemDto
         {
             Id = room.Id.Value,
             Name = room.Name,
@@ -120,14 +115,12 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
             UnreadCount = 0,
             IsMuted = false,
             LastMessageAt = sysMsg.CreatedAt,
-            LastMessagePreview = null,  // ✅ صح
-            LastMessageId = sysMsg.Id.Value,
-            LastMessageSenderId = Guid.Empty,  // ✅ صح
-            LastMessageStatus = null
+            LastMessagePreview = systemText,              LastMessageId = sysMsg.Id.Value,
+            IsSystemMessage = true,
+            LastMessageSenderId = Guid.Empty,              LastMessageStatus = null
         }, recipients);
 
-        // 4. إشعار للأعضاء الحاليين بعضو جديد
-        var existingMembers = recipients
+                var existingMembers = recipients
             .Where(r => r.Value != command.MemberId.Value)
             .ToList();
 

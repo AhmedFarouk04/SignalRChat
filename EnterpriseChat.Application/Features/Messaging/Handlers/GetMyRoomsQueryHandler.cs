@@ -32,15 +32,31 @@ public sealed class GetMyRoomsQueryHandler
 
     public async Task<IReadOnlyList<RoomListItemDto>> Handle(GetMyRoomsQuery query, CancellationToken ct)
     {
-        var myRooms = await _rooms.GetForUserAsync(query.CurrentUserId, ct);
+        var allRooms = await _rooms.GetForUserAsync(query.CurrentUserId, ct);
+        Console.WriteLine($"[BACKEND DEBUG] Total rooms found in DB for user {query.CurrentUserId}: {allRooms.Count}");
+        foreach (var r in allRooms)
+        {
+            var me = r.Members.FirstOrDefault(m => m.UserId == query.CurrentUserId);
+            Console.WriteLine($"[BACKEND DEBUG] Room: {r.Id.Value}, Type: {r.Type}, IsMember: {me != null}, IsDeleted: {me?.IsDeleted}");
+        }
+        var myRooms = allRooms
+            .Where(r => r.Members.Any(m => m.UserId.Value == query.CurrentUserId.Value && !m.IsDeleted))
+            .ToList();
         var mutedRoomIds = (await _mutes.GetMutedRoomIdsAsync(query.CurrentUserId, ct))
             .ToHashSet();
 
         var roomIds = myRooms.Select(r => r.Id.Value).ToList();
 
-        // ✅ 3 bulk queries بدل N+1
         var lastByRoom = await _messages.GetLastMessagesAsync(roomIds, ct);
         var unreadByRoom = await _messages.GetUnreadCountsAsync(roomIds, query.CurrentUserId, ct);
+
+                var clearedAtByRoom = myRooms
+            .ToDictionary(
+                r => r.Id.Value,
+                r => r.Members
+                      .FirstOrDefault(m => m.UserId == query.CurrentUserId)
+                      ?.ClearedAt
+            );
 
         var nameCache = new Dictionary<Guid, string?>();
         var result = new List<RoomListItemDto>(myRooms.Count);
@@ -48,6 +64,12 @@ public sealed class GetMyRoomsQueryHandler
         foreach (var room in myRooms)
         {
             lastByRoom.TryGetValue(room.Id.Value, out var lastMsg);
+
+                        var clearedAt = clearedAtByRoom.GetValueOrDefault(room.Id.Value);
+            if (clearedAt.HasValue && lastMsg != null && lastMsg.CreatedAt <= clearedAt.Value)
+            {
+                lastMsg = null;
+            }
 
             var lastVisibleMsg = GetVisibleLastMessage(lastMsg);
 
@@ -61,7 +83,7 @@ public sealed class GetMyRoomsQueryHandler
                 room.LastReactionTargetUserId?.Value == query.CurrentUserId.Value &&
                 room.LastReactionAt > (lastVisibleMsg?.CreatedAt ?? DateTime.MinValue);
 
-            if (reactionIsNewer)
+                        if (reactionIsNewer && (!clearedAt.HasValue || room.LastReactionAt > clearedAt.Value))
             {
                 preview = room.LastReactionPreview;
                 lastAt = room.LastReactionAt;

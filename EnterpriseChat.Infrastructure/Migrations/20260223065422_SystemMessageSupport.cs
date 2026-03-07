@@ -4,11 +4,9 @@
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class SystemMessageSupport : Migration
+        public partial class SystemMessageSupport : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<bool>(
                 name: "IsSystemMessage",
@@ -29,8 +27,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 columns: new[] { "RoomId", "IsSystemMessage", "CreatedAt" });
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
                 name: "IX_Messages_RoomId_IsSystemMessage_CreatedAt",

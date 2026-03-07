@@ -33,8 +33,7 @@ public sealed class MarkRoomReadCommandHandler : IRequestHandler<MarkRoomReadCom
         _broadcaster = broadcaster;
     }
 
-    // داخل MarkRoomReadCommandHandler.cs
-    public async Task<Unit> Handle(MarkRoomReadCommand command, CancellationToken ct)
+        public async Task<Unit> Handle(MarkRoomReadCommand command, CancellationToken ct)
     {
         await _auth.EnsureUserIsMemberAsync(command.RoomId, command.UserId, ct);
         var lastCreatedAt = await _messageRepo.GetCreatedAtAsync(command.LastMessageId, ct);
@@ -54,11 +53,9 @@ public sealed class MarkRoomReadCommandHandler : IRequestHandler<MarkRoomReadCom
 
             foreach (var msg in unreadBefore)
             {
-                // 1. إبلاغ الجميع أن العضو "فلان" قرأ الرسالة
-                await _broadcaster.MessageStatusUpdatedAsync(msg.Id, command.UserId, MessageStatus.Read, allMembers);
+                                await _broadcaster.MessageStatusUpdatedAsync(msg.Id, command.UserId, MessageStatus.Read, allMembers);
 
-                // 2. 🚀 الخطوة الأهم: إرسال الإحصائيات المحدثة للمرسل فوراً لضمان عدم تلوينها بالأزرق بالخطأ
-                var stats = await _receiptRepo.GetMessageStatsAsync(msg.Id, ct);
+                                var stats = await _receiptRepo.GetMessageStatsAsync(msg.Id, ct);
                 await _broadcaster.MessageReceiptStatsUpdatedAsync(
                     msg.Id.Value,
                     command.RoomId.Value,
@@ -67,8 +64,7 @@ public sealed class MarkRoomReadCommandHandler : IRequestHandler<MarkRoomReadCom
                     stats.ReadCount);
             }
 
-            // تحديث العداد للمستخدم الذي قرأ
-            await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
+                        await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
             {
                 RoomId = command.RoomId.Value,
                 UnreadDelta = -unreadBefore.Count

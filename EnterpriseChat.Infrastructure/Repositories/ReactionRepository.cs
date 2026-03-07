@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Infrastructure/Repositories/ReactionRepository.cs
-using EnterpriseChat.Domain.Entities;
+﻿using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Interfaces;
 using EnterpriseChat.Domain.ValueObjects;
 using EnterpriseChat.Infrastructure.Persistence;

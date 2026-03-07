@@ -18,15 +18,14 @@ public sealed class MessageReadRepository : IMessageReadRepository
     }
 
     public async Task<IReadOnlyList<MessageReadDto>> GetMessagesAsync(
-    RoomId roomId,
-    UserId forUserId,
-    int skip = 0,
-    int take = 100,
-    CancellationToken ct = default)
+        RoomId roomId,
+        UserId forUserId,
+        int skip = 0,
+        int take = 100,
+        DateTime? clearedAfter = null,          CancellationToken ct = default)
     {
         var currentUserIdValue = forUserId.Value;
 
-        // ✅ استخدم ct العادي هنا، لكن مع إضافة timeout
         var deletedMessageIds = await _context.Set<MessageDeletion>()
             .Where(d => d.UserId == forUserId)
             .Join(
@@ -34,18 +33,20 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 d => d.MessageId,
                 m => m.Id,
                 (d, m) => d.MessageId)
-            .ToListAsync(ct);   // ✅ استخدم ct العادي
+            .ToListAsync(ct);
 
-        // ✅ الحل: حول من SplitQuery لـ Include مع ThenInclude
-        var rawMessages = await _context.Messages
-            // ❌ إلغاء AsSplitQuery
-            // .AsSplitQuery()
-            .Include(m => m.Receipts)      // ✅ استخدم Include بدل SplitQuery
+                var baseQuery = _context.Messages
+            .Include(m => m.Receipts)
             .Include(m => m.Reactions)
             .Include(m => m.ReplyToMessage)
             .Where(m => m.RoomId == roomId
                 && !m.IsBlocked
-                && !deletedMessageIds.Contains(m.Id))
+                && !deletedMessageIds.Contains(m.Id));
+
+                if (clearedAfter.HasValue)
+            baseQuery = baseQuery.Where(m => m.CreatedAt > clearedAfter.Value);
+
+        var rawMessages = await baseQuery
             .OrderByDescending(m => m.CreatedAt)
             .Skip(skip > 0 ? skip : 0)
             .Take(take > 0 ? take : 100)
@@ -60,10 +61,9 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 ReplyToIsDeleted = m.ReplyToMessage != null && m.ReplyToMessage.IsDeleted
             })
             .OrderBy(m => m.Message.CreatedAt)
-            .ToListAsync(ct);   // ✅ استخدم ct العادي   // ← None — ده أهم سطر
+            .ToListAsync(ct);
 
-        // ✅ Batch fetch sender names — query واحدة بدل N+1
-        var replySenderIds = rawMessages
+                var replySenderIds = rawMessages
             .Where(x => x.ReplyToSenderId != null)
             .Select(x => x.ReplyToSenderId!.Value)
             .Distinct()
@@ -134,7 +134,9 @@ public sealed class MessageReadRepository : IMessageReadRepository
             ReplyInfoDto? replyInfo = null;
             if (m.ReplyToMessageId != null && x.ReplyToSenderId != null)
             {
-                var senderName = senderNames.TryGetValue(x.ReplyToSenderId.Value, out var n) ? n : "";
+                var senderName = senderNames.TryGetValue(
+                    x.ReplyToSenderId.Value, out var n) ? n : "";
+
                 replyInfo = new ReplyInfoDto
                 {
                     MessageId = m.ReplyToMessageId.Value,
@@ -160,8 +162,11 @@ public sealed class MessageReadRepository : IMessageReadRepository
                 PersonalStatus = personalStatus,
                 DeliveredCount = deliveredCountDto,
                 ReadCount = readCountDto,
+                TotalRecipients = receipts.Count,
                 IsEdited = m.IsEdited,
                 IsDeleted = m.IsDeleted,
+                IsSystem = m.IsSystemMessage,
+                Type = m.IsSystemMessage ? m.SystemMessageType : null,
                 ReplyToMessageId = m.ReplyToMessageId?.Value,
                 ReplyInfo = replyInfo,
                 Receipts = receipts.Select(r => new MessageReceiptDto
@@ -184,7 +189,6 @@ public sealed class MessageReadRepository : IMessageReadRepository
     {
         var term = searchTerm.Trim().ToLower();
 
-        // Search مش بتستخدم AsSplitQuery، ct عادي كويس هنا
         return await _context.Messages
             .Where(m => m.RoomId == roomId &&
                         !m.IsDeleted &&

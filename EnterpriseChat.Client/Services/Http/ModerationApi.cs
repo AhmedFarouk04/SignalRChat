@@ -11,15 +11,13 @@ public sealed class ModerationApi
         _api = api;
     }
 
-    // Blocked
-    public async Task<IReadOnlyList<BlockedUserDto>> GetBlockedAsync(CancellationToken ct = default)
+        public async Task<IReadOnlyList<BlockedUserDto>> GetBlockedAsync(CancellationToken ct = default)
         => await _api.GetAsync<IReadOnlyList<BlockedUserDto>>(ApiEndpoints.Blocked, ct) ?? Array.Empty<BlockedUserDto>();
 
     public Task UnblockAsync(Guid userId, CancellationToken ct = default)
         => _api.DeleteAsync(ApiEndpoints.Unblock(userId), ct);
 
-    // Muted
-    public async Task<IReadOnlyList<MutedRoomDto>> GetMutedAsync(CancellationToken ct = default)
+        public async Task<IReadOnlyList<MutedRoomDto>> GetMutedAsync(CancellationToken ct = default)
         => await _api.GetAsync<IReadOnlyList<MutedRoomDto>>(ApiEndpoints.Muted, ct) ?? Array.Empty<MutedRoomDto>();
 
     public Task UnmuteAsync(Guid roomId, CancellationToken ct = default)
@@ -28,13 +26,10 @@ public sealed class ModerationApi
     => _api.PostAsync<EmptyRequest, object>(ApiEndpoints.Block(userId), new EmptyRequest(), ct);
 
     public sealed record EmptyRequest;
-    // اليوزرز اللي عملوا بلوك للمستخدم الحالي (اللي بيعمل بلوك ليا)
-    public async Task<IReadOnlyList<BlockedUserDto>> GetBlockedByMeAsync(CancellationToken ct = default)
+        public async Task<IReadOnlyList<BlockedUserDto>> GetBlockedByMeAsync(CancellationToken ct = default)
     {
-        // نفس النمط اللي مستخدم في GetBlockedAsync
-        return await _api.GetAsync<IReadOnlyList<BlockedUserDto>>(
-            "api/moderation/blocked-by-me",  // ← ده الـ endpoint الجديد اللي هتعمله في الـ backend
-            ct
+                return await _api.GetAsync<IReadOnlyList<BlockedUserDto>>(
+            "api/moderation/blocked-by-me",              ct
         ) ?? Array.Empty<BlockedUserDto>();
     }
 

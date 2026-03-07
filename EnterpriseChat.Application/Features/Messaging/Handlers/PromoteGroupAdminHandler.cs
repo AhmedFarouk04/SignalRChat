@@ -36,8 +36,7 @@ public sealed class PromoteGroupAdminHandler
         if (command.TargetUserId.Value == Guid.Empty)
             throw new ArgumentException("TargetUserId is required.");
 
-        // Owner only
-        await _auth.EnsureUserIsOwnerAsync(command.RoomId, command.RequesterId, ct);
+                await _auth.EnsureUserIsOwnerAsync(command.RoomId, command.RequesterId, ct);
 
         var room = await _repo.GetByIdWithMembersAsync(command.RoomId, ct)
             ?? throw new InvalidOperationException("Room not found.");

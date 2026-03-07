@@ -4,11 +4,9 @@
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddIsBlockedToMessage : Migration
+        public partial class AddIsBlockedToMessage : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<bool>(
                 name: "IsBlocked",
@@ -18,8 +16,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 defaultValue: false);
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
                 name: "IsBlocked",

@@ -8,23 +8,17 @@
 
         @if (showNewDivider)
         {
-            <div class="unread-divider">New messages</div>
         }
 
         @{
-            // ✅ FIX: كل الرسائل بالترتيب الزمني بما فيها الـ replies
-            // قبل كان بيشيل الـ replies من الـ main list ويعرضها nested تحت الـ parent
-            // ده كان بيخلي الـ reply تتعرض في مكان الـ parent مش في مكانها الزمني الصح
-            var allMessages = Messages
+                                                var allMessages = Messages
             .DistinctBy(m => m.Id)
             .OrderBy(m => m.CreatedAt)
             .ToList();
 
-            // قائمة لتخزين المعرفات التي تم دمجها (للـ system messages)
-            var skipIds = new HashSet<Guid>();
+                        var skipIds = new HashSet<Guid>();
 
-            // جلب اسمك الحالي للمقارنة
-            var myName = GroupMembers?.FirstOrDefault(m => m.Id == CurrentUserId)?.DisplayName;
+                        var myName = GroupMembers?.FirstOrDefault(m => m.Id == CurrentUserId)?.DisplayName;
         }
 
         @for (int i = 0; i < allMessages.Count; i++)
@@ -35,8 +29,7 @@
             var prev = i > 0 ? allMessages[i - 1] : null;
             var next = i < allMessages.Count - 1 ? allMessages[i + 1] : null;
 
-            // --- فاصل التاريخ ---
-            var currDate = msg.CreatedAt.ToLocalTime().Date;
+                        var currDate = msg.CreatedAt.ToLocalTime().Date;
             var prevDate = prev?.CreatedAt.ToLocalTime().Date;
             if (prev is null || prevDate != currDate)
             {
@@ -45,8 +38,7 @@
 
             @if (IsSystemMessage(msg))
             {
-                // --- منطق الدمج (Aggregation) والتحويل لـ You ---
-                var actorName = "";
+                                var actorName = "";
                 var actionType = "";
                 var targets = new List<string>();
 
@@ -57,8 +49,7 @@
                     actorName = parts[1].Trim();
                     targets.Add(parts[0].Replace(" was added", "").Replace(" was removed", "").Replace(" were added", "").Replace(" were removed", "").Trim());
 
-                    // البحث عن الرسايل اللي ورا بعض لنفس الشخص
-                    int j = i + 1;
+                                        int j = i + 1;
                     while (j < allMessages.Count)
                     {
                         var nextMsg = allMessages[j];
@@ -72,8 +63,7 @@
                         else break;
                     }
 
-                    // تحويل الأسماء لـ You
-                    var processedTargets = targets.Select(t => (!string.IsNullOrEmpty(myName) && t.Equals(myName, StringComparison.OrdinalIgnoreCase)) ? "You" : t).Distinct().ToList();
+                                        var processedTargets = targets.Select(t => (!string.IsNullOrEmpty(myName) && t.Equals(myName, StringComparison.OrdinalIgnoreCase)) ? "You" : t).Distinct().ToList();
                     var processedActor = (!string.IsNullOrEmpty(myName) && actorName.Equals(myName, StringComparison.OrdinalIgnoreCase)) ? "You" : actorName;
 
                     string finalMsg;
@@ -84,8 +74,7 @@
                     }
                     else
                     {
-                        // ترتيب عشان لو You موجودة تيجي في الأول
-                        if (processedTargets.Contains("You")) { processedTargets.Remove("You"); processedTargets.Insert(0, "You"); }
+                                                if (processedTargets.Contains("You")) { processedTargets.Remove("You"); processedTargets.Insert(0, "You"); }
                         var targetText = processedTargets.Count > 2 ? $"{processedTargets[0]}, {processedTargets[1]} and {processedTargets.Count - 2} others" : string.Join(" and ", processedTargets);
                         finalMsg = $"{targetText} were {actionType} by {processedActor}";
                     }
@@ -98,8 +87,7 @@
                 }
                 else
                 {
-                    // رسايل نظام تانية (زي pinned)
-                    <div class="system-message-container" @key="@($"sys-{msg.Id}")">
+                                        <div class="system-message-container" @key="@($"sys-{msg.Id}")">
                         <div class="system-message">
                             <span class="system-text">@FormatSystemCleanUp(msg.Content.Replace(myName ?? "___", "You"))</span>
                         </div>
@@ -108,13 +96,11 @@
             }
             else
             {
-                // --- الرسائل العادية (بما فيها الـ replies) ---
-                var samePrev = IsSameGroup(prev, msg);
+                                var samePrev = IsSameGroup(prev, msg);
                 var sameNext = IsSameGroup(msg, next);
                 var pos = (!samePrev && !sameNext) ? "single" : (!samePrev && sameNext) ? "start" : (samePrev && sameNext) ? "mid" : "end";
 
-                // ✅ لو الرسالة عندها reply preview، خليها single عشان تبان واضحة
-                if (msg.ReplyInfo != null) pos = "single";
+                                if (msg.ReplyInfo != null) pos = "single";
 
                 <MessageBubble @key="@($"bubble-{msg.Id}-{(int)msg.PersonalStatus}")"
                                Message="@msg"
@@ -190,8 +176,7 @@
     private static bool IsSameGroup(MessageModel? a, MessageModel? b)
     {
         if (a is null || b is null || a.SenderId != b.SenderId) return false;
-        // ✅ لو أي منهم عنده ReplyInfo، متجمعهاش عشان تبان واضحة
-        if (a.ReplyInfo != null || b.ReplyInfo != null) return false;
+                if (a.ReplyInfo != null || b.ReplyInfo != null) return false;
         return (b.CreatedAt - a.CreatedAt).Duration() <= TimeSpan.FromMinutes(2);
     }
 
@@ -207,13 +192,11 @@
     {
         Console.WriteLine($"[MessageList] OnAfterRender, firstRender={firstRender}, Messages.Count={Messages.Count}");
 
-        // ✅ أول مرة ندخل الشات، ننزل لتحت فوراً
-        if (firstRender)
+                if (firstRender)
         {
             try
             {
-                await Task.Delay(100); // انتظر شوية عشان الـ DOM يكتمل
-                await Scroll.ScrollToBottomAsync(listRef);
+                await Task.Delay(100);                 await Scroll.ScrollToBottomAsync(listRef);
                 Console.WriteLine($"[MessageList] First render - scrolled to bottom");
 
                 if (Messages.Count > 0)
@@ -230,8 +213,7 @@
             return;
         }
 
-        // ✅ لو في رسائل جديدة ونحن في الأسفل، ننزل لتحت
-        if (Messages.Count > lastMessageCount)
+                if (Messages.Count > lastMessageCount)
         {
             var atBottom = await CheckIfAtBottom();
 
@@ -255,8 +237,7 @@
             }
             else
             {
-                // مش في الأسفل - نضيف الـ new divider
-                for (int i = lastMessageCount; i < Messages.Count; i++)
+                                for (int i = lastMessageCount; i < Messages.Count; i++)
                 {
                     var newMsg = Messages[i];
                     newIds.Add(newMsg.Id);
@@ -312,9 +293,9 @@
             );
         }
 
-        var shouldRender = hash != _lastRenderHash;
-        Console.WriteLine($"[MessageList] ShouldRender={shouldRender}, hashChanged={shouldRender}"); // ✅ log مؤقت
+                hash = HashCode.Combine(hash, OpenReactionMessageId ?? Guid.Empty);
 
+        var shouldRender = hash != _lastRenderHash;
         if (!shouldRender) return false;
         _lastRenderHash = hash;
         return true;

@@ -1,5 +1,6 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Client.Authentication.Abstractions;
+using EnterpriseChat.Client.Components.Rooms;
 using EnterpriseChat.Client.Models;
 using EnterpriseChat.Client.Services.Chat;
 using EnterpriseChat.Client.Services.Http;
@@ -14,7 +15,6 @@ using System.Runtime.CompilerServices;
 
 namespace EnterpriseChat.Client.ViewModels;
 
-// ✅ استخدام ClientMessageStatus بشكل صحيح
 using ClientMessageStatus = EnterpriseChat.Client.Models.MessageStatus;
 
 public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
@@ -39,15 +39,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly TimeSpan _typingThrottle = TimeSpan.FromMilliseconds(800);
     private readonly ReactionsApi _reactionsApi;
     private readonly RoomsViewModel _roomsVM;
-    // ✅ الأحداث - تعريف واحد فقط لكل حدث
-    public event Action? Changed;
+        public event Action? Changed;
     public event Func<MessageModel, Task>? MessageReceived;
     public event Func<MessageModel, Task>? MessageUpdated;
     public event Func<MessageModel, Task>? MessageReplyReceived;
     public event Action<ReplyContext?>? ReplyContextChanged;
     private Guid? _openMenuMessageId;
-    private readonly GroupsApi _groupsApi; //
-    public event PropertyChangedEventHandler? PropertyChanged;
+    private readonly GroupsApi _groupsApi;     public event PropertyChangedEventHandler? PropertyChanged;
     private bool _isReplaceModalOpen;
     public bool IsReplaceModalOpen { get => _isReplaceModalOpen; set { _isReplaceModalOpen = value; NotifyChanged(); } }
     private bool _isPinModalOpen;
@@ -67,8 +65,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             _isSelectionMode = value;
             if (!value) SelectedMessageIds.Clear();
-            SelectionModeChanged?.Invoke(); // ✅ أضف ده
-            NotifyChanged();
+            SelectionModeChanged?.Invoke();             NotifyChanged();
         }
     }
    
@@ -86,8 +83,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         _messageIdToPin = messageId;
 
-        // لو عندنا 3 pins بالفعل، اعرض Replace Modal
-        if (PinnedMessages.Count >= 3)
+                if (PinnedMessages.Count >= 3)
         {
             IsReplaceModalOpen = true;
             NotifyChanged();
@@ -96,8 +92,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         IsPinModalOpen = true;
         NotifyChanged();
-    }    // أضف هذه الخصائص في ChatViewModel
-    public void ToggleMessageSelection(Guid messageId)
+    }        public void ToggleMessageSelection(Guid messageId)
     {
         if (SelectedMessageIds.Contains(messageId))
             SelectedMessageIds.Remove(messageId);
@@ -106,8 +101,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         NotifyChanged();
     }
 
-    // ميثود لفتح الـ Forward Modal (هنحتاجها لاحقاً)
-    private bool _isForwardModalOpen;
+        private bool _isForwardModalOpen;
     public bool IsForwardModalOpen
     {
         get => _isForwardModalOpen;
@@ -150,8 +144,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         try
         {
-            // ✅ بعت الـ messageId المحدد للـ unpin
-            await _chatService.PinMessageAsync(Room!.Id, null, null, messageId);
+                        await _chatService.PinMessageAsync(Room!.Id, null, null, messageId);
         }
         catch (Exception ex)
         {
@@ -167,18 +160,15 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         try
         {
-            // 1. تجهيز الطلب
-            var request = new ForwardMessagesRequest
+                        var request = new ForwardMessagesRequest
             {
                 MessageIds = SelectedMessageIds.ToList(),
                 TargetRoomIds = targetRoomIds
             };
 
-            // 2. نداء الـ API (تأكد إنك ضفت EndPoint في الـ ChatService)
-            await _chatService.ForwardMessagesAsync(request);
+                        await _chatService.ForwardMessagesAsync(request);
 
-            // 3. إنهاء وضع الاختيار وتقديم تغذية راجعة
-            IsSelectionMode = false;
+                        IsSelectionMode = false;
 
             NotifyChanged();
             return true;
@@ -195,11 +185,9 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             await _chatService.PinMessageAsync(Room!.Id, messageId, duration);
 
-            // تحديث القائمة محلياً Real-time
-            if (messageId == null)
+                        if (messageId == null)
             {
-                PinnedMessages.Clear(); // إلغاء الكل مؤقتاً لتبسيط المنطق
-            }
+                PinnedMessages.Clear();             }
             else
             {
                 var msg = Messages.FirstOrDefault(m => m.Id == messageId);
@@ -222,8 +210,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         Changed?.Invoke();
     }
 
-    // ✅ Constructor
-    public ChatViewModel(
+        public ChatViewModel(
         IChatService chatService,
         IRoomService roomService,
         IChatRealtimeClient realtime,
@@ -245,8 +232,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _groupsApi = groupsApi;
     }
 
-    // ✅ الخصائص العامة
-    public RoomModel? Room { get; private set; }
+        public RoomModel? Room { get; private set; }
     public GroupMembersModel? GroupMembers { get; private set; }
     public UserModel? OtherUser { get; private set; }
     public ObservableCollection<MessageModel> Messages { get; } = new();
@@ -262,8 +248,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public bool IsRemoved { get; private set; }
     private string _searchQuery = string.Empty;
     public string SearchQuery { get => _searchQuery; set { _searchQuery = value; NotifyChanged(); _ = PerformSearchAsync(); } }
-    public bool IsPageActive { get; set; } // خاصية جديدة لتحديد هل المستخدم يشاهد الشات حالياً
-    private bool _isSearching;
+    public bool IsPageActive { get; set; }     private bool _isSearching;
     public bool IsSearching { get => _isSearching; set { _isSearching = value; if (!value) SearchResults.Clear(); NotifyChanged(); } }
     private readonly Dictionary<Guid, (int total, int delivered, int read)> _pendingStats = new();
 
@@ -284,12 +269,9 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
-    // ✅ InitializeAsync
-    // ✅ InitializeAsync
-    public async Task InitializeAsync(Guid roomId)
+            public async Task InitializeAsync(Guid roomId)
     {
-        // 1. تنظيف الحالة السابقة
-        UnregisterRealtimeEvents();
+                UnregisterRealtimeEvents();
         _flags.RoomMuteChanged -= OnRoomMuteChanged;
         _flags.BlockedByMeChanged -= OnBlockedByMeChanged;
         _flags.BlockedMeChanged -= OnBlockedMeChanged;
@@ -301,19 +283,19 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         IsRemoved = false;
         IsOtherDeleted = false;
         UiError = null;
+                await _flags.LoadStateAsync(_mod, _currentUser);
 
+        Console.WriteLine($"[Flags] Loaded muted rooms from server");
         _currentRoomId = roomId;
         _flags.SetActiveRoom(roomId);
         NotifyChanged();
 
         try
         {
-            // 2. التحقق من هوية المستخدم
-            CurrentUserId = await _currentUser.GetUserIdAsync()
+                        CurrentUserId = await _currentUser.GetUserIdAsync()
                 ?? throw new InvalidOperationException("User not authenticated");
 
-            // 3. جلب بيانات الغرفة
-            Room = await _roomService.GetRoomAsync(roomId);
+                        Room = await _roomService.GetRoomAsync(roomId);
             if (Room == null)
             {
                 UiError = "This room no longer exists.";
@@ -321,16 +303,18 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 return;
             }
 
-            // 4. تحميل الرسائل
-            var rawMessages = await _chatService.GetMessagesAsync(roomId, CurrentUserId, 0, 200);
+                        IsMuted = _flags.GetMuted(roomId);
+            _flags.SetMuted(roomId, IsMuted);
+
+            Console.WriteLine($"[Init] ✅ IsMuted loaded from FLAGS (SERVER) = {IsMuted}");
+                        var rawMessages = await _chatService.GetMessagesAsync(roomId, CurrentUserId, 0, 200);
             var uniqueMessages = rawMessages
                 .GroupBy(m => m.Id)
                 .Select(g => g.First())
                 .OrderBy(m => m.CreatedAt)
                 .ToList();
 
-            // 5. معالجة بيانات الأعضاء (تتم قبل إضافة الرسائل لحساب العداد بدقة)
-            if (Room.Type == "Group")
+                        if (Room.Type == "Group")
             {
                 var dto = await _chatService.GetGroupMembersAsync(roomId);
                 GroupMembers = new GroupMembersModel
@@ -343,6 +327,11 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                         IsAdmin = m.IsAdmin
                     }).ToList()
                 };
+                foreach (var member in GroupMembers.Members)
+                {
+                    if (!string.IsNullOrEmpty(member.DisplayName))
+                        _roomsVM.CacheMemberName(member.Id, member.DisplayName);
+                }
             }
             else if (Room.Type == "Private")
             {
@@ -359,8 +348,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 }
             }
 
-            // ✅ 6. تحديث عدد المستلمين لكل رسالة
-            int memberCount = Room.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
+                        int memberCount = Room.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
 
             foreach (var msg in uniqueMessages)
             {
@@ -368,8 +356,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Messages.Add(msg);
             }
 
-            // ✅ 7. تحميل الـ Pins بعد ما Messages اتملت
-            PinnedMessages.Clear();
+                        PinnedMessages.Clear();
             try
             {
                 var pinnedIds = await _chatService.GetPinnedMessagesAsync(roomId);
@@ -385,15 +372,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Console.WriteLine($"[Pins] GetPinnedMessagesAsync failed: {ex.Message}");
             }
 
-            // ✅ Fallback: لو PinnedMessages فاضية استخدم Room.PinnedMessageId
-            if (!PinnedMessages.Any() && Room.PinnedMessageId != null)
+                        if (!PinnedMessages.Any() && Room.PinnedMessageId != null)
             {
                 var pinnedMsg = Messages.FirstOrDefault(m => m.Id == Room.PinnedMessageId);
                 if (pinnedMsg != null) PinnedMessages.Add(pinnedMsg);
             }
 
-            // 8. بقية الإجراءات
-            _flags.RoomMuteChanged += OnRoomMuteChanged;
+                        _flags.RoomMuteChanged += OnRoomMuteChanged;
             _flags.BlockedByMeChanged += OnBlockedByMeChanged;
             _flags.BlockedMeChanged += OnBlockedMeChanged;
 
@@ -435,6 +420,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             NotifyChanged();
         }
     }
+
     private string _currentPage = "";
     public string CurrentPage
     {
@@ -477,16 +463,14 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
         }
     }
-    // ✅ Register/Unregister Realtime Events
-    private void RegisterRealtimeEvents(Guid roomId)
+        private void RegisterRealtimeEvents(Guid roomId)
     {
         if (_eventsRegistered && _eventsRoomId == roomId)
             return;
 
         UnregisterRealtimeEvents();
         _eventsRoomId = roomId;
-        Console.WriteLine($"[VM] Registering realtime events for room {roomId}"); // ✅
-        _realtime.MessageReceived += OnRealtimeMessageReceived;
+        Console.WriteLine($"[VM] Registering realtime events for room {roomId}");         _realtime.MessageReceived += OnRealtimeMessageReceived;
         _realtime.MessageDelivered += OnMessageDelivered;
         _realtime.MessageRead += OnMessageRead;
         _realtime.MessageDeliveredToAll += OnMessageDeliveredToAll;
@@ -513,9 +497,12 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _realtime.MessageReactionUpdated += OnMessageReactionUpdated;
         _realtime.MessageUpdated += OnMessageUpdated;
         _realtime.MessageDeleted += OnMessageDeleted;
+        _realtime.RoomUpdated += OnRealtimeRoomUpdated;
+
         _realtime.MessagePinned += OnMessagePinned;
         _realtime.AdminPromoted += OnAdminPromoted;
         _realtime.AdminDemoted += OnAdminDemoted;
+        _realtime.ChatCleared += OnChatCleared;
         _realtime.OnDemandOnlineCheckRequested += HandleOnDemandCheck;
         _realtime.MessageReceiptStatsUpdated += OnMessageReceiptStatsUpdated;
         _eventsRegistered = true;
@@ -550,9 +537,12 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _realtime.MessageReactionUpdated -= OnMessageReactionUpdated;
         _realtime.OnDemandOnlineCheckRequested -= HandleOnDemandCheck;
         _realtime.MessageReceiptStatsUpdated -= OnMessageReceiptStatsUpdated;
+        _realtime.RoomUpdated -= OnRealtimeRoomUpdated;
+
         _realtime.MemberRoleChanged -= OnMemberRoleChanged;
         _realtime.AdminPromoted -= OnAdminPromoted;
         _realtime.AdminDemoted -= OnAdminDemoted;
+        _realtime.ChatCleared -= OnChatCleared;
         _realtime.MessageDeleted -= OnMessageDeleted;
         _eventsRegistered = false;
         _eventsRoomId = null;
@@ -568,8 +558,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             NotifyChanged("MemberRoleChanged via SignalR");
         }
     }
-    // ✅ Realtime Event Handlers
-    private void OnMessageReadToAll(Guid messageId, Guid senderId, Guid roomId)
+        private void OnMessageReadToAll(Guid messageId, Guid senderId, Guid roomId)
     {
         Console.WriteLine($"[VM] OnMessageReadToAll: msg={messageId}, sender={senderId}, room={roomId}");
         var msg = Messages.FirstOrDefault(m => m.Id == messageId);
@@ -617,14 +606,11 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         try
         {
-            // سحب قائمة الأونلاين الحالية من السيرفر
-            var onlineUsers = await _realtime.GetOnlineUsersAsync();
+                        var onlineUsers = await _realtime.GetOnlineUsersAsync();
 
             if (onlineUsers.Contains(userId))
             {
-                // نستخدم NotifyChanged بدلاً من InvokeAsync
-                // لأنها ستقوم بتنبيه صفحة Chat.razor لتعمل StateHasChanged
-                OnUserOnline(userId);
+                                                OnUserOnline(userId);
                 NotifyChanged("HandleOnDemandCheck");
             }
         }
@@ -688,36 +674,29 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         Console.WriteLine($"[VM] UserOffline received for {id}");
 
-        // 1. Immediate removal from OnlineUsers collection
-        var userToRemove = OnlineUsers.FirstOrDefault(u => u.Id == id);
+                var userToRemove = OnlineUsers.FirstOrDefault(u => u.Id == id);
         if (userToRemove != null)
         {
             OnlineUsers.Remove(userToRemove);
             Console.WriteLine($"[VM] Removed user {id} from OnlineUsers. New count: {OnlineUsers.Count}");
         }
 
-        // 2. Update OtherUser if this is a private chat
-        if (OtherUser?.Id == id)
+                if (OtherUser?.Id == id)
         {
             OtherUser.IsOnline = false;
             OtherUser.LastSeen = DateTime.UtcNow;
         }
 
-        // 3. Remove from typing users if they were typing
-        var typingUser = TypingUsers.FirstOrDefault(u => u.Id == id);
+                var typingUser = TypingUsers.FirstOrDefault(u => u.Id == id);
         if (typingUser != null)
         {
             TypingUsers.Remove(typingUser);
         }
 
-        // 4. CRITICAL: Force UI update immediately - use NOTIFYCHANGED not throttled
-        NotifyChanged(); // ← مهم: استخدم NotifyChanged وليس NotifyChangedThrottled
-
-        // 5. Also force rebuild for group
-        if (Room?.Type == "Group")
+                NotifyChanged(); 
+                if (Room?.Type == "Group")
         {
-            // Don't do async - rebuild immediately
-            RebuildPresenceFromRealtime();
+                        RebuildPresenceFromRealtime();
         }
     }
     private void OnUserLastSeenUpdated(Guid userId, DateTime lastSeen)
@@ -736,33 +715,27 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             Console.WriteLine($"[VM] Room {rid} presence updated: {count} online");
 
-            // rebuild فوري
-            RebuildPresenceFromRealtime();
+                        RebuildPresenceFromRealtime();
 
             NotifyChanged();
         }
     }
-    // في ChatViewModel.cs - عدل دالة OnTypingStarted كده
-    // في ChatViewModel.cs - دالة OnTypingStarted
-    private void OnTypingStarted(Guid rid, Guid uid)
+            private void OnTypingStarted(Guid rid, Guid uid)
     {
         if (_eventsRoomId != rid || uid == CurrentUserId) return;
 
         Console.WriteLine($"[VM] 🔍 OnTypingStarted received - Room: {rid}, User: {uid}");
 
-        // لو المستخدم موجود بالفعل، متضفهوش تاني
-        var existing = TypingUsers.FirstOrDefault(u => u.Id == uid);
+                var existing = TypingUsers.FirstOrDefault(u => u.Id == uid);
         if (existing != null)
         {
             Console.WriteLine($"[VM] User {uid} already typing, skipping");
             return;
         }
 
-        // محاولة إيجاد المستخدم
-        UserModel? user = null;
+                UserModel? user = null;
 
-        // 1. في الجروب: من قائمة الأعضاء
-        if (Room?.Type == "Group" && GroupMembers != null)
+                if (Room?.Type == "Group" && GroupMembers != null)
         {
             var member = GroupMembers.Members.FirstOrDefault(m => m.Id == uid);
             if (member != null)
@@ -776,8 +749,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Console.WriteLine($"[VM] Found user in GroupMembers: {member.DisplayName}");
             }
         }
-        // 2. في الشات الخاص: المستخدم الآخر
-        else if (Room?.Type == "Private" && OtherUser != null && OtherUser.Id == uid)
+                else if (Room?.Type == "Private" && OtherUser != null && OtherUser.Id == uid)
         {
             user = new UserModel
             {
@@ -788,8 +760,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             Console.WriteLine($"[VM] Found user in OtherUser: {OtherUser.DisplayName}");
         }
 
-        // 3. لو لسه ملقتوش، استخدم الاسم الافتراضي
-        if (user == null)
+                if (user == null)
         {
             var name = GetSenderName(uid);
             user = new UserModel
@@ -801,23 +772,17 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             Console.WriteLine($"[VM] Using GetSenderName: {name}");
         }
 
-        // إضافة المستخدم لقائمة الـ typing
-        TypingUsers.Add(user);
+                TypingUsers.Add(user);
         Console.WriteLine($"[VM] ✅ Added {user.DisplayName} to TypingUsers. Total: {TypingUsers.Count}");
 
-        // Force UI update
-        NotifyChanged();
+                NotifyChanged();
     }
-    // في ChatViewModel.cs - عدل دالة OnTypingStopped كده
-
-    // في ChatViewModel.cs - أضف هذه الدالة
-    // في ChatViewModel.cs - أضف هذه الدالة
-    public IReadOnlyList<UserModel> GetAllUsers()
+    
+            public IReadOnlyList<UserModel> GetAllUsers()
     {
         var users = new List<UserModel>();
 
-        // في الجروب: أضف كل الأعضاء
-        if (GroupMembers?.Members != null)
+                if (GroupMembers?.Members != null)
         {
             foreach (var member in GroupMembers.Members)
             {
@@ -833,14 +798,12 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
         }
 
-        // في الشات الخاص: أضف المستخدم الآخر
-        if (OtherUser != null && !users.Any(u => u.Id == OtherUser.Id))
+                if (OtherUser != null && !users.Any(u => u.Id == OtherUser.Id))
         {
             users.Add(OtherUser);
         }
 
-        // أضف نفسك كمان لو مش موجود (اختياري)
-        if (!users.Any(u => u.Id == CurrentUserId))
+                if (!users.Any(u => u.Id == CurrentUserId))
         {
             users.Add(new UserModel
             {
@@ -873,8 +836,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         IsDisconnected = true;
 
-        // ✅ Clear UI lists immediately
-        OnlineUsers.Clear();
+                OnlineUsers.Clear();
         TypingUsers.Clear();
 
         if (OtherUser != null)
@@ -883,12 +845,18 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             OtherUser.LastSeen = DateTime.UtcNow;
         }
 
-        // Force immediate UI update
-        NotifyChanged();
+                NotifyChanged();
     }
     private void OnReconnected()
     {
         IsDisconnected = false;
+
+                if (_currentRoomId.HasValue)
+        {
+            IsMuted = _flags.GetMuted(_currentRoomId.Value);
+            Console.WriteLine($"[VM] 🔄 Reconnected - Synced IsMuted to {IsMuted}");
+        }
+
         NotifyChanged();
 
         if (_eventsRoomId is Guid rid)
@@ -904,7 +872,6 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             });
         }
     }
-
     private void OnRemovedFromRoom(Guid rid)
     {
         if (_eventsRoomId == rid)
@@ -918,11 +885,9 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         if (_currentRoomId != roomId) return;
 
-        // تحديث البيانات بهدوء
-        await RefreshRoomStateAsync(roomId);
+                await RefreshRoomStateAsync(roomId);
 
-        // ✅ إخطار كل المشتركين (بما فيهم الـ Sidebar) إن فيه تغيير حصل
-        NotifyChanged("OnGroupRenamed");
+                NotifyChanged("OnGroupRenamed");
     }
     private async void OnMemberAdded(Guid roomId, Guid userId, string displayName)
     {
@@ -996,16 +961,14 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             NotifyChanged();
         }
     }
-    // ✅ استبدل الدالة كلها بالكود ده
-    private void OnMessageReactionUpdated(Guid messageId, Guid userId, int reactionTypeInt, bool isNewReaction)
+        private void OnMessageReactionUpdated(Guid messageId, Guid userId, int reactionTypeInt, bool isNewReaction)
     {
         var message = Messages.FirstOrDefault(m => m.Id == messageId);
         if (message == null) return;
 
         var reactionType = (ReactionType)reactionTypeInt;
 
-        // ✅ دايماً ابدأ بـ fresh copy من الـ Counts عشان تضمن re-render
-        var newCounts = message.Reactions?.Counts != null
+                var newCounts = message.Reactions?.Counts != null
             ? new Dictionary<ReactionType, int>(message.Reactions.Counts)
             : new Dictionary<ReactionType, int>();
 
@@ -1014,8 +977,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         if (isNewReaction)
         {
-            // لو المستخدم ده عنده reaction قديمة، شيلها الأول
-            if (userId == CurrentUserId && currentUserReactionType.HasValue
+                        if (userId == CurrentUserId && currentUserReactionType.HasValue
                 && currentUserReactionType.Value != reactionType)
             {
                 var oldType = currentUserReactionType.Value;
@@ -1027,8 +989,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 }
             }
 
-            // أضف الـ reaction الجديدة
-            if (newCounts.ContainsKey(reactionType))
+                        if (newCounts.ContainsKey(reactionType))
                 newCounts[reactionType]++;
             else
                 newCounts[reactionType] = 1;
@@ -1041,8 +1002,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
         else
         {
-            // إزالة الـ reaction
-            if (newCounts.ContainsKey(reactionType))
+                        if (newCounts.ContainsKey(reactionType))
             {
                 newCounts[reactionType]--;
                 if (newCounts[reactionType] <= 0)
@@ -1056,9 +1016,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
         }
 
-        // ✅ المفتاح: استبدل الـ Reactions object كاملاً بـ instance جديدة
-        // عشان Blazor يحس بالتغيير ويعمل re-render للـ MessageBubble
-        message.Reactions = newCounts.Any()
+                        message.Reactions = newCounts.Any()
             ? new MessageReactionsModel
             {
                 MessageId = messageId,
@@ -1069,8 +1027,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             : null;
 
         NotifyChanged();
-    }    // ✅ Helper Methods
-    private void RebuildPresenceFromRealtime()
+    }        private void RebuildPresenceFromRealtime()
     {
         if (GroupMembers is null)
         {
@@ -1081,9 +1038,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         var onlineSet = _realtime.State.OnlineUsers.ToHashSet();
         Console.WriteLine($"[Rebuild] Raw online users from SignalR ({_realtime.State.OnlineUsers.Count}): {string.Join(", ", _realtime.State.OnlineUsers)}");
 
-        // Don't clear and rebuild if counts are the same (optimization)
-        // لكن للتأكد، سنقوم بالتحديث دائماً لهذه المشكلة
-        OnlineUsers.Clear();
+                        OnlineUsers.Clear();
         int added = 0;
 
         foreach (var member in GroupMembers.Members.Where(m => m.Id != CurrentUserId))
@@ -1100,8 +1055,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
         }
 
-        // Clean up TypingUsers
-        for (int i = TypingUsers.Count - 1; i >= 0; i--)
+                for (int i = TypingUsers.Count - 1; i >= 0; i--)
         {
             if (!onlineSet.Contains(TypingUsers[i].Id))
             {
@@ -1112,9 +1066,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         Console.WriteLine($"[Rebuild] Final result: {added} online users");
 
-        // Force UI update
-        NotifyChanged(); // ← تأكد من وجود هذه السطر
-    }
+                NotifyChanged();     }
     private UserModel? FindMember(Guid userId)
     {
         return GroupMembers?.Members
@@ -1196,8 +1148,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         if (mid != null)
         {
-            // ✅ Pin: أضف الرسالة
-            var msg = Messages.FirstOrDefault(m => m.Id == mid);
+                        var msg = Messages.FirstOrDefault(m => m.Id == mid);
             if (msg != null && !PinnedMessages.Any(m => m.Id == mid))
             {
                 if (PinnedMessages.Count >= 3)
@@ -1207,8 +1158,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
         else
         {
-            // ✅ Unpin: reload من الـ API عشان تاخد الحالة الصحيحة
-            PinnedMessages.Clear();
+                        PinnedMessages.Clear();
             try
             {
                 var pinnedIds = await _chatService.GetPinnedMessagesAsync(rid);
@@ -1239,13 +1189,11 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             _toasts.Error("Pin failed", ex.Message);
         }
     }
-    // ✅ Public Methods
-    public async Task SendAsync(Guid roomId, string text)
+        public async Task SendAsync(Guid roomId, string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
 
-        // ✅ حساب عدد المستلمين فوراً لضمان دقة حالة الجروب
-        int currentMemberCount = Room?.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
+                int currentMemberCount = Room?.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
 
         var tempId = Guid.NewGuid();
         var pending = new MessageModel
@@ -1255,8 +1203,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             Status = ClientMessageStatus.Pending,
             SenderId = CurrentUserId,
             CreatedAt = DateTime.UtcNow,
-            TotalRecipients = currentMemberCount // 🚀 تحديد العدد المستهدف فوراً
-        };
+            TotalRecipients = currentMemberCount         };
 
         var list = Messages.ToList();
         list.Add(pending);
@@ -1287,28 +1234,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             NotifyChanged();
         }
     }
-    private void OnMessageStatusChanged(Guid messageId, string status)
-    {
-        // 1. البحث عن الرسالة في القائمة
-        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
-        if (msg != null)
-        {
-            // 2. تحويل الـ string اللي جاي من SignalR لـ Enum الحالة بتاعك
-            if (Enum.TryParse<ClientMessageStatus>(status, true, out var newStatus))
-            {
-                msg.Status = newStatus;
 
-                // لو الشخص التاني هو اللي قرأ، نحدث الـ PersonalStatus برضه عشان تظهر الزرقاء
-                msg.PersonalStatus = newStatus;
-
-                // 3. أهم خطوة: إجبار Blazor على إعادة الرسم
-                NotifyChanged();
-            }
-        }
-    }
-
-    // ✅ SendMessageWithReplyAsync - واحدة فقط بدون تكرار
-    public async Task SendMessageWithReplyAsync(Guid roomId, string text, Guid? replyToMessageId, ReplyInfoModel? replySnapshot)
+        public async Task SendMessageWithReplyAsync(Guid roomId, string text, Guid? replyToMessageId, ReplyInfoModel? replySnapshot)
     {
         Console.WriteLine($"[VM] SendMessageWithReplyAsync room={roomId} text='{text}' replyTo={replyToMessageId}");
 
@@ -1332,11 +1259,11 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             PersonalStatus = ClientMessageStatus.Sent,
             ReplyToMessageId = replyToMessageId,
             ReplyInfo = replySnapshot,
-            TotalRecipients = currentMemberCount
+            TotalRecipients = currentMemberCount,
+            IsSystemMessage = false
         };
 
-        // ✅ أضف للـ list مؤقتاً بدون sort (هيتعمل sort بعد السيرفر)
-        Messages.Add(pending);
+                Messages.Add(pending);
         NotifyChanged();
 
         try
@@ -1348,8 +1275,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 pending.Status = ClientMessageStatus.Sent;
                 pending.Error = null;
 
-                // ✅ استخدم CreatedAt من السيرفر (ده هو الوقت الحقيقي الصح)
-                if (dto.CreatedAt != default)
+                                if (dto.CreatedAt != default)
                     pending.CreatedAt = dto.CreatedAt;
 
                 if (dto.ReplyInfo != null)
@@ -1365,8 +1291,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                     };
                 }
 
-                // ✅ الحل الجذري: Re-sort بعد ما السيرفر رجع الوقت الحقيقي
-                var sorted = Messages.OrderBy(m => m.CreatedAt).ToList();
+                                var sorted = Messages.OrderBy(m => m.CreatedAt).ToList();
                 Messages.Clear();
                 foreach (var msg in sorted)
                     Messages.Add(msg);
@@ -1406,8 +1331,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         try
         {
-            // 1. حاول عبر SignalR (أسرع)
-            await _realtime.MarkRoomReadAsync(roomId, lastMessageId);
+                        await _realtime.MarkRoomReadAsync(roomId, lastMessageId);
             Console.WriteLine($"[VM] MarkRoomRead via SignalR successful");
         }
         catch (Exception ex)
@@ -1415,8 +1339,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             Console.WriteLine($"[VM] SignalR MarkRoomRead failed: {ex.Message}");
             try
             {
-                // 2. Fallback للـ HTTP API
-                await _chatService.MarkRoomReadAsync(roomId, lastMessageId);
+                                await _chatService.MarkRoomReadAsync(roomId, lastMessageId);
                 Console.WriteLine($"[VM] MarkRoomRead via HTTP successful");
             }
             catch (Exception ex2)
@@ -1425,8 +1348,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
         }
 
-        // 3. تحديث محلي فوري (بدون انتظار السيرفر)
-        _flags.SetUnread(roomId, 0);
+                _flags.SetUnread(roomId, 0);
         Console.WriteLine($"[VM] Local unread reset to 0");
     }
 
@@ -1450,9 +1372,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         try
         {
             await _mod.BlockAsync(userId);
-            IsBlockedByMe = true;                    // ← التغيير
-            _flags.SetBlockedByMe(userId, true);     // ← التغيير (مش SetBlocked)
-            TypingUsers.Clear();
+            IsBlockedByMe = true;                                _flags.SetBlockedByMe(userId, true);                 TypingUsers.Clear();
             if (OtherUser?.Id == userId)
             {
                 OtherUser.IsOnline = false;
@@ -1495,8 +1415,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                     }
                     catch
                     {
-                        OtherUser.LastSeen = null;  // fallback آمن
-                    }
+                        OtherUser.LastSeen = null;                      }
                 }
             }
 
@@ -1511,60 +1430,58 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         try
         {
-            var currentlyMuted = _flags.GetMuted(roomId);
-            var nextMuted = !currentlyMuted;
+            var nextMuted = !IsMuted;
 
-            if (nextMuted)
-                await _chatService.MuteAsync(roomId);  // ✅ API + DB
-            else
-                await _chatService.UnmuteAsync(roomId); // ✅ API + DB
-
+                        IsMuted = nextMuted;
             _flags.SetMuted(roomId, nextMuted);
-            IsMuted = nextMuted;
-
             NotifyChanged();
+
+                        if (nextMuted)
+                await _chatService.MuteAsync(roomId);
+            else
+                await _chatService.UnmuteAsync(roomId);
+
+            Console.WriteLine($"[Mute Toggle] ✅ Changed to {nextMuted}");
         }
         catch (Exception ex)
         {
             _toasts.Error("Failed", $"Could not toggle mute: {ex.Message}");
+
+                        IsMuted = !IsMuted;
+            _flags.SetMuted(roomId, IsMuted);
+            await RefreshMuteStateAsync(roomId);
+            NotifyChanged();
         }
     }
-
     public async Task RefreshRoomStateAsync(Guid roomId)
     {
         try
         {
-            // 1. تحديث بيانات الغرفة
-            var room = await _roomService.GetRoomAsync(roomId);
+                        var room = await _roomService.GetRoomAsync(roomId);
             if (room != null)
             {
                 Room = room;
-                IsMuted = room.IsMuted;
+                IsMuted = _flags.GetMuted(roomId);
             }
 
-            // 2. جلب الأعضاء
-            var membersDto = await _groupsApi.GetMembersAsync(roomId);
+                        var membersDto = await _groupsApi.GetMembersAsync(roomId);
             if (membersDto != null)
             {
                 Console.WriteLine($"[RefreshRoomState] Got {membersDto.Members.Count} members from API");
 
-                // ✅ إنشاء قائمة جديدة من UserModel
-                var memberList = membersDto.Members.Select(m => new UserModel
+                                var memberList = membersDto.Members.Select(m => new UserModel
                 {
                     Id = m.Id,
                     DisplayName = m.DisplayName ?? "User",
                     Email = "",
-                    IsAdmin = m.IsAdmin // 👈 هذا هو المفتاح
-                }).ToList();
+                    IsAdmin = m.IsAdmin                 }).ToList();
 
-                // عرض القيم للتأكد
-                foreach (var m in memberList)
+                                foreach (var m in memberList)
                 {
                     Console.WriteLine($"[RefreshRoomState] Member {m.DisplayName} - IsAdmin stored: {m.IsAdmin}");
                 }
 
-                // ✅ تحديث GroupMembers بالقائمة الجديدة
-                this.GroupMembers = new GroupMembersModel
+                                this.GroupMembers = new GroupMembersModel
                 {
                     OwnerId = membersDto.OwnerId,
                     Members = memberList
@@ -1573,8 +1490,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Console.WriteLine($"[RefreshRoomState] GroupMembers updated with {memberList.Count} members");
             }
 
-            // ✅ مهم: إشعار أن البيانات تغيرت
-            NotifyChanged();
+                        NotifyChanged();
         }
         catch (Exception ex)
         {
@@ -1596,14 +1512,11 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         catch { }
     }
 
-    // ✅ استبدل الدالة بالكود ده
-    public async Task AddReactionAsync(Guid messageId, ReactionType reactionType)
+        public async Task AddReactionAsync(Guid messageId, ReactionType reactionType)
     {
         try
         {
-            // ✅ Optimistic update فوراً قبل ما السيرفر يرد
-            // ده بيخلي الـ UI يتحدث فوراً
-            OnMessageReactionUpdated(messageId, CurrentUserId, (int)reactionType, true);
+                                    OnMessageReactionUpdated(messageId, CurrentUserId, (int)reactionType, true);
 
             var reactions = await _chatService.ReactToMessageAsync(messageId, reactionType);
 
@@ -1612,8 +1525,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 var message = Messages.FirstOrDefault(m => m.Id == messageId);
                 if (message != null)
                 {
-                    // ✅ استبدل بالبيانات الحقيقية من السيرفر
-                    message.Reactions = reactions;
+                                        message.Reactions = reactions;
                     NotifyChanged();
                 }
             }
@@ -1621,8 +1533,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         catch (Exception ex)
         {
             _toasts.Error("Reaction failed", ex.Message);
-            // ✅ Rollback لو فشل
-            var reactions = await _chatService.GetMessageReactionsAsync(messageId);
+                        var reactions = await _chatService.GetMessageReactionsAsync(messageId);
             var message = Messages.FirstOrDefault(m => m.Id == messageId);
             if (message != null)
             {
@@ -1633,22 +1544,18 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
     public string GetSenderName(Guid userId)
     {
-        // ✅ لو الرسالة بتاعتك
-        if (userId == CurrentUserId)
+                if (userId == CurrentUserId)
             return "You";
 
-        // Group members
-        var member = GroupMembers?.Members?.FirstOrDefault(m => m.Id == userId);
+                var member = GroupMembers?.Members?.FirstOrDefault(m => m.Id == userId);
         if (member != null && !string.IsNullOrWhiteSpace(member.DisplayName))
             return member.DisplayName;
 
-        // Online users
-        var online = OnlineUsers.FirstOrDefault(u => u.Id == userId);
+                var online = OnlineUsers.FirstOrDefault(u => u.Id == userId);
         if (online != null && !string.IsNullOrWhiteSpace(online.DisplayName))
             return online.DisplayName;
 
-        // Private other user
-        if (OtherUser?.Id == userId && !string.IsNullOrWhiteSpace(OtherUser.DisplayName))
+                if (OtherUser?.Id == userId && !string.IsNullOrWhiteSpace(OtherUser.DisplayName))
             return OtherUser.DisplayName;
 
         return "User";
@@ -1660,25 +1567,20 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         var onlineSet = _realtime.State.OnlineUsers.ToHashSet();
 
-        // نحدث حالة الأونلاين فقط دون إعادة إنشاء الكائنات بالكامل للحفاظ على قيم IsAdmin
-        foreach (var m in GroupMembers.Members)
+                foreach (var m in GroupMembers.Members)
         {
             m.IsOnline = onlineSet.Contains(m.Id);
         }
 
         return GroupMembers.Members
-            .OrderByDescending(u => u.Id == GroupMembers.OwnerId) // المالك أولاً
-            .ThenByDescending(u => u.IsAdmin) // ثم الأدمنز
-            .ThenByDescending(u => u.IsOnline) // ثم الأونلاين
-            .ToList();
+            .OrderByDescending(u => u.Id == GroupMembers.OwnerId)             .ThenByDescending(u => u.IsAdmin)             .ThenByDescending(u => u.IsOnline)             .ToList();
     }
     public void NotifyReplyContextChanged(ReplyContext? context)
     {
         ReplyContextChanged?.Invoke(context);
     }
 
-    // ✅ OnRoomMuteChanged and OnUserBlockChanged من الـ Flags
-    private void OnRoomMuteChanged(Guid roomId)
+        private void OnRoomMuteChanged(Guid roomId)
     {
         if (_currentRoomId != roomId) return;
         IsMuted = _flags.GetMuted(roomId);
@@ -1709,10 +1611,8 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 OtherUser.LastSeen = null;
             }
         }
-        else  // ← Unblock via SignalR
-        {
-            // نفس المنطق: refresh الحالة
-            _ = Task.Run(async () =>
+        else          {
+                        _ = Task.Run(async () =>
             {
                 try
                 {
@@ -1755,24 +1655,20 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             OtherUser.IsOnline = false;
             OtherUser.LastSeen = null;
         }
-        else  // Unblock
-        {
+        else          {
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    // أول حاجة: جيب الأونلاين (ده آمن ومش بيفشل عادة)
-                    var onlineUsers = await _realtime.GetOnlineUsersAsync();
+                                        var onlineUsers = await _realtime.GetOnlineUsersAsync();
                     OtherUser.IsOnline = onlineUsers.Contains(userId);
 
                     if (OtherUser.IsOnline)
                     {
-                        OtherUser.LastSeen = null;  // مهم جدًا: نصفر LastSeen لو أونلاين
-                    }
+                        OtherUser.LastSeen = null;                      }
                     else
                     {
-                        // لو مش أونلاين، حاول جيب LastSeen، ولو فشل نتركه null أو قيمة افتراضية
-                        try
+                                                try
                         {
                             var status = await _realtime.GetUserOnlineStatus(userId);
                             if (status != null)
@@ -1783,9 +1679,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                         }
                         catch
                         {
-                            // fallback: لو فشل GetUserOnlineStatus، نستخدم قيمة آمنة
-                            OtherUser.LastSeen = null;  // أو DateTime.UtcNow لو عايز "Offline" بدون وقت
-                            Console.WriteLine("[Unblock fallback] GetUserOnlineStatus failed, using safe default");
+                                                        OtherUser.LastSeen = null;                              Console.WriteLine("[Unblock fallback] GetUserOnlineStatus failed, using safe default");
                         }
                     }
 
@@ -1794,8 +1688,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[Unblock Refresh] Error: {ex.Message}");
-                    // أسوأ حالة: نفرض Offline بدون LastSeen
-                    OtherUser.IsOnline = false;
+                                        OtherUser.IsOnline = false;
                     OtherUser.LastSeen = null;
                     NotifyChanged();
                 }
@@ -1805,8 +1698,22 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         NotifyChanged();
     }
 
-    // ✅ DisposeAsync - واحدة فقط
-    public async ValueTask DisposeAsync()
+        private void OnRealtimeRoomUpdated(RoomUpdatedModel upd)
+    {
+        Console.WriteLine($"[VM] 🟢 BEFORE: IsMuted={IsMuted}, AFTER: {upd.IsMuted}");
+
+        if (_currentRoomId != upd.RoomId) return;
+
+        Console.WriteLine($"[VM] RoomUpdated received: Room={upd.RoomId}, IsMuted={upd.IsMuted}");
+
+        if (IsMuted != upd.IsMuted)
+        {
+            IsMuted = upd.IsMuted;
+            _flags.SetMuted(upd.RoomId, upd.IsMuted);
+            Console.WriteLine($"[VM] ✅ IsMuted updated to {upd.IsMuted}");
+            NotifyChanged();
+        }
+    }        public async ValueTask DisposeAsync()
     {
         _flags.SetActiveRoom(null);
         _flags.RoomMuteChanged -= OnRoomMuteChanged;
@@ -1821,28 +1728,22 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             Console.WriteLine($"[VM] Left room {_currentRoomId}");
         }
 
-        // ← أضف ده: صفر القوائم عشان العدد ينقص فورًا لما تخرج
-        OnlineUsers.Clear();
+                OnlineUsers.Clear();
         TypingUsers.Clear();
 
-        // ← أضف ده كمان: صفر الـ OtherUser لو شات خاص
-        if (OtherUser != null)
+                if (OtherUser != null)
         {
             OtherUser.IsOnline = false;
             OtherUser.LastSeen = null;
         }
 
-        await _realtime.DisconnectAsync(); // لو عايز تقطع الاتصال كامل (اختياري)
-        _currentRoomId = null;
+        await _realtime.DisconnectAsync();         _currentRoomId = null;
 
-        NotifyChanged(); // عشان الـ UI يرندر العدد 0 فورًا
-    }
+        NotifyChanged();     }
 
-    // ✅ IDisposable implementation
-    public void Dispose()
+        public void Dispose()
     {
-        // Sync cleanup if needed
-        _flags.RoomMuteChanged -= OnRoomMuteChanged;
+                _flags.RoomMuteChanged -= OnRoomMuteChanged;
         _flags.BlockedByMeChanged -= OnBlockedByMeChanged;
         _flags.BlockedMeChanged -= OnBlockedMeChanged;
         UnregisterRealtimeEvents();
@@ -1857,8 +1758,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         Console.WriteLine($"Original: {original.Count}, Replies: {replies.Count}");
 
-        // تحقق من التكرار
-        var duplicateGroups = Messages
+                var duplicateGroups = Messages
             .GroupBy(m => m.Id)
             .Where(g => g.Count() > 1)
             .ToList();
@@ -1872,8 +1772,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
         }
 
-        // تحقق من التكرار بالمحتوى
-        var contentDuplicates = Messages
+                var contentDuplicates = Messages
             .GroupBy(m => new { m.Content, m.SenderId, m.CreatedAt })
             .Where(g => g.Count() > 1)
             .ToList();
@@ -1893,8 +1792,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         _searchCts = new CancellationTokenSource();
         var ct = _searchCts.Token;
 
-        // تغيير الشرط ليسمح بحرف واحد (بشرط ميكونش مسافة فاضية)
-        if (string.IsNullOrWhiteSpace(SearchQuery))
+                if (string.IsNullOrWhiteSpace(SearchQuery))
         {
             SearchResults.Clear();
             return;
@@ -1921,8 +1819,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             msg.IsEdited = true;
             msg.UpdatedAt = DateTime.UtcNow;
 
-            // ✅ reset فوري في الـ UI قبل ما الـ StatsUpdated يوصل
-            msg.PersonalStatus = ClientMessageStatus.Delivered;
+                        msg.PersonalStatus = ClientMessageStatus.Delivered;
             msg.IsConfirmedRead = false;
             msg.ReadCount = 0;
 
@@ -1933,8 +1830,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         if (isForEveryone)
         {
-            // حذف للكل: غير المحتوى وعلم IsDeleted
-            var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+                        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
             if (msg != null)
             {
                 msg.IsDeleted = true;
@@ -1944,8 +1840,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
         else
         {
-            // حذف للمستخدم الحالي فقط: أزل من الـ list
-            var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+                        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
             if (msg != null)
             {
                 Messages.Remove(msg);
@@ -1958,8 +1853,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         newContent = newContent.Trim();
         var msg = Messages.FirstOrDefault(m => m.Id == messageId);
 
-        // ✅ بعد التعديل، reset الـ status عشان ApplyStats يحدده صح
-        var savedReadCount = msg?.ReadCount ?? 0;
+                var savedReadCount = msg?.ReadCount ?? 0;
         var savedDeliveredCount = msg?.DeliveredCount ?? 0;
 
         if (msg != null)
@@ -1979,16 +1873,14 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             {
                 msg.IsBeingEdited = false;
                 msg.UpdatedAt = DateTime.UtcNow;
-                // ✅ مش بنعمل restore للـ status - خلي ApplyStats يحدده
-                NotifyChanged();
+                                NotifyChanged();
             }
         }
         catch (Exception ex)
         {
             if (msg != null)
             {
-                msg.Content = msg.Content; // rollback content
-                msg.IsBeingEdited = false;
+                msg.Content = msg.Content;                 msg.IsBeingEdited = false;
                 NotifyChanged();
             }
             _toasts.Error("Edit failed", ex.Message);
@@ -2009,9 +1901,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     public async Task PinMessageWithDurationAsync(Guid messageId, string duration)
     {
         await _chatService.PinMessageAsync(Room.Id, messageId, duration);
-        // السيرفر هيبعت SignalR يضيف رسالة نظام تلقائياً في الشات
-        // والـ TopBar هيحدث نفسه فوراً
-    }
+                    }
 
     public void AddOrUpdateMessage(MessageModel message)
     {
@@ -2030,7 +1920,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             existing.Id = message.Id;
             if (message.ReplyInfo != null)
                 existing.ReplyInfo = message.ReplyInfo;
-
+            existing.IsSystemMessage = message.IsSystemMessage;
             if (message.ReplyToMessageId.HasValue)
                 existing.ReplyToMessageId = message.ReplyToMessageId;
             existing.DeliveredCount = Math.Max(existing.DeliveredCount, message.DeliveredCount);
@@ -2039,8 +1929,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             int roomMemberCount = Room?.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
             existing.TotalRecipients = Math.Max(roomMemberCount, message.TotalRecipients);
 
-            // ✅ إعادة تقييم الحالة فوراً (هذا ما يحل مشكلة الريفرش)
-            if (Room?.Type == "Private")
+                        if (Room?.Type == "Private")
             {
                 if (message.ShouldForceRead || existing.ShouldForceRead)
                 {
@@ -2051,8 +1940,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
             else
             {
-                // في الجروب: تحول للأزرق فقط لو العدد اكتمل الآن
-                if (existing.ReadCount >= existing.TotalRecipients && existing.TotalRecipients > 0)
+                                if (existing.ReadCount >= existing.TotalRecipients && existing.TotalRecipients > 0)
                     existing.PersonalStatus = ClientMessageStatus.Read;
                 else if (existing.DeliveredCount >= 1)
                     existing.PersonalStatus = ClientMessageStatus.Delivered;
@@ -2097,9 +1985,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         ApplyStats(msg, total, delivered, read);
     }
 
-    // 1. أضف هذه الدالة المساعدة في نهاية ChatViewModel.cs
-    // 2. استدعها داخل دالة ApplyStats (التي عدلناها سابقاً)
-    private void ApplyStats(MessageModel msg, int total, int delivered, int read)
+            private void ApplyStats(MessageModel msg, int total, int delivered, int read)
     {
         int roomMemberCount = Room?.Type == "Group"
             ? (GroupMembers?.Members.Count ?? 1) - 1
@@ -2116,12 +2002,9 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             if (Room?.Type == "Private")
             {
                 if (read >= 1)
-                    newStatus = ClientMessageStatus.Read;        // فاتح الشات ✓✓ أزرق
-                else if (delivered >= 1)
-                    newStatus = ClientMessageStatus.Delivered;   // أونلاين ✓✓ أبيض
-                else
-                    newStatus = ClientMessageStatus.Sent;        // أوفلاين ✓ رمادي
-            }
+                    newStatus = ClientMessageStatus.Read;                        else if (delivered >= 1)
+                    newStatus = ClientMessageStatus.Delivered;                   else
+                    newStatus = ClientMessageStatus.Sent;                    }
             else
             {
                 if (read >= total && total > 0)
@@ -2156,41 +2039,32 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             if (newStatus > msg.PersonalStatus)
             {
-                // 1. غير الحالة
-                msg.PersonalStatus = newStatus;
+                                msg.PersonalStatus = newStatus;
                 msg.ReadCount = Math.Max(msg.ReadCount, 1);
                 Console.WriteLine($"[VM] ✅ Status updated to {newStatus}");
 
-                // 2. Force UI update - طريقتين:
+                
+                                msg.NotifyPropertyChanged(nameof(MessageModel.PersonalStatus));
 
-                // الطريقة الأولى: استخدم خاصية مساعدة
-                msg.NotifyPropertyChanged(nameof(MessageModel.PersonalStatus));
-
-                // الطريقة الثانية: Replace في الـ ObservableCollection
-                var index = Messages.IndexOf(msg);
+                                var index = Messages.IndexOf(msg);
                 if (index >= 0)
                 {
                     Messages[index] = msg;
                 }
 
-                // 3. Notify changed
-                Changed?.Invoke();
+                                Changed?.Invoke();
             }
         }
     }
     public void DeactivateChat()
     {
-        // 1. تصفير الغرفة النشطة في المخزن لكي يبدأ العداد بالعمل مجدداً
-        _flags.SetActiveRoom(null);
+                _flags.SetActiveRoom(null);
 
-        // 2. تصفير المعرف المحلي
-        _currentRoomId = null;
+                _currentRoomId = null;
 
-        // 3. إيقاف حالة النشاط
-        IsPageActive = false;
+                IsPageActive = false;
 
-        // 4. إلغاء الاشتراك من الأحداث لمنع استهلاك الذاكرة
-        UnregisterRealtimeEvents();
+                UnregisterRealtimeEvents();
 
         Console.WriteLine("[VM] Chat deactivated and ActiveRoom cleared.");
     }
@@ -2231,8 +2105,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         try
         {
-            // نجيب آخر رسالة مش مني
-            var lastMessageFromOther = Messages
+                        var lastMessageFromOther = Messages
                 .Where(m => m.SenderId != CurrentUserId)
                 .OrderByDescending(m => m.CreatedAt)
                 .FirstOrDefault();
@@ -2241,8 +2114,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             {
                 Console.WriteLine($"[VM] Marking ALL messages as read on exit up to {lastMessageFromOther.Id}");
 
-                // نحدث الحالة محلياً لكل الرسائل
-                foreach (var msg in Messages.Where(m => m.SenderId != CurrentUserId))
+                                foreach (var msg in Messages.Where(m => m.SenderId != CurrentUserId))
                 {
                     if (msg.PersonalStatus < ClientMessageStatus.Read)
                     {
@@ -2251,11 +2123,9 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                     }
                 }
 
-                // نحدث السيرفر بآخر رسالة
-                await MarkRoomReadAsync(_currentRoomId.Value, lastMessageFromOther.Id);
+                                await MarkRoomReadAsync(_currentRoomId.Value, lastMessageFromOther.Id);
 
-                // نحدث الـ Sidebar
-                if (_roomsVM != null)
+                                if (_roomsVM != null)
                 {
                     _roomsVM.UpdateLastMessageStatus(_currentRoomId.Value, lastMessageFromOther.Id, ClientMessageStatus.Read);
                     _roomsVM.MarkRoomAsReadLocal(_currentRoomId.Value, lastMessageFromOther.Id);
@@ -2269,20 +2139,81 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             Console.WriteLine($"[VM] Error marking messages as read on exit: {ex.Message}");
         }
     }
-    // واستخدمها بدل SafeAddOrUpdateMessage
-    // في ChatViewModel.cs - عدل هذه الدالة
+        public async Task DeleteChatAsync(Guid roomId)
+    {
+        Console.WriteLine($"[VM] DeleteChat called with roomId={roomId}");
+
+        try
+        {
+            await _chatService.DeleteChatAsync(roomId);
+        }
+        catch (Exception ex)
+        {
+            _toasts.Error("Delete failed", ex.Message);
+            throw;
+        }
+    }
+
+        public async Task ClearChatAsync(Guid roomId, bool forEveryone = false)
+    {
+        try
+        {
+            await _chatService.ClearChatAsync(roomId, forEveryone);
+            Messages.Clear();
+            NotifyChanged();
+        }
+        catch (Exception ex)
+        {
+            _toasts.Error("Clear failed", ex.Message);
+            throw;
+        }
+    }
+    private void OnChatCleared(Guid roomId, bool forEveryone)
+    {
+        if (_currentRoomId != roomId) return;
+
+        Console.WriteLine($"[VM] 🧹 ChatCleared received: room={roomId}, forEveryone={forEveryone}");
+
+        Messages.Clear();
+        PinnedMessages.Clear();
+        NotifyChanged();
+    }
+
+    public void SyncLastMessageToRoomsVM()
+    {
+        if (_currentRoomId == null || !Messages.Any()) return;
+
+        var lastMessage = Messages
+            .Where(m => m.SenderId != Guid.Empty && !m.IsDeleted)
+            .OrderByDescending(m => m.CreatedAt)
+            .FirstOrDefault();
+
+        if (lastMessage == null) return;
+
+                if (GroupMembers?.Members != null)
+            foreach (var member in GroupMembers.Members)
+                if (!string.IsNullOrEmpty(member.DisplayName))
+                    _roomsVM.CacheMemberName(member.Id, member.DisplayName);
+
+                _roomsVM.EnrichRoomMemberNames(_currentRoomId.Value, GroupMembers?.Members);
+
+        var status = (EnterpriseChat.Client.Models.MessageStatus)(int)lastMessage.PersonalStatus;
+        _roomsVM.UpdateRoomPreview(
+            _currentRoomId.Value,
+            lastMessage.Id,
+            lastMessage.Content,
+            lastMessage.SenderId,
+            lastMessage.CreatedAt,
+            status
+        );
+    }
     private void OnRealtimeMessageReceived(MessageModel message)
     {
-        // 🛡️ حماية الحظر: لو الشخص ده أنا عامله بلوك، ارمي الرسالة فوراً ولا تبعت Delivered Receipt
         if (IsBlockedByMe && message.SenderId != CurrentUserId)
-        {
-            Console.WriteLine($"[VM] Blocked message from {message.SenderId} ignored.");
             return;
-        }
 
         if (_currentRoomId == message.RoomId)
         {
-            // ✅ منطق القراءة الفورية للشات الخاص فقط
             if (Room?.Type == "Private" && message.SenderId != CurrentUserId && IsPageActive)
             {
                 message.PersonalStatus = ClientMessageStatus.Read;
@@ -2292,10 +2223,32 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
             AddOrUpdateMessage(message);
 
-            // إشعار القراءة للسيرفر
+            if (_roomsVM != null && message.RoomId == _currentRoomId)
+            {
+                bool isMuted = _flags.GetMuted(message.RoomId);
+
+                                string? senderName = message.SenderId == CurrentUserId
+                    ? null                      : GetSenderName(message.SenderId);
+
+                _roomsVM.UpdateRoomPreview(
+                    roomId: message.RoomId,
+                    messageId: message.Id,
+                    preview: message.Content,
+                    senderId: message.SenderId,
+                    messageAt: message.CreatedAt,
+                    status: message.PersonalStatus,
+                    skipUnread: isMuted,
+                    skipNotify: isMuted,
+                    senderName: senderName                  );
+            }
+
             if (message.SenderId != CurrentUserId && _currentRoomId != null && IsPageActive)
             {
-                var lastOther = Messages.Where(m => m.SenderId != CurrentUserId).OrderByDescending(m => m.CreatedAt).FirstOrDefault();
+                var lastOther = Messages
+                    .Where(m => m.SenderId != CurrentUserId)
+                    .OrderByDescending(m => m.CreatedAt)
+                    .FirstOrDefault();
+
                 if (lastOther != null)
                 {
                     _ = Task.Run(async () => {

@@ -33,8 +33,7 @@ public sealed class DeliverRoomMessagesCommandHandler : IRequestHandler<DeliverR
 
         Console.WriteLine($"[DeliverRoom] Starting for user {command.UserId.Value} in room {command.RoomId.Value}");
 
-        // ✅ نجيب كل الرسائل اللي لسه متوصلتش للمستخدم ده
-        var messages = await _messageRepo.GetUndeliveredForUserAsync(command.RoomId, command.UserId, ct);
+                var messages = await _messageRepo.GetUndeliveredForUserAsync(command.RoomId, command.UserId, ct);
 
         Console.WriteLine($"[DeliverRoom] Found {messages.Count} undelivered messages");
 
@@ -61,8 +60,7 @@ public sealed class DeliverRoomMessagesCommandHandler : IRequestHandler<DeliverR
 
         Console.WriteLine($"[DeliverRoom] Marked {deliveredCount} messages as DELIVERED");
 
-        // ✅ البث للـ Senders
-        if (_broadcaster is not null && deliveredSenders.Any())
+                if (_broadcaster is not null && deliveredSenders.Any())
         {
             var roomMembers = await _messageRepo.GetRoomMemberIdsAsync(command.RoomId, ct);
 
@@ -70,14 +68,11 @@ public sealed class DeliverRoomMessagesCommandHandler : IRequestHandler<DeliverR
             {
                 var senderId = new UserId(kv.Key);
 
-                // لكل رسالة، نبث التحديث
-                foreach (var msgId in kv.Value)
+                                foreach (var msgId in kv.Value)
                 {
-                    // نجيب إحصائيات الرسالة بعد التحديث
-                    var stats = await _receiptRepo.GetMessageStatsAsync(msgId, ct);
+                                        var stats = await _receiptRepo.GetMessageStatsAsync(msgId, ct);
 
-                    // نبث لكل أعضاء الغرفة
-                    foreach (var memberId in roomMembers)
+                                        foreach (var memberId in roomMembers)
                     {
                         await _broadcaster.MessageStatusUpdatedAsync(
                             msgId,
@@ -85,8 +80,7 @@ public sealed class DeliverRoomMessagesCommandHandler : IRequestHandler<DeliverR
                             MessageStatus.Delivered,
                             new[] { memberId });
 
-                        // لو العضو ده هو الـ sender، ابعتله الإحصائيات
-                        if (memberId == senderId)
+                                                if (memberId == senderId)
                         {
                             await _broadcaster.MessageReceiptStatsUpdatedAsync(
                                 msgId.Value,

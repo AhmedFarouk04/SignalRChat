@@ -9,12 +9,12 @@ public sealed class RoomUpdatedDto
     public DateTime CreatedAt { get; set; }
     public int UnreadDelta { get; set; }
 
-    // ✅ add these
-    public string? RoomName { get; set; }
+        public string? RoomName { get; set; }
     public string? RoomType { get; set; }
-
+    public string? SenderName { get; init; } 
     public bool IsReply { get; set; }
     public Guid? ReplyToMessageId { get; set; }
-    public bool IsSystemMessage { get; set; } // 👈 أضف هذا
+    public bool IsClearEvent { get; set; }     public bool IsMuted { get; set; }
 
+    public bool IsSystemMessage { get; set; } 
 }

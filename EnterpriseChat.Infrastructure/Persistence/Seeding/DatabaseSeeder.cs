@@ -12,9 +12,7 @@ public sealed class DatabaseSeeder
     private readonly ChatDbContext _context;
     private readonly IPasswordHasher _hasher;
 
-    private readonly UserId _user1 = new(Guid.Parse("11111111-1111-1111-1111-111111111111")); // Owner
-    private readonly UserId _user2 = new(Guid.Parse("22222222-2222-2222-2222-222222222222")); // Member
-    private readonly UserId _user3 = new(Guid.Parse("33333333-3333-3333-3333-333333333333"));
+    private readonly UserId _user1 = new(Guid.Parse("11111111-1111-1111-1111-111111111111"));     private readonly UserId _user2 = new(Guid.Parse("22222222-2222-2222-2222-222222222222"));     private readonly UserId _user3 = new(Guid.Parse("33333333-3333-3333-3333-333333333333"));
     private readonly UserId _user4 = new(Guid.Parse("44444444-4444-4444-4444-444444444444"));
     private readonly UserId _user5 = new(Guid.Parse("55555555-5555-5555-5555-555555555555"));
     private readonly UserId _user6 = new(Guid.Parse("66666666-6666-6666-6666-666666666666"));
@@ -39,8 +37,7 @@ public sealed class DatabaseSeeder
 
     private async Task SeedUsersAsync()
     {
-        // ✅ كلمة سر ديمو قوية - تقدر تعمل بيها Login
-        const string seedPassword = "P@ssw0rd!123";
+                const string seedPassword = "P@ssw0rd!123";
         var seedHash = _hasher.Hash(seedPassword);
 
         var usersToEnsure = new List<ChatUser>
@@ -71,8 +68,7 @@ public sealed class DatabaseSeeder
     {
         var user = new ChatUser(id, username, email, passwordHash);
         user.SetDisplayName(displayName);
-        user.ConfirmEmail(); // ✅ confirmed users for dev
-        return user;
+        user.ConfirmEmail();         return user;
     }
 
     private async Task SeedRoomsAsync()

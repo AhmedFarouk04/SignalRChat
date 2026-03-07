@@ -6,12 +6,10 @@ public sealed class RedisPresenceService : IPresenceService
 {
     private readonly IDatabase _db;
     private const string Prefix = "presence:";
-    private const string LastSeenPrefix = "lastseen:"; // ➕ إضافة Last Seen prefix
-    private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(2);
+    private const string LastSeenPrefix = "lastseen:";     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(2);
 
     private static string Key(Guid userId) => $"{Prefix}{userId}";
-    private static string LastSeenKey(Guid userId) => $"{LastSeenPrefix}{userId}"; // ➕
-
+    private static string LastSeenKey(Guid userId) => $"{LastSeenPrefix}{userId}"; 
     public RedisPresenceService(IConnectionMultiplexer redis)
     {
         _db = redis.GetDatabase();
@@ -40,8 +38,7 @@ public sealed class RedisPresenceService : IPresenceService
                         Console.WriteLine($"[RedisPresence] Cleaning up stale connection for user {userId}");
                         await _db.KeyDeleteAsync(key);
 
-                        // تسجيل Last Seen
-                        await _db.StringSetAsync(LastSeenKey(userId), DateTime.UtcNow.Ticks, TimeSpan.FromDays(30));
+                                                await _db.StringSetAsync(LastSeenKey(userId), DateTime.UtcNow.Ticks, TimeSpan.FromDays(30));
                     }
                 }
             }
@@ -58,8 +55,7 @@ public sealed class RedisPresenceService : IPresenceService
             var heartbeatKey = $"heartbeat:{userId.Value}";
             await _db.StringSetAsync(heartbeatKey, DateTime.UtcNow.Ticks, TimeSpan.FromSeconds(20));
 
-            // كمان نجدد الـ TTL للـ presence key
-            var presenceKey = Key(userId.Value);
+                        var presenceKey = Key(userId.Value);
             await _db.KeyExpireAsync(presenceKey, TimeSpan.FromMinutes(1));
         }
         catch (Exception ex)
@@ -78,14 +74,11 @@ public sealed class RedisPresenceService : IPresenceService
         var key = Key(userId.Value);
         await _db.SetAddAsync(key, connectionId);
 
-        // ✅ زود الـ TTL لدقيقتين بدل 30 ثانية
-        await _db.KeyExpireAsync(key, TimeSpan.FromMinutes(2));
+                await _db.KeyExpireAsync(key, TimeSpan.FromMinutes(2));
 
-        // ✅ حذف Last Seen عند الاتصال
-        await _db.KeyDeleteAsync(LastSeenKey(userId.Value));
+                await _db.KeyDeleteAsync(LastSeenKey(userId.Value));
 
-        // ✅ Heartbeat كل 30 ثانية بدل 10
-        var heartbeatKey = $"heartbeat:{userId.Value}";
+                var heartbeatKey = $"heartbeat:{userId.Value}";
         await _db.StringSetAsync(heartbeatKey, DateTime.UtcNow.Ticks, TimeSpan.FromSeconds(30));
     }
     public async Task UserDisconnectedAsync(UserId userId, string connectionId)
@@ -96,11 +89,9 @@ public sealed class RedisPresenceService : IPresenceService
         if (await _db.SetLengthAsync(key) == 0)
         {
             await _db.KeyDeleteAsync(key);
-            // ➕ تسجيل Last Seen عند قطع آخر اتصال فوراً
-            await _db.StringSetAsync(LastSeenKey(userId.Value), DateTime.UtcNow.Ticks, TimeSpan.FromDays(30));
+                        await _db.StringSetAsync(LastSeenKey(userId.Value), DateTime.UtcNow.Ticks, TimeSpan.FromDays(30));
 
-            // ✅ حذف الـ heartbeat فوراً
-            await _db.KeyDeleteAsync($"heartbeat:{userId.Value}");
+                        await _db.KeyDeleteAsync($"heartbeat:{userId.Value}");
 
             Console.WriteLine($"[RedisPresence] User {userId} completely disconnected, last seen recorded");
         }
@@ -140,18 +131,14 @@ public sealed class RedisPresenceService : IPresenceService
             {
                 try
                 {
-                    // تحقق من وجود المفتاح وفعاليته
-                    if (!await _db.KeyExistsAsync(key))
+                                        if (!await _db.KeyExistsAsync(key))
                         continue;
 
-                    // تحقق من TTL
-                    var ttl = await _db.KeyTimeToLiveAsync(key);
+                                        var ttl = await _db.KeyTimeToLiveAsync(key);
 
-                    // ✅ TTL أقصر من 10 ثواني معناه إن المستخدم على وشك الانتهاء
-                    if (ttl == null || ttl <= TimeSpan.Zero || ttl < TimeSpan.FromSeconds(5))
+                                        if (ttl == null || ttl <= TimeSpan.Zero || ttl < TimeSpan.FromSeconds(5))
                     {
-                        // لسه بنعتبره أونلاين لو الـ TTL قريب
-                        var id = key.ToString().Replace(Prefix, "");
+                                                var id = key.ToString().Replace(Prefix, "");
                         if (Guid.TryParse(id, out var guid))
                         {
                             var connectionCount = await _db.SetLengthAsync(key);
@@ -170,16 +157,14 @@ public sealed class RedisPresenceService : IPresenceService
                     var idStr = key.ToString().Replace(Prefix, "");
                     if (Guid.TryParse(idStr, out var userId))
                     {
-                        // تحقق إضافي: هل لسه في connections؟
-                        var connectionCount = await _db.SetLengthAsync(key);
+                                                var connectionCount = await _db.SetLengthAsync(key);
                         if (connectionCount > 0)
                         {
                             users.Add(new UserId(userId));
                         }
                         else
                         {
-                            // لو مفيش connections، احذف المفتاح
-                            await _db.KeyDeleteAsync(key);
+                                                        await _db.KeyDeleteAsync(key);
                         }
                     }
                 }

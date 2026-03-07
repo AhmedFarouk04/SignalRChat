@@ -16,16 +16,15 @@ public sealed class RoomListItemDto
     public DateTime? LastMessageAt { get; init; }
     public string? LastMessagePreview { get; init; }
     public Guid? LastMessageId { get; init; }
+    public bool IsSystemMessage { get; set; }
 
-    // ✅ NEW
-    public Guid? LastReadMessageId { get; set; }
+        public Guid? LastReadMessageId { get; set; }
     public DateTime? LastReadAt { get; set; }
     public Guid? LastMessageSenderId { get; init; }
     public MessageStatus? LastMessageStatus { get; init; }
     public int? LastMessageTotalRecipients { get; init; }
     public int? LastMessageDeliveredCount { get; init; }
     public int? LastMessageReadCount { get; init; }
-    public DateTime? LastSeenAt { get; set; } // ➕ أضف هذا
-
+    public DateTime? LastSeenAt { get; set; } 
     public Dictionary<Guid, string> MemberNames { get; init; } = new();
 }

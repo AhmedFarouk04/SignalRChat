@@ -34,8 +34,7 @@ public sealed class JwtAuthStateProvider : AuthenticationStateProvider
             var handler = new JwtSecurityTokenHandler();
             var jwt = handler.ReadJwtToken(token);
 
-            // Expiration safety (UTC)
-            if (jwt.ValidTo != DateTime.MinValue && jwt.ValidTo < DateTime.UtcNow)
+                        if (jwt.ValidTo != DateTime.MinValue && jwt.ValidTo < DateTime.UtcNow)
             {
                 await _tokenStore.ClearAsync();
                 return new ClaimsIdentity();

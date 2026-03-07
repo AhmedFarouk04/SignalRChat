@@ -7,8 +7,7 @@ namespace EnterpriseChat.Infrastructure.Presence;
 public sealed class InMemoryPresenceService : IPresenceService
 {
     private readonly ConcurrentDictionary<Guid, HashSet<string>> _connections = new();
-    private readonly ConcurrentDictionary<Guid, DateTime> _lastSeen = new(); // ➕ إضافة Last Seen
-
+    private readonly ConcurrentDictionary<Guid, DateTime> _lastSeen = new(); 
     public Task UserConnectedAsync(UserId userId, string connectionId)
     {
         var connections = _connections.GetOrAdd(userId.Value, _ => new HashSet<string>());
@@ -17,8 +16,7 @@ public sealed class InMemoryPresenceService : IPresenceService
             connections.Add(connectionId);
         }
 
-        // ➕ إزالة Last Seen عند الاتصال
-        _lastSeen.TryRemove(userId.Value, out _);
+                _lastSeen.TryRemove(userId.Value, out _);
 
         return Task.CompletedTask;
     }
@@ -43,8 +41,7 @@ public sealed class InMemoryPresenceService : IPresenceService
                 if (connections.Count == 0)
                 {
                     _connections.TryRemove(userId.Value, out _);
-                    // ➕ تسجيل Last Seen عند قطع آخر اتصال
-                    _lastSeen[userId.Value] = DateTime.UtcNow;
+                                        _lastSeen[userId.Value] = DateTime.UtcNow;
                 }
             }
         }
@@ -61,8 +58,7 @@ public sealed class InMemoryPresenceService : IPresenceService
     }
     public Task UpdateHeartbeatAsync(UserId userId)
     {
-        // InMemory مش محتاج heartbeat حقيقي، بس نضمن إنه موجود
-        return Task.CompletedTask;
+                return Task.CompletedTask;
     }
     public Task<IReadOnlyCollection<UserId>> GetOnlineUsersAsync()
         => Task.FromResult<IReadOnlyCollection<UserId>>(

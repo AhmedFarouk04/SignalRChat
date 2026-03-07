@@ -19,7 +19,6 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Controllers & Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -42,7 +41,6 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// CORS
 builder.Services.AddCors(opt =>
 {
     opt.AddPolicy("client", p =>
@@ -57,28 +55,22 @@ builder.Services.AddCors(opt =>
          .AllowCredentials());
 });
 
-// DbContext
-// DbContext
 builder.Services.AddDbContext<ChatDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sql => {
             sql.CommandTimeout(300);
-            sql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery); // ✅ أضف هذا السطر فقط
+            sql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery); 
         }));
-// Infrastructure + MediatR
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddMediatR(typeof(SendMessageCommand).Assembly);
 
-// JWT
 builder.Services.AddSingleton<JwtTokenService>();
 
-// Auth (MemoryCache + Hasher + AuthService)
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPasswordHasher, Pbkdf2PasswordHasher>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-// SMTP Options
 builder.Services.AddOptions<SmtpSettings>()
     .Bind(builder.Configuration.GetRequiredSection("Email:Smtp"))
     .Validate(s => !string.IsNullOrWhiteSpace(s.Host), "Email:Smtp:Host is required")
@@ -89,7 +81,6 @@ builder.Services.AddOptions<SmtpSettings>()
 
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
-// Redis
 var redisConnectionString =
     builder.Configuration["Presence:Redis"]
     ?? builder.Configuration.GetConnectionString("Redis");
@@ -102,7 +93,6 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, EnterpriseChat.API.Auth.SubUserIdProvider>();
 
-// SignalR
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = true;
@@ -126,7 +116,6 @@ builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 builder.Services.AddScoped<IMessageBroadcaster, SignalRMessageBroadcaster>();
 builder.Services.AddScoped<IUserPresenceNotifier, SignalRUserPresenceNotifier>();
 
-// AuthN/AuthZ
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

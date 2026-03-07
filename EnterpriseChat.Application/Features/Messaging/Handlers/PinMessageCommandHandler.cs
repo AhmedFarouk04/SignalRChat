@@ -35,8 +35,7 @@ public sealed class PinMessageCommandHandler : IRequestHandler<PinMessageCommand
 
         await _unitOfWork.CommitAsync(ct);
 
-        // ✅ الفرق: Pin → ابعت الـ ID | Unpin (أي نوع) → ابعت null دايماً
-        var broadcastId = request.MessageId != null ? request.MessageId.Value : (Guid?)null; 
+                var broadcastId = request.MessageId != null ? request.MessageId.Value : (Guid?)null; 
         await _broadcaster.NotifyMessagePinned(request.RoomId.Value, broadcastId);
 
         return Unit.Value;

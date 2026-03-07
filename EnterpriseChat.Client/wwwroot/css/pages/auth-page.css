@@ -150,7 +150,7 @@
 .auth-card {
     display: flex;
     flex-direction: column;
-    gap: 10px; /* يخلي login/register نفس الإحساس */
+    gap: 10px; 
 }
 
 

@@ -46,11 +46,9 @@ public sealed class AddMembersToGroupBulkHandler : IRequestHandler<AddMembersToG
         var existingMemberIds = room.Members.Select(m => m.UserId.Value).ToHashSet();
         var addedMembersInfos = new List<(UserId Id, string Name)>();
 
-        // ✅ فلترة قوية + رسالة واضحة لو مفيش أعضاء صالحين
-        foreach (var memberId in command.MemberIds.Distinct())
+                foreach (var memberId in command.MemberIds.Distinct())
         {
-            if (memberId.Value == Guid.Empty) continue; // تجاهل Empty
-            if (existingMemberIds.Contains(memberId.Value)) continue;
+            if (memberId.Value == Guid.Empty) continue;             if (existingMemberIds.Contains(memberId.Value)) continue;
             if (await _blocks.IsBlockedAsync(command.RequesterId, memberId, ct)) continue;
 
             var name = await _users.GetDisplayNameAsync(memberId.Value, ct) ?? "Unknown User";
@@ -98,7 +96,7 @@ public sealed class AddMembersToGroupBulkHandler : IRequestHandler<AddMembersToG
 
 
     private async Task NotifyGroup(ChatRoom room, Message sysMsg, string text,
-    List<UserId> recipients, List<(UserId Id, string Name)> addedMembers)
+   List<UserId> recipients, List<(UserId Id, string Name)> addedMembers)
     {
         var msgDto = new MessageDto
         {
@@ -106,28 +104,27 @@ public sealed class AddMembersToGroupBulkHandler : IRequestHandler<AddMembersToG
             RoomId = room.Id.Value,
             Content = text,
             CreatedAt = sysMsg.CreatedAt,
-            IsSystemMessage = true  // ✅ مهم جداً
+            IsSystemMessage = true
         };
 
-        // 1. بث الرسالة داخل الشات (بتظهر جوه المحادثة)
-        await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
+                await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        // 2. تحديث القائمة بدون Preview (زي ما عملنا في RemoveMember)
-        await _broadcaster.RoomUpsertedAsync(new RoomListItemDto
+                await _broadcaster.RoomUpsertedAsync(new RoomListItemDto
         {
             Id = room.Id.Value,
             Name = room.Name,
             Type = room.Type.ToString(),
             UnreadCount = 0,
             IsMuted = false,
+            IsSystemMessage = true,
             LastMessageAt = sysMsg.CreatedAt,
-            LastMessagePreview = null,  // ✅ صح
-            LastMessageId = sysMsg.Id.Value,
-            LastMessageSenderId = Guid.Empty,  // ✅ صح
+            LastMessagePreview = text,              LastMessageId = sysMsg.Id.Value,
+            LastMessageSenderId = Guid.Empty,
             LastMessageStatus = null
         }, recipients);
 
-        // 3. إشعارات للأعضاء الجدد (حالياً مش محتاجين RoomUpdated)
+    
+
         var addedIds = addedMembers.Select(x => x.Id.Value).ToHashSet();
         var existingMembers = recipients.Where(r => !addedIds.Contains(r.Value)).ToList();
 

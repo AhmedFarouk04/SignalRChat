@@ -14,8 +14,7 @@ public sealed class PresenceApi
 
     public async Task<IsOnlineResponse> IsOnlineAsync(Guid userId)
     {
-        // endpoint: api/presence/online/{userId}
-        var url = ApiEndpoints.IsOnline(userId);
+                var url = ApiEndpoints.IsOnline(userId);
 
         var res = await _http.GetFromJsonAsync<IsOnlineResponse>(url);
         return res ?? new IsOnlineResponse { UserId = userId, Online = false };

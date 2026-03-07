@@ -1,10 +1,8 @@
-﻿// ✅ غير private لـ public في الـ constructor
-public sealed class ReactionId
+﻿public sealed class ReactionId
 {
     public Guid Value { get; }
 
-    public ReactionId(Guid value) // ← غير private لـ public
-    {
+    public ReactionId(Guid value)     {
         Value = value;
     }
 

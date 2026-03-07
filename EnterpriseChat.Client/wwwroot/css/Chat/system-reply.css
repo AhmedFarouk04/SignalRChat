@@ -1,4 +1,4 @@
-﻿/* ===== Reply Preview داخل الـ Message Bubble ===== */
+﻿
 .msg-body .reply-preview {
     background: rgba(0, 0, 0, 0.2);
     border-left: 3px solid var(--accent-main, #38bdf8);
@@ -23,7 +23,7 @@
     margin-bottom: 2px;
 }
 
-/* لو رسالة "mine" - لون مختلف للـ reply */
+
 .mine .reply-preview {
     background: rgba(0, 0, 0, 0.25);
     border-left-color: rgba(255, 255, 255, 0.7);
@@ -43,7 +43,7 @@
     display: block;
 }
 
-/* ===== Reply Context في الـ Composer (قبل الإرسال) ===== */
+
 .reply-context {
     background: rgba(56, 189, 248, 0.08);
     border-left: 3px solid var(--accent-main, #38bdf8);
@@ -93,7 +93,7 @@
         color: #ef4444;
     }
 
-/* ===== Date Separator ===== */
+
 .date-sep {
     display: flex;
     align-items: center;
@@ -122,7 +122,7 @@
         margin-left: 1.5em;
     }
 
-/* ===== Unread Divider ===== */
+
 .unread-divider {
     display: flex;
     align-items: center;

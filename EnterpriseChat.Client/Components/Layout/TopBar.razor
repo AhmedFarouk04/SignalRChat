@@ -6,7 +6,7 @@
 @inject ICurrentUser CurrentUser
 @implements IDisposable
 
-<div class="topbar">
+<div class="topbar" @onclick="CloseMenuOnOutsideClick">
     @if (VM?.IsSearching == true)
     {
         <div class="search-mode">
@@ -84,25 +84,82 @@
                         }
                     </div>
                 </div>
+
                 <div class="room-actions">
-                    <button class="icon-btn" title="Search" @onclick="() => VM.IsSearching = true">🔍</button>
-                    @if (!IsPrivate)
-                    {
-                        <button class="icon-btn" type="button" title="Members" @onclick="() => OnMembers.InvokeAsync()">
-                            👥
+                    @* Search stays outside *@
+                    <button class="icon-btn" title="Search" @onclick="() => VM.IsSearching = true" @onclick:stopPropagation="true">🔍</button>
+
+                    @* Everything else inside ⋮ *@
+                    <div class="chat-actions-wrapper" @onclick:stopPropagation="true">
+                        <button class="icon-btn topbar-more-btn @(_actionsMenuOpen ? "active" : "")"
+                                title="More options"
+                                @onclick="ToggleActionsMenu">
+                            ⋮
                         </button>
-                    }
-                    @if (IsPrivate)
-                    {
-                        <button class="icon-btn" type="button" title="@(IsBlockedByMe ? "Unblock" : "Block")" @onclick="() => (IsBlockedByMe ? OnUnblock : OnBlock).InvokeAsync()">
-                            @(IsBlockedByMe ? "🔓" : "🚫")
-                        </button>
-                    }
-                    <button class="icon-btn" type="button" title="Mute" @onclick="() => OnMuteToggle.InvokeAsync()">
-                        @(IsMuted ? "🔕" : "🔔")
-                    </button>
+
+                        @if (_actionsMenuOpen)
+                        {
+                            @* ── Backdrop يغلق الـ dropdown لما تضغط برا ── *@
+                            <div class="dropdown-backdrop" @onclick="CloseMenuOnOutsideClick"></div>
+
+                            <div class="actions-dropdown">
+
+                                @* Mute/Unmute *@
+                                <button class="dropdown-item" @onclick="HandleMuteClick">
+                                    <span class="di-icon">@(_localIsMuted ? "🔕" : "🔔")</span>
+                                    <span>@(_localIsMuted ? "Unmute" : "Mute")</span>
+                                </button>
+
+                                @* Block/Unblock - Private only *@
+                                @if (IsPrivate)
+                                {
+                                    <button class="dropdown-item @(IsBlockedByMe ? "warn" : "")" @onclick="HandleBlockClick">
+                                        <span class="di-icon">@(IsBlockedByMe ? "🔓" : "🚫")</span>
+                                        <span>@(IsBlockedByMe ? "Unblock" : "Block")</span>
+                                    </button>
+                                }
+
+                                @* Members - Group only *@
+                                @if (!IsPrivate)
+                                {
+                                    <button class="dropdown-item" @onclick="HandleMembersClick">
+                                        <span class="di-icon">👥</span>
+                                        <span>Members</span>
+                                    </button>
+                                }
+
+                                <div class="dropdown-divider"></div>
+
+                                @* Clear Chat *@
+                                <button class="dropdown-item" @onclick="() => ShowConfirm(ConfirmAction.Clear)">
+                                    <span class="di-icon">🧹</span>
+                                    <span>Clear Chat</span>
+                                </button>
+
+                                @* Clear for Everyone - Group owner only *@
+                                @if (!IsPrivate && VM?.GroupMembers?.OwnerId == _currentUserId)
+                                {
+                                    <button class="dropdown-item" @onclick="() => ShowConfirm(ConfirmAction.ClearAll)">
+                                        <span class="di-icon">🧹</span>
+                                        <span>Clear for Everyone</span>
+                                    </button>
+                                }
+
+                                <div class="dropdown-divider"></div>
+
+                                @* Delete *@
+                                <button class="dropdown-item danger" @onclick="() => ShowConfirm(ConfirmAction.Delete)">
+                                    <span class="di-icon">🗑️</span>
+                                    <span>@(IsPrivate ? "Delete Chat" : "Delete Group")</span>
+                                </button>
+
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
+
+            @* ── Pinned Messages Bar ── *@
             @if (VM?.PinnedMessages != null && VM.PinnedMessages.Any())
             {
                 var currentPinned = GetCurrentPinned();
@@ -138,8 +195,29 @@
     }
 </div>
 
+@* ── Confirmation Dialog ── *@
+@if (_confirmAction != ConfirmAction.None)
+{
+    <div class="confirm-overlay" @onclick="CancelConfirm">
+        <div class="confirm-dialog" @onclick:stopPropagation="true">
+            <div class="confirm-icon">@GetConfirmIcon()</div>
+            <div class="confirm-title">@GetConfirmTitle()</div>
+            <div class="confirm-body">@GetConfirmBody()</div>
+            <div class="confirm-actions">
+                <button class="confirm-btn cancel" @onclick="CancelConfirm">Cancel</button>
+                <button class="confirm-btn @(_confirmAction == ConfirmAction.Delete ? "delete" : "clear")"
+                        @onclick="ExecuteConfirm">
+                    @GetConfirmLabel()
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+
+
 @code {
-    [Parameter] public RoomModel? Room { get; set; }
+        [Parameter] public RoomModel? Room { get; set; }
     [Parameter] public ChatViewModel? VM { get; set; }
     [Parameter] public EventCallback<Guid> OnScrollToMessage { get; set; }
     [Parameter] public int MembersCount { get; set; }
@@ -151,18 +229,123 @@
     [Parameter] public EventCallback OnMembers { get; set; }
     [Parameter] public bool IsBlockedByMe { get; set; }
     [Parameter] public EventCallback OnUnblock { get; set; }
+    [Parameter] public EventCallback OnDeleteChat { get; set; }
+    [Parameter] public EventCallback OnClearChat { get; set; }
+    [Parameter] public EventCallback OnClearChatForAll { get; set; }
+    private bool _localIsMuted;
 
-    private bool IsPrivate => Room?.Type == "Private";
-    private string Title => IsPrivate ? Room?.OtherDisplayName ?? "Private Chat" : Room?.Name ?? "Group";
-    private int _displayIndex = 0;
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+
+        if (_localIsMuted != IsMuted)
+        {
+            _localIsMuted = IsMuted;
+            StateHasChanged();           }
+    }
+        private bool _actionsMenuOpen = false;
     private Guid _currentUserId;
+    private int _displayIndex = 0;
+
+        private enum ConfirmAction { None, Clear, ClearAll, Delete }
+    private ConfirmAction _confirmAction = ConfirmAction.None;
+
+    private void ShowConfirm(ConfirmAction action)
+    {
+        _actionsMenuOpen = false;
+        _confirmAction = action;
+        StateHasChanged();
+    }
+
+    private void CancelConfirm()
+    {
+        _confirmAction = ConfirmAction.None;
+        StateHasChanged();
+    }
+
+    private async Task ExecuteConfirm()
+    {
+        var action = _confirmAction;
+        _confirmAction = ConfirmAction.None;
+        StateHasChanged();
+
+        switch (action)
+        {
+            case ConfirmAction.Clear: await OnClearChat.InvokeAsync(); break;
+            case ConfirmAction.ClearAll: await OnClearChatForAll.InvokeAsync(); break;
+            case ConfirmAction.Delete: await OnDeleteChat.InvokeAsync(); break;
+        }
+    }
+
+    private string GetConfirmIcon() => _confirmAction == ConfirmAction.Delete ? "🗑️" : "🧹";
+
+    private string GetConfirmTitle() => _confirmAction switch
+    {
+        ConfirmAction.Delete => IsPrivate ? "Delete Chat?" : "Delete Group?",
+        ConfirmAction.ClearAll => "Clear for Everyone?",
+        _ => "Clear Chat?"
+    };
+
+    private string GetConfirmBody() => _confirmAction switch
+    {
+        ConfirmAction.Delete => IsPrivate
+            ? "This chat will be deleted for you only. The other person won't be notified."
+            : "This will permanently delete the group and all its messages for everyone.",
+        ConfirmAction.ClearAll => "All messages will be cleared for every member in this group. This cannot be undone.",
+        _ => "All messages will be cleared for you only. This cannot be undone."
+    };
+
+    private string GetConfirmLabel() => _confirmAction switch
+    {
+        ConfirmAction.Delete => IsPrivate ? "Delete" : "Delete Group",
+        ConfirmAction.ClearAll => "Clear for All",
+        _ => "Clear"
+    };
+
+        private void ToggleActionsMenu()
+    {
+        _actionsMenuOpen = !_actionsMenuOpen;
+        StateHasChanged();
+    }
+
+    private void CloseMenuOnOutsideClick()
+    {
+        if (_actionsMenuOpen)
+        {
+            _actionsMenuOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleMuteClick()
+    {
+        _actionsMenuOpen = false;
+        await OnMuteToggle.InvokeAsync();
+    }
+
+    private async Task HandleBlockClick()
+    {
+        _actionsMenuOpen = false;
+        await (IsBlockedByMe ? OnUnblock : OnBlock).InvokeAsync();
+    }
+
+    private async Task HandleMembersClick()
+    {
+        _actionsMenuOpen = false;
+        await OnMembers.InvokeAsync();
+    }
+
+        private bool IsPrivate => Room?.Type == "Private";
+    private string Title => IsPrivate ? Room?.OtherDisplayName ?? "Private Chat" : Room?.Name ?? "Group";
     private int CurrentOnlineCount => VM?.OnlineUsers?.Count ?? OnlineCount;
+
     private async Task HandleUnpin(Guid messageId)
     {
         if (VM != null)
             await VM.UnpinMessageAsync(messageId);
     }
-    protected override async Task OnInitializedAsync()
+
+        protected override async Task OnInitializedAsync()
     {
         var userId = await CurrentUser.GetUserIdAsync();
         _currentUserId = userId ?? Guid.Empty;
@@ -174,24 +357,19 @@
         Realtime.RoomPresenceUpdated += OnRoomPresenceUpdated;
 
         if (VM != null)
-        {
             VM.Changed += OnViewModelChanged;
-        }
     }
+
     protected override async Task OnParametersSetAsync()
     {
-        // ✅ كل ما الـ Parent بيبعت parameters جديدة، force re-render
         await InvokeAsync(StateHasChanged);
     }
-    private void OnBlockedByMe(Guid userId, bool blocked)
+
+        private void OnBlockedByMe(Guid userId, bool blocked)
     {
         if (OtherUser?.Id == userId)
         {
-            if (blocked)
-            {
-                OtherUser.IsOnline = false;
-                OtherUser.LastSeen = null;
-            }
+            if (blocked) { OtherUser.IsOnline = false; OtherUser.LastSeen = null; }
             InvokeAsync(StateHasChanged);
         }
     }
@@ -200,14 +378,11 @@
     {
         if (OtherUser?.Id == userId)
         {
-            if (blocked)
-            {
-                OtherUser.IsOnline = false;
-                OtherUser.LastSeen = null;
-            }
+            if (blocked) { OtherUser.IsOnline = false; OtherUser.LastSeen = null; }
             InvokeAsync(StateHasChanged);
         }
     }
+
     private void OnUserOnline(Guid userId)
     {
         if (OtherUser?.Id == userId)
@@ -226,7 +401,6 @@
             OtherUser.LastSeen = DateTime.UtcNow;
         }
         InvokeAsync(StateHasChanged);
-
     }
 
     private void OnUserLastSeenUpdated(Guid userId, DateTime lastSeen)
@@ -243,16 +417,14 @@
     {
         if (Room?.Id == roomId && !IsPrivate)
         {
-            // تحديث القيمة التي يقرأ منها الـ HTML (CurrentOnlineCount)
             OnlineCount = count;
             InvokeAsync(StateHasChanged);
         }
     }
 
-    private MessageModel GetCurrentPinned()
+        private MessageModel GetCurrentPinned()
     {
-        if (VM?.PinnedMessages == null || !VM.PinnedMessages.Any())
-            return null;
+        if (VM?.PinnedMessages == null || !VM.PinnedMessages.Any()) return null;
         if (_displayIndex >= VM.PinnedMessages.Count) _displayIndex = 0;
         return VM.PinnedMessages[_displayIndex];
     }
@@ -279,11 +451,13 @@
             await OnScrollToMessage.InvokeAsync(messageId);
         }
     }
+
     private void OnViewModelChanged()
     {
         InvokeAsync(StateHasChanged);
         Console.WriteLine($"[TopBar] ViewModel changed, online count: {VM?.OnlineUsers?.Count ?? 0}");
     }
+
     public void Dispose()
     {
         Realtime.UserOnline -= OnUserOnline;
@@ -293,8 +467,6 @@
         Realtime.UserBlockedByMeChanged -= OnBlockedByMe;
         Realtime.UserBlockedMeChanged -= OnBlockedMe;
         if (VM != null)
-        {
             VM.Changed -= OnViewModelChanged;
-        }
     }
 }

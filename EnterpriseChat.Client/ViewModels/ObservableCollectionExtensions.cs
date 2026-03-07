@@ -1,12 +1,10 @@
-﻿// في نفس ChatViewModel.cs، أضف هذه الـ Extension Methods داخل namespace
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 
 namespace EnterpriseChat.Client.ViewModels
 {
     public static class ObservableCollectionExtensions
     {
-        // ✅ AddRange لـ ObservableCollection
-        public static void AddRange<T>(this ObservableCollection<T> collection, IEnumerable<T> items)
+                public static void AddRange<T>(this ObservableCollection<T> collection, IEnumerable<T> items)
         {
             if (collection == null) throw new ArgumentNullException(nameof(collection));
             if (items == null) throw new ArgumentNullException(nameof(items));
@@ -17,8 +15,7 @@ namespace EnterpriseChat.Client.ViewModels
             }
         }
 
-        // ✅ RemoveAll لـ ObservableCollection
-        public static void RemoveAll<T>(this ObservableCollection<T> collection, Func<T, bool> predicate)
+                public static void RemoveAll<T>(this ObservableCollection<T> collection, Func<T, bool> predicate)
         {
             if (collection == null) throw new ArgumentNullException(nameof(collection));
             if (predicate == null) throw new ArgumentNullException(nameof(predicate));

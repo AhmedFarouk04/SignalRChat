@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Application/DTOs/MessageDto.cs
-using EnterpriseChat.Domain.Enums;
+﻿using EnterpriseChat.Domain.Enums;
 
 namespace EnterpriseChat.Application.DTOs;
 
@@ -21,6 +20,5 @@ public class MessageDto
     public bool IsDeleted { get; set; }
     public DateTime? UpdatedAt { get; set; }
 
-    // ✅ جديد: للرسائل النظامية
     public bool IsSystemMessage { get; set; } = false;
 }

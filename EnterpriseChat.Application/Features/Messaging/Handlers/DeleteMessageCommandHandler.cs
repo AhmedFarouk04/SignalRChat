@@ -32,8 +32,7 @@ public sealed class DeleteMessageCommandHandler : IRequestHandler<DeleteMessageC
 
         if (request.DeleteForEveryone)
         {
-            // Authorization Check
-            var room = await _roomRepo.GetByIdWithMembersAsync(message.RoomId, ct)
+                        var room = await _roomRepo.GetByIdWithMembersAsync(message.RoomId, ct)
                 ?? throw new InvalidOperationException("Room not found.");
 
             bool isSender = message.SenderId == request.UserId;
@@ -43,12 +42,10 @@ public sealed class DeleteMessageCommandHandler : IRequestHandler<DeleteMessageC
             if (!isSender && !isAdminOrOwner)
                 throw new UnauthorizedAccessException("You are not allowed to delete this message.");
 
-            // Domain logic
-            message.DeleteForEveryone(request.UserId);
+                        message.DeleteForEveryone(request.UserId);
             await _uow.CommitAsync(ct);
 
-            // Broadcast to everyone in room
-            var members = await _messageRepo.GetRoomMemberIdsAsync(message.RoomId, ct);
+                        var members = await _messageRepo.GetRoomMemberIdsAsync(message.RoomId, ct);
 
             await _broadcaster.MessageDeletedAsync(
                 message.Id,
@@ -65,12 +62,10 @@ public sealed class DeleteMessageCommandHandler : IRequestHandler<DeleteMessageC
         }
         else
         {
-            // Delete For Me - حفظ في DB
-            message.DeleteForUser(request.UserId);
+                        message.DeleteForUser(request.UserId);
             await _uow.CommitAsync(ct);
 
-            // Broadcast للمستخدم ده بس
-            await _broadcaster.MessageDeletedAsync(
+                        await _broadcaster.MessageDeletedAsync(
                 message.Id,
                 isForEveryone: false,
                 new[] { request.UserId });

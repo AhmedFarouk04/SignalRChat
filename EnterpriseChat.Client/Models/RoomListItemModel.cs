@@ -12,14 +12,11 @@ public sealed class RoomListItemModel
     public string? OtherDisplayName { get; init; }
 
     public DateTime? LastSeenAt { get; set; }
-    // ✅ realtime fields (mutable)
-    public int UnreadCount { get; set; }
+        public int UnreadCount { get; set; }
     public bool IsMuted { get; set; }
     public DateTime? LastMessageAt { get; set; }
     public string? LastMessagePreview { get; set; }
     public Guid? LastMessageId { get; set; }
     public Dictionary<Guid, string> MemberNames { get; init; } = new();
 
-    public string? LastReactionPreview { get; set; }  // مثال: "Ahmed reacted ❤️ to your message"
-    public Guid? LastReactionMessageSenderId { get; set; } // صاحب الرسالة اللي اتعمل عليها reaction
-}
+    public string? LastReactionPreview { get; set; }      public Guid? LastReactionMessageSenderId { get; set; } }

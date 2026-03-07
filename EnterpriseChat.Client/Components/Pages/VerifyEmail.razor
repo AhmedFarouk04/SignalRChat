@@ -97,8 +97,7 @@
 
     private async Task DoResendAsync()
     {
-        // حماية إضافية
-        if (string.IsNullOrWhiteSpace(Email) || ResendCooldown || IsBusy)
+                if (string.IsNullOrWhiteSpace(Email) || ResendCooldown || IsBusy)
             return;
 
         Error = null;
@@ -108,8 +107,7 @@
         {
             await AuthApi.ResendCodeAsync(Email.Trim());
 
-            // اقفل 30 ثانية مع عداد
-            StartCooldown(30);
+                        StartCooldown(30);
         }
         catch (Exception ex)
         {

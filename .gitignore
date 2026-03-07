@@ -1,14 +1,16 @@
-# Visual Studio
-.vs/
-
-# .NET
+# .NET Core
 bin/
 obj/
-
-# User-specific files
 *.user
 *.suo
 
-# OS
+# User Secrets
+secrets.json
+appsettings.*.json
+
+# VS Code
+.vscode/
+
+# OS generated files
 .DS_Store
 Thumbs.db

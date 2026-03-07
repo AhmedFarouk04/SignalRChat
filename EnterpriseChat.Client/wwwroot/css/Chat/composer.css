@@ -62,7 +62,7 @@
         transform: none;
     }
 
-/* Attach */
+
 .attach-btn {
     width: 40px;
     height: 40px;
@@ -124,7 +124,7 @@
         transform: translateY(0);
     }
 }
-/* نفس تنسيق MembersDrawer */
+
 .drawer-backdrop {
     position: fixed;
     top: 0;
@@ -175,7 +175,7 @@
     }
 }
 
-/* تنسيقات داخلية للـ Drawer */
+
 .drawer-header {
     padding: 20px 24px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -224,7 +224,7 @@
     padding: 16px;
 }
 
-/* تنسيق للـ Attachments داخل الـ Drawer */
+
 .attach-wrap {
     height: 100%;
     display: flex;

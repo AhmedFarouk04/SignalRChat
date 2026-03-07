@@ -115,15 +115,7 @@
             return;
         }
 
-        // ✅ شيل الشرط بتاع Length < 2 عشان يبحث من أول حرف
-        // if (q.Length < 2)
-        // {
-        //     results.Clear();
-        //     loading = false;
-        //     await InvokeAsync(StateHasChanged);
-        //     return;
-        // }
-
+                                                                
         loading = true;
         error = null;
         await InvokeAsync(StateHasChanged);
@@ -173,6 +165,11 @@
                 return;
             }
 
+            Console.WriteLine($"[DEBUG] Room created/found: {dto.Id}");
+
+                        Nav.NavigateTo($"/rooms");
+
+                        await Task.Delay(2000);
             Nav.NavigateTo($"/chat/{dto.Id}");
         }
         catch (Exception ex)

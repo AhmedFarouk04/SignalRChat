@@ -5,6 +5,5 @@ namespace EnterpriseChat.Application.Features.Messaging.Commands;
 
 public sealed record AddMembersToGroupBulkCommand(
     RoomId RoomId,
-    List<UserId> MemberIds, // قائمة الأعضاء
-    UserId RequesterId
+    List<UserId> MemberIds,     UserId RequesterId
 ) : IRequest<Unit>;

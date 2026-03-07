@@ -29,6 +29,34 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await _hub.Clients.Group(roomId.ToString())
             .SendAsync("MessageReceived", message);
     }
+
+    public async Task ChatDeletedForUserAsync(RoomId roomId, UserId userId)
+    {
+        await _hub.Clients
+            .User(userId.Value.ToString())
+            .SendAsync("ChatDeleted", roomId.Value);
+    }
+    public async Task RoomRestoredAsync(RoomId roomId, UserId userId)
+    {
+        await _hub.Clients.User(userId.Value.ToString())
+            .SendAsync("RoomRestored", roomId.Value);
+    }
+    public async Task BroadcastRoomUpserted(Guid userId, RoomListItemDto room)
+    {
+        await _hub.Clients.User(userId.ToString()).SendAsync("RoomUpserted", room);
+    }
+    public async Task ChatClearedAsync(
+        RoomId roomId,
+        IEnumerable<UserId> recipients,
+        bool forEveryone)
+    {
+        var tasks = recipients.DistinctBy(u => u.Value)
+            .Select(u => _hub.Clients
+                .User(u.Value.ToString())
+                .SendAsync("ChatCleared", roomId.Value, forEveryone));
+
+        await Task.WhenAll(tasks);
+    }
     public async Task BroadcastMessageAsync(MessageDto message, IEnumerable<UserId> recipients)
     {
         var users = recipients?.DistinctBy(u => u.Value).ToList() ?? new();
@@ -41,7 +69,6 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         await Task.WhenAll(tasks);
     }
 
-    // ✅ تعديل: نستخدم roomId للبث للغرفة
     public async Task MessageReceiptStatsUpdatedAsync(Guid messageId, Guid roomId, int totalRecipients, int deliveredCount, int readCount)
     {
         var msg = await _messageRepo.GetByIdAsync(messageId, CancellationToken.None);
@@ -55,7 +82,6 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
     public async Task MessageDeliveredAsync(MessageId messageId, UserId userId, RoomId roomId)
     {
-        // ✅ لازم نبعت الـ roomId كمان عشان الكلاينت يقدر يعرف الرسالة في أنهي غرفة
         await _hub.Clients.User(userId.Value.ToString())
             .SendAsync("MessageDelivered", messageId.Value, roomId.Value);
     }
@@ -127,12 +153,12 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
         foreach (var userId in users)
         {
-            if (await _muteRepo.IsMutedAsync(roomId, userId))
-                continue;
+            bool isSender = userId.Value == update.SenderId;
+            bool isMuted = await _muteRepo.IsMutedAsync(roomId, userId);
 
             var delta = update.UnreadDelta < 0
                 ? update.UnreadDelta
-                : (userId.Value == update.SenderId ? 0 : update.UnreadDelta);
+                : (isSender ? 0 : update.UnreadDelta);
 
             var perUserUpdate = new RoomUpdatedDto
             {
@@ -145,7 +171,9 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
                 IsReply = update.IsReply,
                 ReplyToMessageId = update.ReplyToMessageId,
                 RoomName = update.RoomName,
-                RoomType = update.RoomType
+                RoomType = update.RoomType,
+                IsMuted = isMuted, 
+                IsClearEvent = update.IsClearEvent
             };
 
             tasks.Add(_hub.Clients.User(userId.Value.ToString())
@@ -153,9 +181,7 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
         }
 
         await Task.WhenAll(tasks);
-        Console.WriteLine($"[Broadcast] RoomUpdated sent for room {update.RoomId}, delta={update.UnreadDelta}, recipients={users.Count()}");
     }
-
     public async Task RoomUpsertedAsync(RoomListItemDto room, IEnumerable<UserId> users)
     {
         var roomId = new RoomId(room.Id);
@@ -163,16 +189,12 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
 
         foreach (var userId in users.DistinctBy(u => u.Value))
         {
-            if (await _muteRepo.IsMutedAsync(roomId, userId))
-                continue;
-
             tasks.Add(_hub.Clients.User(userId.Value.ToString())
                 .SendAsync("RoomUpserted", room));
         }
 
         await Task.WhenAll(tasks);
     }
-
     public async Task MemberAddedAsync(RoomId roomId, UserId memberId, string displayName, IEnumerable<UserId> users)
     {
         var tasks = new List<Task>();
@@ -202,9 +224,7 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
                 .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName));
         }
 
-        // ✅ احذف السطرين دول — هما سبب الـ duplicate
-        // ❌ await _hub.Clients.Group(roomId.Value.ToString())
-        //     .SendAsync("MemberRemoved", roomId.Value, memberId.Value, removerName);
+        
 
         await Task.WhenAll(tasks);
     }
@@ -215,7 +235,6 @@ public async Task MessageUpdatedAsync(MessageId messageId, string newContent, IE
 {
     var recipientsList = recipients?.DistinctBy(u => u.Value).ToList() ?? new();
 
-    // ✅ استخدم GetByIdWithReceiptsAsync بدل GetByIdAsync
     var msg = await _messageRepo.GetByIdWithReceiptsAsync(messageId, CancellationToken.None);
     if (msg == null) return;
 
@@ -227,7 +246,6 @@ public async Task MessageUpdatedAsync(MessageId messageId, string newContent, IE
 
     await Task.WhenAll(tasks);
 
-    // ✅ دلوقتي الـ stats صح لأن الـ Receipts موجودة
     await _hub.Clients.User(msg.SenderId.Value.ToString())
         .SendAsync("MessageReceiptStatsUpdated",
             messageId.Value,
@@ -246,7 +264,6 @@ public async Task MessageUpdatedAsync(MessageId messageId, string newContent, IE
 
     public async Task MessageReadAsync(MessageId messageId, UserId userId, RoomId roomId)
     {
-        // ✅ بنبعت المعاملين عشان الـ Handler في الكلاينت يشتغل صح
         await _hub.Clients.User(userId.Value.ToString())
             .SendAsync("MessageRead", messageId.Value, roomId.Value);
     }

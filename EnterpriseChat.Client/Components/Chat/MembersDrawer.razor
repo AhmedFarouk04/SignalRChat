@@ -135,10 +135,8 @@
                                 @* منطق الحذف الجديد *@
                                 @{
                                     bool canRemoveThisUser = false;
-                                    // 1. المالك يحذف أي حد إلا نفسه
-                                    if (IsCurrentUserOwner && u.Id != OwnerId) { canRemoveThisUser = true; }
-                                    // 2. الأدمن يحذف الأعضاء العاديين فقط (مش المالك ولا أدمن زيه)
-                                    else if (IsCurrentUserAdmin && u.Id != OwnerId && !u.IsAdmin && u.Id != CurrentUserId) { canRemoveThisUser = true; }
+                                                                        if (IsCurrentUserOwner && u.Id != OwnerId) { canRemoveThisUser = true; }
+                                                                        else if (IsCurrentUserAdmin && u.Id != OwnerId && !u.IsAdmin && u.Id != CurrentUserId) { canRemoveThisUser = true; }
                                 }
 
                                 @if (canRemoveThisUser)
@@ -252,18 +250,15 @@
     [Parameter] public EventCallback OnLeave { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
 
-    // Helpers للصلاحيات
-    private bool IsCurrentUserAdmin => Members.Any(m => m.Id == CurrentUserId && m.IsAdmin);
+        private bool IsCurrentUserAdmin => Members.Any(m => m.Id == CurrentUserId && m.IsAdmin);
     private bool IsCurrentUserOwner => CurrentUserId == OwnerId;
-    private Guid? _memberToTransfer = null; // لتتبع من سيستلم التاج
-    private Guid? _memberToRemove = null;
+    private Guid? _memberToTransfer = null;     private Guid? _memberToRemove = null;
     private string newGroupName = "";
     private bool isBusy = false;
     private bool isEditingName = false;
     private bool showInviteModal = false;
     private CancellationTokenSource? _transferCts;
-    private const int TransferAutoCloseMs = 4000; // 4 ثواني (عدّلها براحتك)
-    private CancellationTokenSource? _removeCts;
+    private const int TransferAutoCloseMs = 4000;     private CancellationTokenSource? _removeCts;
     private DotNetObjectReference<MembersDrawer>? _dotNetRef;
     private bool showLeaveModal = false;
     private bool showOwnerLeaveModal = false;
@@ -289,8 +284,7 @@
         CloseLeaveModals();
         await HandleDelete();
     }
-    // في MembersDrawer.razor - تحسين HandleRename
-    private async Task HandleRename()
+        private async Task HandleRename()
     {
         if (string.IsNullOrWhiteSpace(newGroupName) || newGroupName == GroupName)
         {
@@ -302,15 +296,12 @@
         try
         {
             await OnRename.InvokeAsync(newGroupName);
-            // النجاح: أقفل وضع التعديل
-            isEditingName = false;
+                        isEditingName = false;
         }
         catch (Exception ex)
         {
-            // الفشل: خلي الـ input مفتوح والاسم القديم
-            Toasts.Error("Failed to rename", ex.Message);
-            newGroupName = GroupName; // استرجاع الاسم القديم
-        }
+                        Toasts.Error("Failed to rename", ex.Message);
+            newGroupName = GroupName;         }
         finally
         {
             isBusy = false;
@@ -377,8 +368,7 @@
     }
     private void ToggleTransferConfirm(Guid userId)
     {
-        // لو ضغط على نفس الشخص تاني = اقفل
-        if (_memberToTransfer == userId)
+                if (_memberToTransfer == userId)
         {
             CloseTransferPopup();
             return;
@@ -386,8 +376,7 @@
 
         _memberToTransfer = userId;
 
-        // ابدأ تايمر يقفل لوحده
-        _transferCts?.Cancel();
+                _transferCts?.Cancel();
         _transferCts?.Dispose();
         _transferCts = new CancellationTokenSource();
 
@@ -396,8 +385,7 @@
             {
                 if (t.IsCanceled || t.IsFaulted) return;
 
-                // اقفل فقط لو لسه نفس الشخص مفتوح
-                if (_memberToTransfer == userId)
+                                if (_memberToTransfer == userId)
                 {
                     _memberToTransfer = null;
                     InvokeAsync(StateHasChanged);
@@ -426,12 +414,7 @@
         StateHasChanged();
     }
 
-    // private async Task HandleLeave()
-    // {
-    //     if (await JS.InvokeAsync<bool>("confirm", "Are you sure you want to leave this group?"))
-    //         await OnLeave.InvokeAsync();
-    // }
-
+                    
     protected override void OnParametersSet()
     {
         if (string.IsNullOrEmpty(newGroupName))

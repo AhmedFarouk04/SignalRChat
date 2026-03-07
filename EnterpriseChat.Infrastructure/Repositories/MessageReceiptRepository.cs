@@ -59,23 +59,19 @@ public sealed class MessageReceiptRepository
         MessageId messageId,
         CancellationToken ct = default)
     {
-        // 1. نجيب العدد الإجمالي للمستلمين
-        var totalCount = await _context.MessageReceipts
+                var totalCount = await _context.MessageReceipts
             .Where(r => r.MessageId == messageId)
             .CountAsync(ct);
 
-        // 2. نجيب عدد المستلمين الذين حالتهم >= Delivered
-        var deliveredCount = await _context.MessageReceipts
+                var deliveredCount = await _context.MessageReceipts
             .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Delivered)
             .CountAsync(ct);
 
-        // 3. نجيب عدد المستلمين الذين حالتهم >= Read
-        var readCount = await _context.MessageReceipts
+                var readCount = await _context.MessageReceipts
             .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Read)
             .CountAsync(ct);
 
-        // 4. نجيب قوائم المستخدمين الذين تم التسليم لهم والقراءة (اختياري)
-        var deliveredUsers = await _context.MessageReceipts
+                var deliveredUsers = await _context.MessageReceipts
             .Where(r => r.MessageId == messageId && r.Status >= MessageStatus.Delivered)
             .Select(r => r.UserId)
             .ToListAsync(ct);

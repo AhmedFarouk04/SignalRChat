@@ -73,8 +73,7 @@ public sealed class LeaveGroupCommandHandler : IRequestHandler<LeaveGroupCommand
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = Guid.Empty,  // System ID
-            Content = sysMsg.Content,
+            SenderId = Guid.Empty,              Content = sysMsg.Content,
             CreatedAt = sysMsg.CreatedAt,
             IsSystemMessage = true
         };
@@ -90,10 +89,8 @@ public sealed class LeaveGroupCommandHandler : IRequestHandler<LeaveGroupCommand
             UnreadCount = 0,
             IsMuted = false,
             LastMessageAt = sysMsg.CreatedAt,
-            LastMessagePreview = null,  // ✅ من غير Preview
-            LastMessageId = sysMsg.Id.Value,
-            LastMessageSenderId = Guid.Empty,  // ✅ System ID
-            LastMessageStatus = null
+            LastMessagePreview = systemText,              LastMessageId = sysMsg.Id.Value,
+            LastMessageSenderId = Guid.Empty,              LastMessageStatus = null
         }, recipients);
 
 

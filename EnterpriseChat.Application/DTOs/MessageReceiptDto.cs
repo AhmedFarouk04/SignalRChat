@@ -10,6 +10,5 @@ namespace EnterpriseChat.Application.DTOs
     public class MessageReceiptDto
     {
         public Guid UserId { get; set; }
-        public MessageStatus Status { get; set; } // Delivered or Read
-    }
+        public MessageStatus Status { get; set; }     }
 }

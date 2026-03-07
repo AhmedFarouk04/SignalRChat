@@ -46,7 +46,6 @@ public sealed class SmtpEmailSender : IEmailSender
             Credentials = new NetworkCredential(_s.Username, _s.Password)
         };
 
-        // SendMailAsync doesn't accept CancellationToken in many versions.
-        await client.SendMailAsync(msg);
+                await client.SendMailAsync(msg);
     }
 }

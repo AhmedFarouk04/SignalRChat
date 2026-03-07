@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Application/DTOs/UserDto.cs
-namespace EnterpriseChat.Application.DTOs;
+﻿namespace EnterpriseChat.Application.DTOs;
 
 public sealed class UserDto
 {

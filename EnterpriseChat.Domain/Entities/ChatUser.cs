@@ -8,19 +8,15 @@ public sealed class ChatUser
 
     public string DisplayName { get; private set; } = string.Empty;
 
-    // ✅ جديد
-    public string Username { get; private set; } = string.Empty;
+        public string Username { get; private set; } = string.Empty;
 
-    // ✅ هنخلي Email إلزامي في النظام الجديد
-    public string Email { get; private set; } = string.Empty;
+        public string Email { get; private set; } = string.Empty;
 
-    // ✅ hashed password
-    public string PasswordHash { get; private set; } = string.Empty;
+        public string PasswordHash { get; private set; } = string.Empty;
 
     public bool EmailConfirmed { get; private set; }
 
-    // ✅ OTP verification fields
-    public string? EmailOtpHash { get; private set; }
+        public string? EmailOtpHash { get; private set; }
     public DateTime? EmailOtpExpiresAtUtc { get; private set; }
     public int EmailOtpAttempts { get; private set; }
     public DateTime? EmailOtpLastSentAtUtc { get; private set; }
@@ -45,8 +41,7 @@ public sealed class ChatUser
         Email = email;
         PasswordHash = passwordHash;
 
-        // displayName default = username
-        DisplayName = username;
+                DisplayName = username;
 
         EmailConfirmed = false;
     }
@@ -94,8 +89,7 @@ public sealed class ChatUser
         if (email.Length > 256)
             throw new ArgumentException("Email too long.");
 
-        // بسيط وعملي
-        if (!email.Contains('@') || !email.Contains('.'))
+                if (!email.Contains('@') || !email.Contains('.'))
             throw new ArgumentException("Invalid email.");
     }
 
@@ -107,8 +101,7 @@ public sealed class ChatUser
         if (username.Length < 3 || username.Length > 32)
             throw new ArgumentException("Username length must be 3..32.");
 
-        // a-z A-Z 0-9 _ .
-        if (!Regex.IsMatch(username, @"^[a-zA-Z0-9_\.]+$"))
+                if (!Regex.IsMatch(username, @"^[a-zA-Z0-9_\.]+$"))
             throw new ArgumentException("Username contains invalid characters.");
     }
 }

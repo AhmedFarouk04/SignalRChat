@@ -21,8 +21,7 @@ public sealed class AttachmentsController : BaseController
         _auth = auth;
     }
 
-    // GET /api/attachments/{attachmentId}
-    [HttpGet("{attachmentId:guid}")]
+        [HttpGet("{attachmentId:guid}")]
     public async Task<IActionResult> Download(Guid attachmentId, CancellationToken ct)
     {
         if (attachmentId == Guid.Empty) return BadRequest("AttachmentId is required.");
@@ -45,8 +44,7 @@ public sealed class AttachmentsController : BaseController
         return File(bytes, entity.ContentType, entity.FileName);
     }
 
-    // DELETE /api/attachments/{attachmentId}
-    [HttpDelete("{attachmentId:guid}")]
+        [HttpDelete("{attachmentId:guid}")]
     public async Task<IActionResult> Delete(Guid attachmentId, CancellationToken ct)
     {
         if (attachmentId == Guid.Empty) return BadRequest("AttachmentId is required.");

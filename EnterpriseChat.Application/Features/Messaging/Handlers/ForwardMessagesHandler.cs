@@ -1,6 +1,5 @@
 ﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
-// EnterpriseChat.Application/Features/Messaging/Handlers/ForwardMessagesHandler.cs
 using EnterpriseChat.Application.Interfaces;
 using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Enums;
@@ -79,11 +78,9 @@ namespace EnterpriseChat.Application.Features.Messaging.Handlers
                     ));
                 }
 
-                // ✅ Commit الأول قبل أي broadcast
-                await _unitOfWork.CommitAsync(ct);
+                                await _unitOfWork.CommitAsync(ct);
 
-                // ✅ بعد الـ commit، ابعت SignalR
-                foreach (var (dto, roomUpdate) in messagesToBroadcast)
+                                foreach (var (dto, roomUpdate) in messagesToBroadcast)
                 {
                     await _broadcaster.BroadcastToRoomGroupAsync(targetRoomId, dto);
 

@@ -124,8 +124,7 @@ else
                             </div>
                         </div>
                         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                            @if (isOwner && !m.IsOwner) // Promote/Demote و Transfer للـ Owner فقط
-                            {
+                            @if (isOwner && !m.IsOwner)                             {
                                 <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => ToggleAdminAsync(m.UserId, m.IsAdmin))">
                                     @(m.IsAdmin ? "Demote" : "Promote")
                                 </button>
@@ -189,8 +188,7 @@ else
     private Guid CurrentUserId { get; set; }
     private void EnableEditName()
     {
-        newName = group?.Name ?? ""; // تعبئة الـ input بالاسم الحالي
-        isEditingName = true;
+        newName = group?.Name ?? "";         isEditingName = true;
         StateHasChanged();
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -232,8 +230,7 @@ else
             StateHasChanged();
         }
     }
-    // Toast موحد لكل operation
-    private async Task ExecuteWithToast(Func<Task> action, string successMessage = "Done")
+        private async Task ExecuteWithToast(Func<Task> action, string successMessage = "Done")
     {
         busy = true;
         StateHasChanged();
@@ -241,8 +238,7 @@ else
         {
             await action();
             Toasts.Success("Success", successMessage);
-            await LoadAsync(); // optional for safety
-        }
+            await LoadAsync();         }
         catch (Exception ex)
         {
             if (ex is UnauthorizedAccessException || ex.Message.Contains("owner", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("admin", StringComparison.OrdinalIgnoreCase))
@@ -272,8 +268,7 @@ else
         await ExecuteWithToast(async () =>
         {
             await GroupsApi.UpdateGroupAsync(RoomId, newName.Trim());
-            isEditingName = false; // رجوع للشكل الطبيعي بعد النجاح
-        }, "Group renamed");
+            isEditingName = false;         }, "Group renamed");
     }
     private async Task AddMemberAsync(Guid userId) => await ExecuteWithToast(async () =>
    {
@@ -288,8 +283,7 @@ else
        searchResults.Clear();
        _search = "";
 
-       // ✅ تحديث فوري بـ LoadAsync
-       await LoadAsync();
+              await LoadAsync();
 
    }, "Member added");
 
@@ -297,8 +291,7 @@ else
     {
         await GroupsApi.RemoveMemberAsync(RoomId, userId);
 
-        // ✅ تحديث فوري بـ LoadAsync
-        await LoadAsync();
+                await LoadAsync();
 
     }, "Member removed");
     private async Task ToggleAdminAsync(Guid userId, bool isAdmin) => await ExecuteWithToast(async () =>
@@ -321,8 +314,7 @@ else
         Nav.NavigateTo("/rooms");
     }, "Group deleted");
 
-    // DebouncedSearchAsync زي ما هو عندك
-    private async Task DebouncedSearchAsync()
+        private async Task DebouncedSearchAsync()
     {
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
@@ -334,13 +326,10 @@ else
 
         try
         {
-            await Task.Delay(250); // ✅ من غير CancellationToken
-            if (ct.IsCancellationRequested) return;
+            await Task.Delay(250);             if (ct.IsCancellationRequested) return;
 
-            // ✅ أضف currentUserId
-            var currentUserId = await CurrentUser.GetUserIdAsync() ?? Guid.Empty;
-            var res = await UsersApi.SearchAsync(q, currentUserId, 25, ct); // ✅ الترتيب صح
-
+                        var currentUserId = await CurrentUser.GetUserIdAsync() ?? Guid.Empty;
+            var res = await UsersApi.SearchAsync(q, currentUserId, 25, ct); 
             var currentIds = group.Members.Select(m => m.UserId).ToHashSet();
             searchResults.AddRange(res.Where(u => !currentIds.Contains(u.Id))
                 .Select(u => new EnterpriseChat.Client.Models.UserModel
@@ -375,14 +364,12 @@ else
 
         await InvokeAsync(async () =>
         {
-            // ✅ تحديث فوري بدون LoadAsync
-            if (group != null)
+                        if (group != null)
             {
                 var memberToRemove = group.Members.FirstOrDefault(m => m.UserId == userId);
                 if (memberToRemove != null)
                 {
-                    // تحويل IReadOnlyList إلى List للتعديل
-                    var membersList = group.Members.ToList();
+                                        var membersList = group.Members.ToList();
                     membersList.Remove(memberToRemove);
                     group = group with { Members = membersList };
                 }

@@ -21,10 +21,7 @@ public sealed class UsersApi
         if (string.IsNullOrWhiteSpace(query))
             return Array.Empty<UserDirectoryItemDto>();
 
-        // ✅ شيل الشرط بتاع Length < 2 برضه
-        // if (query.Length < 2) 
-        //     return Array.Empty<UserDirectoryItemDto>();
-
+                        
         var res = await _api.GetAsync<IReadOnlyList<UserDirectoryItemDto>>(
             ApiEndpoints.UserSearch(query, take, currentUserId),
             ct);

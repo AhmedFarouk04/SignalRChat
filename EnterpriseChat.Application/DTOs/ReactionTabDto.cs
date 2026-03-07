@@ -9,7 +9,6 @@ namespace EnterpriseChat.Application.DTOs
 {
     public sealed class ReactionTabDto
     {
-        public ReactionType? Type { get; set; } // null = All
-        public int Count { get; set; }
+        public ReactionType? Type { get; set; }         public int Count { get; set; }
     }
 }

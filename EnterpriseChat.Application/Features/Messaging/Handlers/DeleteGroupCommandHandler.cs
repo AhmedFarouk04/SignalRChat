@@ -11,8 +11,7 @@ public sealed class DeleteGroupCommandHandler : IRequestHandler<DeleteGroupComma
     private readonly IChatRoomRepository _repo;
     private readonly IRoomAuthorizationService _auth;
     private readonly IUnitOfWork _uow;
-    private readonly IMessageBroadcaster? _broadcaster; // optional
-
+    private readonly IMessageBroadcaster? _broadcaster; 
     public DeleteGroupCommandHandler(IChatRoomRepository repo, IRoomAuthorizationService auth, IUnitOfWork uow, IMessageBroadcaster? broadcaster)
     {
         _repo = repo;
@@ -36,11 +35,9 @@ public sealed class DeleteGroupCommandHandler : IRequestHandler<DeleteGroupComma
         await _repo.DeleteAsync(room, ct);
         await _uow.CommitAsync(ct);
 
-        // 1) group deleted لكل الأعضاء
-        await _broadcaster.GroupDeletedAsync(room.Id, recipients);
+                await _broadcaster.GroupDeletedAsync(room.Id, recipients);
 
-        // 2) شيل الروم من عند كل عضو
-        await _broadcaster.RemovedFromRoomAsync(room.Id, recipients);
+                await _broadcaster.RemovedFromRoomAsync(room.Id, recipients);
 
         return Unit.Value;
 

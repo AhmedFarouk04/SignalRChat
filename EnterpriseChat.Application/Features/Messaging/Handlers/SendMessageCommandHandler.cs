@@ -1,5 +1,4 @@
-﻿// ✅ SendMessageCommandHandler.cs - النسخة المُصلحة
-
+﻿
 using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Application.Features.Messaging.Commands;
 using EnterpriseChat.Application.Interfaces;
@@ -23,7 +22,7 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
     private readonly IPresenceService _presenceService;
     private readonly IMediator _mediator;
     private readonly IMessageReceiptRepository _receiptRepo;
-
+    private readonly IMutedRoomRepository _mutedRoomRepo;
     public SendMessageCommandHandler(
         IChatRoomRepository roomRepository,
         IMessageRepository messageRepository,
@@ -34,7 +33,8 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
         IPresenceService presenceService,
         IMediator mediator,
         IMessageReceiptRepository receiptRepo,
-        IMessageBroadcaster? broadcaster = null)
+        IMessageBroadcaster? broadcaster = null,
+        IMutedRoomRepository mutedRoomRepo = null)
     {
         _roomRepository = roomRepository;
         _messageRepository = messageRepository;
@@ -46,6 +46,7 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
         _mediator = mediator;
         _receiptRepo = receiptRepo;
         _broadcaster = broadcaster;
+        _mutedRoomRepo = mutedRoomRepo;
     }
 
     public async Task<MessageDto> Handle(SendMessageCommand command, CancellationToken ct)
@@ -60,8 +61,7 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
             .Where(id => id != command.SenderId)
             .ToList();
 
-        // 1. فحص الحظر
-        bool isBlocked = false;
+                bool isBlocked = false;
         if (room.Type == RoomType.Private && recipients.Count == 1)
         {
             var receiverId = recipients[0];
@@ -70,8 +70,7 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
 
         if (isBlocked) recipients = new List<UserId>();
 
-        // 2. معالجة الرد (Reply)
-        ReplyInfoDto? replyInfo = null;
+                ReplyInfoDto? replyInfo = null;
         if (command.ReplyToMessageId != null && command.ReplyToMessageId.Value != Guid.Empty)
         {
             var repliedMessage = await _messageRepository.GetByIdAsync(command.ReplyToMessageId, ct);
@@ -90,27 +89,32 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
             }
         }
 
-        // 3. إنشاء الرسالة وحفظها
-        var message = new Message(
+                        var message = new Message(
             command.RoomId,
             command.SenderId,
             command.Content,
             recipients,
             command.ReplyToMessageId,
-            isBlocked); // ✅ مرر متغير isBlocked اللي إنت حسبته فوق
+            isBlocked);
 
         await _messageRepository.AddAsync(message, ct);
+
         if (!isBlocked)
         {
-            room.UpdateLastMessage(message);
+                        room.RestoreMember(command.SenderId);
+            foreach (var recipient in recipients)
+            {
+                room.RestoreMember(recipient);
+            }
+
+                        room.UpdateLastMessage(message);
+
+                        _roomRepository.Update(room);
         }
 
-        // 🔥 الخطوة 1: حفظ الرسالة والـ Receipts وتحديث LastMessage
-        await _unitOfWork.CommitAsync(ct);
-        // 🔥 الخطوة 1: حفظ الرسالة والـ Receipts
+                await _unitOfWork.CommitAsync(ct);
 
-        // 🔥 الخطوة 2: عمل Deliver للأونلاين فوراً
-        var onlineUsers = await _presenceService.GetOnlineUsersAsync();
+                var onlineUsers = await _presenceService.GetOnlineUsersAsync();
         var toDeliverImmediately = recipients
             .Where(r => onlineUsers.Any(o => o.Value == r.Value))
             .ToList();
@@ -120,14 +124,11 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
             await _mediator.Send(new DeliverMessageCommand(message.Id, userId), ct);
         }
 
-        // 🔥 الخطوة 3: Commit الـ Deliver
-        await _unitOfWork.CommitAsync(ct);
+                await _unitOfWork.CommitAsync(ct);
 
-        // 🔥 الخطوة 4: جلب الـ Stats النهائية
-        var finalStats = await _receiptRepo.GetMessageStatsAsync(message.Id, ct);
+                var finalStats = await _receiptRepo.GetMessageStatsAsync(message.Id, ct);
 
-        // 🔥 الخطوة 5: تجهيز الـ DTO
-        var dto = new MessageDto
+                var dto = new MessageDto
         {
             Id = message.Id.Value,
             RoomId = command.RoomId.Value,
@@ -145,40 +146,64 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
             IsDeleted = false
         };
 
-        // 🔥 الخطوة 6: Broadcasting (بعد ما كل حاجة تمت بنجاح)
-        if (_broadcaster is not null)
+                        if (_broadcaster is not null)
         {
             try
             {
                 var preview = dto.Content.Length > 80 ? dto.Content[..80] + "…" : dto.Content;
 
-                // بث الرسالة
-                var broadcastTargets = isBlocked
-    ? new List<UserId> { command.SenderId }  // ✅ List
-    : recipients.Concat(new[] { command.SenderId }).ToList();
+                                var allMembers = room.Members.Select(m => m.UserId).ToList();
 
-                await _broadcaster.BroadcastMessageAsync(dto, broadcastTargets);
+                                var mutedUsers = new List<UserId>();
+                var nonMutedUsers = new List<UserId>();
 
-                // تحديث القائمة الجانبية
-                var updateDto = new RoomUpdatedDto
+                foreach (var userId in allMembers)
                 {
-                    RoomId = dto.RoomId,
-                    MessageId = dto.Id,
-                    SenderId = dto.SenderId,
-                    Preview = preview,
-                    CreatedAt = dto.CreatedAt,
-                    UnreadDelta = 1,
-                    IsReply = dto.ReplyToMessageId.HasValue,
-                    RoomName = room.Name,
-                    RoomType = room.Type.ToString()
-                };
+                                                            bool isMuted = await _mutedRoomRepo.IsMutedAsync(command.RoomId, userId, ct);
+                    if (isMuted)
+                        mutedUsers.Add(userId);
+                    else
+                        nonMutedUsers.Add(userId);
+                }
+                var senderUser = await _userDirectory.GetUserAsync(command.SenderId, ct);
+                var senderName = senderUser?.DisplayName ?? "";
 
-                await _broadcaster.RoomUpdatedAsync(updateDto, recipients);
+                                if (nonMutedUsers.Any())
+                {
+                    var recipientUpdateDto = new RoomUpdatedDto
+                    {
+                        RoomId = dto.RoomId,
+                        MessageId = dto.Id,
+                        SenderId = dto.SenderId,
+                        Preview = preview,
+                        CreatedAt = dto.CreatedAt,
+                        UnreadDelta = 1,
+                        RoomName = room.Name,
+                        RoomType = room.Type.ToString(),
+                        SenderName = senderName,
+                        IsMuted = false                     };
+                    await _broadcaster.RoomUpdatedAsync(recipientUpdateDto, nonMutedUsers);
+                }
 
-                updateDto.UnreadDelta = 0;
-                await _broadcaster.RoomUpdatedAsync(updateDto, new[] { command.SenderId });
+                                var zeroDeltaUsers = mutedUsers.Concat(new[] { command.SenderId }).Distinct().ToList();
+                if (zeroDeltaUsers.Any())
+                {
+                    var zeroDeltaDto = new RoomUpdatedDto
+                    {
+                        RoomId = dto.RoomId,
+                        MessageId = dto.Id,
+                        SenderId = dto.SenderId,
+                        Preview = preview,
+                        CreatedAt = dto.CreatedAt,
+                        SenderName = senderName,
+                        UnreadDelta = 0,
+                        RoomName = room.Name,
+                        RoomType = room.Type.ToString(),
+                        IsMuted = true                     };
+                    await _broadcaster.RoomUpdatedAsync(zeroDeltaDto, zeroDeltaUsers);
+                }
 
-                // تحديث الـ Stats
+                                await _broadcaster.BroadcastMessageAsync(dto, allMembers);
                 await _broadcaster.MessageReceiptStatsUpdatedAsync(
                     dto.Id,
                     command.RoomId.Value,
@@ -188,7 +213,6 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
             }
             catch (Exception ex)
             {
-                // ✅ Log الـ error بس متمنعش الـ response
                 Console.WriteLine($"[Broadcasting Error] {ex.Message}");
             }
         }

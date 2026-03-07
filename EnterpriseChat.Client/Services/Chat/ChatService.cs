@@ -58,7 +58,7 @@ public sealed class ChatService : IChatService
                 IsDeleted = m.ReplyInfo.IsDeleted
             },
             IsSystem = m.IsSystem,
-            Type = m.Type,
+            Type = m.Type?.ToString(),
             Reactions = m.Reactions == null || (!m.Reactions.Counts?.Any() ?? true)
     ? null
     : new MessageReactionsModel
@@ -76,8 +76,7 @@ public sealed class ChatService : IChatService
         }).ToList();
     }
 
-    // باقي الدوال بدون تغيير (كوبي-بيست الباقي من الكود القديم)
-    public Task<MessageDto?> SendMessageAsync(Guid roomId, string content)
+        public Task<MessageDto?> SendMessageAsync(Guid roomId, string content)
         => _api.PostAsync<object, MessageDto>(ApiEndpoints.SendMessage, new
         {
             RoomId = roomId,
@@ -183,8 +182,7 @@ public sealed class ChatService : IChatService
         {
             RoomId = roomId,
             Content = content,
-            ReplyToMessageId = replyInfo?.MessageId  // ✅ السيرفر بيبني ReplyInfo من الـ DB
-        };
+            ReplyToMessageId = replyInfo?.MessageId          };
         return await _api.PostAsync<object, MessageDto>(ApiEndpoints.SendMessage, request);
     }
 
@@ -220,11 +218,13 @@ public sealed class ChatService : IChatService
             Content = m.Content,
             CreatedAt = m.CreatedAt,
             PersonalStatus = (ClientMessageStatus)(int)m.PersonalStatus,
-            // لو عايز Status كـ fallback
-            // Status = (ClientMessageStatus)(int)(m.Status ?? DomainMessageStatus.Sent),
-        }).ToList();
+                                }).ToList();
     }
+    public Task DeleteChatAsync(Guid roomId)
+    => _api.DeleteAsync($"/api/rooms/{roomId}/chat");
 
+    public Task ClearChatAsync(Guid roomId, bool forEveryone = false)
+        => _api.PostAsync($"/api/rooms/{roomId}/chat/clear?forEveryone={forEveryone}");
     public async Task ForwardMessagesAsync(ForwardMessagesRequest request)
     {
         var json = JsonSerializer.Serialize(new

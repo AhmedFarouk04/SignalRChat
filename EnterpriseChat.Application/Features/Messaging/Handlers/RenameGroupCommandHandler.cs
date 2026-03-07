@@ -23,20 +23,15 @@ public sealed class RenameGroupCommandHandler : IRequestHandler<RenameGroupComma
         _uow = uow;
     }
 
-    // في RenameGroupCommandHandler.Handle
-    // في RenameGroupCommandHandler.cs
-    // في RenameGroupCommandHandler.cs
-    public async Task<Unit> Handle(RenameGroupCommand request, CancellationToken ct)
+                public async Task<Unit> Handle(RenameGroupCommand request, CancellationToken ct)
     {
         Console.WriteLine($"[HANDLER] ========== RenameGroup START ==========");
 
         try
         {
-            // Authorization
-            await _auth.EnsureUserIsAdminAsync(request.RoomId, request.RequesterId, ct);
+                        await _auth.EnsureUserIsAdminAsync(request.RoomId, request.RequesterId, ct);
 
-            // ✅ استخدم method مخصصة للتحديث (بدون AsNoTracking)
-            var room = await _rooms.GetByIdForUpdateAsync(request.RoomId, ct);
+                        var room = await _rooms.GetByIdForUpdateAsync(request.RoomId, ct);
             if (room == null)
                 throw new KeyNotFoundException("Room not found.");
 
@@ -48,8 +43,7 @@ public sealed class RenameGroupCommandHandler : IRequestHandler<RenameGroupComma
 
             await _uow.CommitAsync(ct);
 
-            // تحقق بعد الحفظ
-            var verifyRoom = await _rooms.GetByIdAsync(request.RoomId, ct);
+                        var verifyRoom = await _rooms.GetByIdAsync(request.RoomId, ct);
             Console.WriteLine($"[HANDLER] Verification after commit: '{verifyRoom?.Name}'");
 
             return Unit.Value;

@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Application/DTOs/ReplyInfoDto.cs
-namespace EnterpriseChat.Application.DTOs;
+﻿namespace EnterpriseChat.Application.DTOs;
 
 public sealed class ReplyInfoDto
 {

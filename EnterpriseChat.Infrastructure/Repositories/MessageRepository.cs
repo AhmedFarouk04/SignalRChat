@@ -35,6 +35,20 @@ public sealed class MessageRepository : IMessageRepository
             .Include(m => m.Deletions)
             .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
     }
+    public async Task<int> GetMessagesCountInRoomAsync(RoomId roomId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Messages
+            .Where(m => m.RoomId == roomId && !m.IsBlocked)
+            .CountAsync(cancellationToken);
+    }
+
+    public async Task<Message?> GetLastMessageInRoomAsync(RoomId roomId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Messages
+            .Where(m => m.RoomId == roomId && !m.IsBlocked)
+            .OrderByDescending(m => m.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
     public async Task<int> GetTotalUnreadCountAsync(RoomId roomId, UserId userId, CancellationToken ct = default)
     {
         return await _context.Messages
@@ -51,11 +65,7 @@ public sealed class MessageRepository : IMessageRepository
       UserId userId,
       CancellationToken ct = default)
     {
-        // نجيب كل الرسائل اللي:
-        // 1. في الروم ده
-        // 2. مش من المستخدم نفسه
-        // 3. الـ receipt بتاعته لسه < Delivered
-        return await _context.Messages
+                                        return await _context.Messages
             .Include(m => m.Receipts)
             .Where(m => m.RoomId == roomId
                 && m.SenderId != userId
@@ -144,8 +154,7 @@ public sealed class MessageRepository : IMessageRepository
         UserId readerId,
         CancellationToken ct = default)
     {
-        // EF Core 7+: ExecuteUpdateAsync
-        return await _context.MessageReceipts
+                return await _context.MessageReceipts
             .Where(r =>
                 r.UserId == readerId &&
                 r.Status < MessageStatus.Read &&
@@ -172,8 +181,7 @@ public sealed class MessageRepository : IMessageRepository
 
     public async Task<int> GetUnreadCountAsync(RoomId roomId, UserId userId, CancellationToken ct = default)
     {
-        // ✅ المقارنات كلها ValueObjects (بدون .Value)
-        return await (
+                return await (
             from r in _context.MessageReceipts.AsNoTracking()
             join m in _context.Messages.AsNoTracking() on r.MessageId equals m.Id
             where m.RoomId == roomId
@@ -210,48 +218,12 @@ GROUP BY m.RoomId";
         return results.ToDictionary(r => r.RoomId, r => r.Count);
     }
 
-    //    public async Task<Dictionary<Guid, Message?>> GetLastMessagesAsync(
-    //        IEnumerable<Guid> roomIds,
-    //        CancellationToken ct = default)
-    //    {
-    //        var ids = roomIds.Distinct().ToList();
-    //        if (ids.Count == 0) return new Dictionary<Guid, Message?>();
-    //        var json = JsonSerializer.Serialize(ids);
-    //        var sql = @"
-    //WITH Ranked AS (
-    //    SELECT
-    //        m.Id,
-    //        m.RoomId,
-    //        m.SenderId,
-    //        m.Content,
-    //        m.CreatedAt,
-    //        ROW_NUMBER() OVER (PARTITION BY m.RoomId ORDER BY m.CreatedAt DESC, m.Id DESC) AS rn
-    //    FROM Messages m
-    //    INNER JOIN OPENJSON(@json) WITH (RoomId UNIQUEIDENTIFIER '$') j ON m.RoomId = j.RoomId
-    //)
-    //SELECT
-    //    m.Id,
-    //    m.RoomId,
-    //    m.SenderId,
-    //    m.Content,
-    //    m.CreatedAt
-    //FROM Ranked m
-    //WHERE m.rn = 1";
-    //        var paramJson = new Microsoft.Data.SqlClient.SqlParameter("@json", json);
-    //        var messages = await _context.Messages
-    //            .FromSqlRaw(sql, paramJson)
-    //            .AsNoTracking()
-    //            .ToListAsync(ct);
-    //        return messages
-    //            .ToDictionary(m => m.RoomId.Value, m => m);
-    //    }
-  public async Task<IEnumerable<(Guid MessageId, Guid SenderId)>> GetMessageIdsAndSendersUpToAsync(
+                                                                                                                                              public async Task<IEnumerable<(Guid MessageId, Guid SenderId)>> GetMessageIdsAndSendersUpToAsync(
     RoomId roomId, 
     DateTime upTo, 
     CancellationToken ct = default)
 {
-    // ✅ استخدم await مباشرة من غير ContinueWith
-    var messages = await _context.Messages
+        var messages = await _context.Messages
         .Where(m => m.RoomId == roomId && m.CreatedAt <= upTo)
         .OrderBy(m => m.CreatedAt)
         .Select(m => new 
@@ -263,8 +235,7 @@ GROUP BY m.RoomId";
     
     return messages.Select(m => (m.MessageId, m.SenderId));
 }
-    // داخل class MessageRepository
-    public async Task<Dictionary<Guid, LastMessageInfo>> GetLastMessagesAsync(
+        public async Task<Dictionary<Guid, LastMessageInfo>> GetLastMessagesAsync(
      IReadOnlyList<Guid> roomIds,
      CancellationToken ct)
     {
@@ -313,11 +284,9 @@ WHERE r.rn = 1
 
         var paramJson = new SqlParameter("@json", json);
 
-        // ✅ التغيير هنا: استخدم ct بدل CancellationToken.None
-        var rows = await _context.Database
+                var rows = await _context.Database
             .SqlQueryRaw<LastMessageRow>(sql, paramJson)
-            .ToListAsync(ct);  // 👈 كده صحيح
-
+            .ToListAsync(ct);  
         var dict = new Dictionary<Guid, LastMessageInfo>();
 
         foreach (var r in rows)
@@ -342,8 +311,7 @@ WHERE r.rn = 1
         return dict;
     }
 
-    // ✅ الـ DTO المعدل (حذفنا MaxStatus نهائيًا)
-
+    
     public async Task<Message?> GetByIdWithReceiptsAsync(MessageId messageId, CancellationToken ct = default)
     {
         return await _context.Messages
@@ -361,7 +329,6 @@ WHERE r.rn = 1
     }
 }
 
-// ✅ DTO بسيط للـ unread counts (record عشان يكون lightweight)
 public record UnreadDto(Guid RoomId, int Count);
 public sealed class LastMessageRow
 {
@@ -376,6 +343,5 @@ public sealed class LastMessageRow
     public int DeliveredCount { get; set; }
     public int ReadCount { get; set; }
 }
-// في MessageRepository.cs
 
 

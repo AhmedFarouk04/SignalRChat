@@ -44,7 +44,6 @@ public sealed class CreateGroupChatHandler : IRequestHandler<CreateGroupChatComm
         if (trimmedName.Length > 50)
             throw new ArgumentException("Group name cannot exceed 50 characters.");
 
-        // ✅ فلترة قوية جدًا + رسالة واضحة
         var validMembers = command.Members
             .Where(m => m != Guid.Empty && m != command.CreatorId.Value)
             .Distinct()
@@ -72,29 +71,18 @@ public sealed class CreateGroupChatHandler : IRequestHandler<CreateGroupChatComm
         await _messages.AddAsync(sysMsg, ct);
         await _unitOfWork.CommitAsync(ct);
 
-        var msgDto = new MessageDto
+                var msgDto = new MessageDto
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
-            SenderId = Guid.Empty,  // System ID
+            SenderId = Guid.Empty,
             Content = sysMsg.Content,
             CreatedAt = sysMsg.CreatedAt,
             IsSystemMessage = true
         };
         await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
 
-        await _broadcaster.RoomUpdatedAsync(new RoomUpdatedDto
-        {
-            RoomId = room.Id.Value,
-            MessageId = msgDto.Id,
-            SenderId = command.CreatorId.Value,
-            Preview = "Group created",
-            CreatedAt = msgDto.CreatedAt,
-            UnreadDelta = 0
-        }, recipients);
-
-        var now = DateTime.UtcNow;
-        var dto = new RoomListItemDto
+                        await _broadcaster.RoomUpsertedAsync(new RoomListItemDto
         {
             Id = room.Id.Value,
             Name = room.Name,
@@ -102,13 +90,12 @@ public sealed class CreateGroupChatHandler : IRequestHandler<CreateGroupChatComm
             UnreadCount = 0,
             IsMuted = false,
             LastMessageAt = sysMsg.CreatedAt,
-            LastMessagePreview = null,  // ✅ من غير Preview
+            LastMessagePreview = systemText,
             LastMessageId = sysMsg.Id.Value,
-            LastMessageSenderId = Guid.Empty,  // ✅ System ID
+            LastMessageSenderId = Guid.Empty,
+            IsSystemMessage = true,
             LastMessageStatus = null
-        };
-
-        await _broadcaster.RoomUpsertedAsync(dto, recipients);
+        }, recipients);
 
         return room;
     }

@@ -76,7 +76,7 @@ public sealed class LocalAttachmentService : IAttachmentService
     Size: entity.Size,
     DownloadUrl: $"/api/attachments/{entity.Id}",
     CreatedAt: entity.CreatedAt,
-    CanDelete: false  // ✅ هنا أضفناها - في وقت الـ upload، المالك هو اللي رفعه فسيتمكن من حذفه لاحقاً
+    CanDelete: false  
 );
     }
 }

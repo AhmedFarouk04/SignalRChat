@@ -31,8 +31,7 @@ public class Message
     public IReadOnlyCollection<MessageDeletion> Deletions => _deletions.AsReadOnly();
     public int DeliveredCount => _receipts.Count(r => r.Status >= MessageStatus.Delivered);
     public int ReadCount => _receipts.Count(r => r.Status >= MessageStatus.Read);
-    public bool IsBlocked { get; private set; } // ✅ ضيف السطر ده
-
+    public bool IsBlocked { get; private set; } 
     public bool IsSystemMessage { get; private set; }
     public SystemMessageType? SystemMessageType { get; private set; }
     private Message() { }
@@ -52,11 +51,9 @@ public class Message
         CreatedAt = DateTime.UtcNow;
         ReplyToMessageId = replyToMessageId;
         IsBlocked = isBlocked;
-        IsSystemMessage = false;                    // ← جديد
-        SystemMessageType = null;
+        IsSystemMessage = false;                            SystemMessageType = null;
 
-        // ✅ تعديل هنا: نضيف RoomId للـ Receipt
-        foreach (var userId in recipients)
+                foreach (var userId in recipients)
         {
             _receipts.Add(new MessageReceipt(Id, roomId, userId));
         }
@@ -71,17 +68,14 @@ public class Message
         ));
 
     }
-    // Delete For Me - يضيف record في _deletions
-    public void DeleteForUser(UserId userId)
+        public void DeleteForUser(UserId userId)
     {
         if (_deletions.Any(d => d.UserId == userId))
-            return; // already deleted for this user
-
+            return; 
         _deletions.Add(new MessageDeletion(Id, userId));
     }
 
-    // Delete For Everyone - الـ hard delete الموجود + بس نحدث الـ Content
-    public void DeleteForEveryone(UserId requestedBy)
+        public void DeleteForEveryone(UserId requestedBy)
     {
         if (IsDeleted) return;
 
@@ -90,8 +84,7 @@ public class Message
         Content = "This message was deleted";
     }
 
-    // Helper - هينفعنا في الـ Query layer
-    public bool IsDeletedForUser(UserId userId)
+        public bool IsDeletedForUser(UserId userId)
     {
         return IsDeleted || _deletions.Any(d => d.UserId == userId);
     }
@@ -99,14 +92,12 @@ public class Message
         RoomId roomId,
         string content,
         SystemMessageType systemType,
-        IEnumerable<UserId> recipients)   // recipients مهم عشان الـ receipts
-    {
+        IEnumerable<UserId> recipients)       {
         var msg = new Message
         {
             Id = MessageId.New(),
             RoomId = roomId,
-            SenderId = UserId.System,          // لو عندك UserId.System وإلا استخدم Guid خاص
-            Content = content,
+            SenderId = UserId.System,                      Content = content,
             CreatedAt = DateTime.UtcNow,
             IsSystemMessage = true,
             SystemMessageType = systemType
@@ -115,8 +106,7 @@ public class Message
         foreach (var userId in recipients)
             msg._receipts.Add(new MessageReceipt(msg.Id, roomId, userId));
 
-        // مش هنضيف MessageSentEvent عشان مش رسالة عادية
-        return msg;
+                return msg;
     }
     public void MarkDelivered(UserId userId)
     {
@@ -217,8 +207,7 @@ public class Message
     }
     public void ClearAllReceipts()
     {
-        _receipts.Clear(); // امسح Read و Delivered كلهم
-    }
+        _receipts.Clear();     }
     public MessageReceiptStats GetReceiptStats()
     {
         var receipts = _receipts.ToList();

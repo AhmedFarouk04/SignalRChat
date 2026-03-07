@@ -20,7 +20,7 @@ public sealed class UsersController : ControllerBase
     public async Task<IActionResult> Search(
         [FromQuery] string query,
         [FromQuery] int take = 20,
-        [FromQuery] Guid? excludeUserId = null,  // ✅ أضف هذا
+        [FromQuery] Guid? excludeUserId = null,  
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -28,7 +28,7 @@ public sealed class UsersController : ControllerBase
 
         take = Math.Clamp(take, 1, 50);
 
-        var result = await _users.SearchAsync(query.Trim(), excludeUserId, take, ct);  // ✅ تعديل
+        var result = await _users.SearchAsync(query.Trim(), excludeUserId, take, ct);  
         return Ok(result);
     }
 }

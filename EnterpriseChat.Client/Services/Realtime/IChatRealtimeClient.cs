@@ -16,7 +16,8 @@ public interface IChatRealtimeClient
     event Action<Guid>? UserOffline;
     event Action<Guid, DateTime>? UserLastSeenUpdated;
     event Action<Guid, int>? RoomPresenceUpdated;
-
+        event Action<Guid>? ChatDeleted;
+    event Action<Guid, bool>? ChatCleared;
     event Action<Guid, Guid>? TypingStarted;
     event Action<Guid, Guid>? TypingStopped;
 
@@ -36,34 +37,22 @@ public interface IChatRealtimeClient
     event Action<Guid, Guid>? AdminDemoted;
     event Action<Guid, Guid>? OwnerTransferred;
     event Action<RoomListItemDto>? RoomUpserted;
-    event Action<Guid, string>? MessageUpdated; // (messageId, newContent)
-    public event Action<Guid, bool>? MessageDeleted;
+    event Action<Guid, string>? MessageUpdated;     public event Action<Guid, bool>? MessageDeleted;
 
-    // في IChatRealtimeClient.cs أضف:
-    event Action<Guid, Guid, int> MessageStatusUpdated; // messageId, userId, status
-    event Action<Guid, Guid, bool>? MemberRoleChanged;
-    event Action<Guid, Guid, int, bool> MessageReactionUpdated; // messageId, userId, reactionType, isNewReaction
-    event Action<Guid, Guid?>? MessagePinned; // (roomId, messageId)
-     event Action<List<Guid>>? InitialOnlineUsersReceived;
+        event Action<Guid, Guid, int> MessageStatusUpdated;     event Action<Guid, Guid, bool>? MemberRoleChanged;
+    event Action<Guid, Guid, int, bool> MessageReactionUpdated;     event Action<Guid, Guid?>? MessagePinned;      event Action<List<Guid>>? InitialOnlineUsersReceived;
 
     event Action<Guid, Guid, int, int, int>? MessageReceiptStatsUpdated;
-    event Action<Guid, Guid>? MessageDelivered;  // messageId, roomId
-    event Action<Guid, Guid>? MessageRead;       // messageId, roomId
-    event Action<Guid, Guid, Guid>? MessageDeliveredToAll; // messageId, senderId, roomId
-    event Action<Guid, Guid, Guid>? MessageReadToAll;      // messageId, senderId, roomId
+    event Action<Guid, Guid>? MessageDelivered;      event Action<Guid, Guid>? MessageRead;           event Action<Guid, Guid, Guid>? MessageDeliveredToAll;     event Action<Guid, Guid, Guid>? MessageReadToAll;      
+        event Action<Guid, List<Guid>>? InitialTypingUsersReceived;
 
-    // ➕ حدث جديد
-    event Action<Guid, List<Guid>>? InitialTypingUsersReceived;
-
-    // ➕ دالة جديدة
-    IReadOnlyList<Guid> GetTypingUsersInRoom(Guid roomId);
+        IReadOnlyList<Guid> GetTypingUsersInRoom(Guid roomId);
     Task PinMessageAsync(Guid roomId, Guid? messageId);
     Task SendMessageWithReplyAsync(Guid roomId, MessageModel message);
     Task StopTypingImmediatelyAsync(Guid roomId);
     Task ConnectAsync();
     Task DisconnectAsync(bool force = false);
-    // ضيف السطر ده في نهاية الـ Interface قبل القوس الأخير
-    Task NotifyMemberRoleChangedAsync(Guid roomId, Guid userId, bool isAdmin);
+        Task NotifyMemberRoleChangedAsync(Guid roomId, Guid userId, bool isAdmin);
     Task JoinRoomAsync(Guid roomId);
     Task LeaveRoomAsync(Guid roomId);
 
@@ -73,7 +62,6 @@ public interface IChatRealtimeClient
     Task NotifyTypingAsync(Guid roomId);
     Task<bool> CheckUserOnlineStatus(Guid userId);
     Task<object> GetUserOnlineStatus(Guid userId);
-    Task<List<Guid>> GetOnlineUsersAsync(); // ✅ أضف هذا السطر أيضاً
-
+    Task<List<Guid>> GetOnlineUsersAsync(); 
 
 }

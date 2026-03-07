@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Application/Features/Messaging/Commands/ReactToMessageCommand.cs
-using EnterpriseChat.Application.DTOs;
+﻿using EnterpriseChat.Application.DTOs;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.ValueObjects;
 using MediatR;

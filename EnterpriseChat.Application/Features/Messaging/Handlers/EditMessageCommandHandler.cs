@@ -9,8 +9,7 @@ namespace EnterpriseChat.Application.Features.Messaging.Handlers
 {
 
 
-    // EnterpriseChat.Application/Features/Messaging/Handlers/EditMessageCommandHandler.cs
-    public sealed class EditMessageCommandHandler : IRequestHandler<EditMessageCommand, Unit>
+        public sealed class EditMessageCommandHandler : IRequestHandler<EditMessageCommand, Unit>
     {
         private readonly IMessageRepository _messageRepo;
         private readonly IUnitOfWork _uow;
@@ -39,14 +38,11 @@ namespace EnterpriseChat.Application.Features.Messaging.Handlers
                 throw new InvalidOperationException("Cannot edit a deleted message.");
 
             message.Edit(request.NewContent);
-            message.ClearReadReceipts(); // ✅ امسح Read بس
-                                         // ✅ رجّع لـ Delivered - الناس لازم تقرأ التعديل
-
+            message.ClearReadReceipts();                                          
             await _uow.CommitAsync(ct);
 
             var members = await _messageRepo.GetRoomMemberIdsAsync(message.RoomId, ct);
-            var stats = message.GetReceiptStats(); // ← دلوقتي read=0, delivered=N
-
+            var stats = message.GetReceiptStats(); 
             await _broadcaster.MessageReceiptStatsUpdatedAsync(
                 message.Id.Value, message.RoomId.Value,
                 stats.TotalRecipients, stats.DeliveredCount, stats.ReadCount);

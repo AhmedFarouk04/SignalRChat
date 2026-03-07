@@ -21,15 +21,12 @@
 
         public async Task BlockChangedAsync(Guid blockerId, Guid blockedId, bool blocked, CancellationToken ct = default)
         {
-            // اللي عمل البلوك
             await _hub.Clients.User(blockerId.ToString())
                 .SendAsync("UserBlockedByMeChanged", blockedId, blocked, ct);
 
-            // اللي اتعمله بلوك
             await _hub.Clients.User(blockedId.ToString())
                 .SendAsync("UserBlockedMeChanged", blockerId, blocked, ct);
 
-            // Presence hide (اختياري لكن مفيد)
             if (blocked)
                 await HideUsersFromEachOtherAsync(blockerId, blockedId, ct);
         }

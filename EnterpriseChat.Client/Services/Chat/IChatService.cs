@@ -31,9 +31,10 @@ public interface IChatService
     Task<MessageReactionsModel?> ReactToMessageAsync(Guid messageId, ReactionType reactionType, CancellationToken ct = default);
     Task<MessageReactionsModel?> GetMessageReactionsAsync(Guid messageId, CancellationToken ct = default);
 
-    // ✅ تعريف واحد بس لـ PinMessage
-    Task PinMessageAsync(Guid roomId, Guid? messageId, string? duration = null, Guid? unpinMessageId = null);
+        Task PinMessageAsync(Guid roomId, Guid? messageId, string? duration = null, Guid? unpinMessageId = null);
     Task<List<Guid>> GetPinnedMessagesAsync(Guid roomId);
+    Task DeleteChatAsync(Guid roomId);
+    Task ClearChatAsync(Guid roomId, bool forEveryone = false);
 
     Task<MessageDto?> SendMessageWithReplyAsync(Guid roomId, string content, ReplyInfoModel? replyInfo);
     Task<IReadOnlyList<MessageModel>> SearchMessagesAsync(Guid roomId, string term, int take = 50);

@@ -1,22 +1,43 @@
 ﻿@using EnterpriseChat.Client.Services.Realtime
+@using EnterpriseChat.Client.Services.Ui
 @inherits LayoutComponentBase
 @inject IChatRealtimeClient Realtime
+@inject GlobalNotificationHandler GlobalNotification
+@inject NotificationSoundService SoundService
+@implements IDisposable
+
 <div class="app-layout">
     <aside class="sidebar">
         <Sidebar />
     </aside>
-
     <section class="main">
         <div class="content">
             @Body
         </div>
     </section>
 </div>
-
 <ToastHost />
-@code{
+
+@code {
     protected override async Task OnInitializedAsync()
-{
-    await Realtime.ConnectAsync(); // connect global مرة واحدة لكل الـ app
-}
+    {
+        await Realtime.ConnectAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+                        await SoundService.InitializeAsync("/sounds/notify.mp3");
+
+                        GlobalNotification.Subscribe();
+
+            Console.WriteLine("[MainLayout] ✅ Sound initialized & GlobalNotification subscribed");
+        }
+    }
+
+    public void Dispose()
+    {
+        GlobalNotification.Unsubscribe();
+    }
 }

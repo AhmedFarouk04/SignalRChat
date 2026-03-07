@@ -44,7 +44,6 @@ public sealed class UserDirectoryService : IUserDirectoryService
             .Select(u => new UserDirectoryItemDto(u.Id, u.DisplayName, u.Email))
             .ToListAsync(ct);
     }
-    // في UserDirectoryService.cs
     public async Task<UserSummaryDto?> GetUserSummaryAsync(UserId userId, CancellationToken ct = default)
     {
         var user = await _db.Users

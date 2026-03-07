@@ -8,8 +8,7 @@ public sealed class MessageReceipt
     public MessageId MessageId { get; private set; }
     public UserId UserId { get; private set; }
 
-    // ✅ إضافة RoomId
-    public RoomId RoomId { get; private set; }
+        public RoomId RoomId { get; private set; }
 
     public MessageStatus Status { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -18,12 +17,10 @@ public sealed class MessageReceipt
 
     public MessageReceipt(
         MessageId messageId,
-        RoomId roomId,  // ✅ إضافة parameter
-        UserId userId)
+        RoomId roomId,          UserId userId)
     {
         MessageId = messageId;
-        RoomId = roomId;  // ✅ تعيين القيمة
-        UserId = userId;
+        RoomId = roomId;          UserId = userId;
         Status = MessageStatus.Sent;
         UpdatedAt = DateTime.UtcNow;
     }

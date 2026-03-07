@@ -20,6 +20,7 @@ public class MessageModel : INotifyPropertyChanged
             }
         }
     }
+    public bool IsSystemMessage { get; set; }
     public bool IsBeingEdited { get; set; } = false;
 
     private bool _shouldForceRead;
@@ -33,14 +34,11 @@ public class MessageModel : INotifyPropertyChanged
                 _shouldForceRead = value;
                 OnPropertyChanged();
 
-                // ✅ لو القيمة اتغيرت لـ true، غير PersonalStatus على طول
-               
+                               
             }
         }
     }
-    // MessageModel.cs - أضف property جديدة
-    private bool _isConfirmedRead; // ← السيرفر أكد إن الشخص قراها فعلاً
-
+        private bool _isConfirmedRead; 
     public bool IsConfirmedRead
     {
         get => _isConfirmedRead;

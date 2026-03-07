@@ -4,18 +4,11 @@
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddPerformanceIndexes : Migration
+        public partial class AddPerformanceIndexes : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // ─────────────────────────────────────────────────────────────
-            // Messages: أهم index في التطبيق
-            // يُستخدم في: GetMessages, GetUnreadCount, GetLastMessages
-            // بيغطي الـ query: WHERE RoomId = X ORDER BY CreatedAt DESC
-            // ─────────────────────────────────────────────────────────────
-            migrationBuilder.Sql(@"
+                                                                        migrationBuilder.Sql(@"
                 IF NOT EXISTS (
                     SELECT 1 FROM sys.indexes
                     WHERE name = 'IX_Messages_RoomId_CreatedAt'
@@ -26,11 +19,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     INCLUDE (SenderId, Content, IsBlocked, IsDeleted, IsSystemMessage, SystemMessageType);
             ");
 
-            // ─────────────────────────────────────────────────────────────
-            // Messages: للـ unread count query
-            // WHERE RoomId = X AND SenderId <> Y AND IsDeleted = 0
-            // ─────────────────────────────────────────────────────────────
-            migrationBuilder.Sql(@"
+                                                            migrationBuilder.Sql(@"
                 IF NOT EXISTS (
                     SELECT 1 FROM sys.indexes
                     WHERE name = 'IX_Messages_RoomId_SenderId_IsDeleted'
@@ -41,12 +30,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     INCLUDE (CreatedAt, IsSystemMessage);
             ");
 
-            // ─────────────────────────────────────────────────────────────
-            // MessageReceipts: للـ unread bulk query
-            // WHERE UserId = X AND Status < Read AND RoomId = Y
-            // موجود في الـ snapshot بس بدون INCLUDE — هنحسنه
-            // ─────────────────────────────────────────────────────────────
-            migrationBuilder.Sql(@"
+                                                                        migrationBuilder.Sql(@"
                 IF NOT EXISTS (
                     SELECT 1 FROM sys.indexes
                     WHERE name = 'IX_MessageReceipts_UserId_Status_RoomId_Covering'
@@ -57,10 +41,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     INCLUDE (MessageId, UpdatedAt);
             ");
 
-            // ─────────────────────────────────────────────────────────────
-            // MessageReceipts: lookup by MessageId (split query)
-            // ─────────────────────────────────────────────────────────────
-            migrationBuilder.Sql(@"
+                                                migrationBuilder.Sql(@"
                 IF NOT EXISTS (
                     SELECT 1 FROM sys.indexes
                     WHERE name = 'IX_MessageReceipts_MessageId_Covering'
@@ -71,11 +52,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     INCLUDE (UserId, Status, RoomId);
             ");
 
-            // ─────────────────────────────────────────────────────────────
-            // ChatRoomMembers: lookup by UserId (GetForUserAsync)
-            // موجود بالفعل لكن بدون INCLUDE
-            // ─────────────────────────────────────────────────────────────
-            migrationBuilder.Sql(@"
+                                                            migrationBuilder.Sql(@"
                 IF NOT EXISTS (
                     SELECT 1 FROM sys.indexes
                     WHERE name = 'IX_ChatRoomMembers_UserId_Covering'
@@ -86,11 +63,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     INCLUDE (RoomId, LastReadMessageId, LastReadAt, IsAdmin, IsOwner);
             ");
 
-            // ─────────────────────────────────────────────────────────────
-            // MessageDeletions: JOIN مع Messages (GetMessagesAsync)
-            // WHERE UserId = X → يجيب MessageIds
-            // ─────────────────────────────────────────────────────────────
-            migrationBuilder.Sql(@"
+                                                            migrationBuilder.Sql(@"
                 IF NOT EXISTS (
                     SELECT 1 FROM sys.indexes
                     WHERE name = 'IX_MessageDeletions_UserId_MessageId'
@@ -102,8 +75,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
             ");
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("DROP INDEX IF EXISTS IX_Messages_RoomId_CreatedAt ON Messages;");
             migrationBuilder.Sql("DROP INDEX IF EXISTS IX_Messages_RoomId_SenderId_IsDeleted ON Messages;");

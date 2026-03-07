@@ -1,6 +1,5 @@
 ﻿using EnterpriseChat.Domain.Entities;
-using EnterpriseChat.Domain.ValueObjects;  // ✅ هذا هو المفقود!
-using Microsoft.EntityFrameworkCore;
+using EnterpriseChat.Domain.ValueObjects;  using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace EnterpriseChat.Infrastructure.Persistence.Configurations;
@@ -22,8 +21,7 @@ public sealed class ChatRoomMemberConfiguration : IEntityTypeConfiguration<ChatR
             .HasColumnName("UserId")
             .IsRequired();
 
-        // ✅ Shadow property nullable
-        builder.Property<Guid?>("ChatUserId")
+                builder.Property<Guid?>("ChatUserId")
             .HasColumnName("ChatUserId")
             .IsRequired(false);
 
@@ -57,8 +55,7 @@ public sealed class ChatRoomMemberConfiguration : IEntityTypeConfiguration<ChatR
             .HasPrincipalKey(r => r.Id)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // ✅ العلاقة مع ChatUser - Nullable FK مع SetNull
-        builder.HasOne<ChatUser>()
+                builder.HasOne<ChatUser>()
             .WithMany()
             .HasForeignKey("ChatUserId")
             .HasPrincipalKey(u => u.Id)

@@ -1,5 +1,4 @@
 ﻿using EnterpriseChat.Domain.ValueObjects;
 
-namespace EnterpriseChat.Domain.Common; // أو namespace مناسب في Domain
-
+namespace EnterpriseChat.Domain.Common; 
 public record MessageReadInfo(MessageId MessageId, UserId SenderId);

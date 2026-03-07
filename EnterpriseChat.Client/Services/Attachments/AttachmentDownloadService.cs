@@ -12,8 +12,7 @@ public sealed class AttachmentDownloadService
         _js = js;
     }
 
-    // ✅ ده اللي هنستخدمه من ChatAttachments
-    public async Task DownloadAsync(IApiClient.ApiFile file)
+        public async Task DownloadAsync(IApiClient.ApiFile file)
     {
         await _js.InvokeVoidAsync(
             "downloadFileFromStream",

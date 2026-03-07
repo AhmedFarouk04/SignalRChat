@@ -7,16 +7,33 @@ public sealed class ChatRoomMember
     public RoomId RoomId { get; private set; }
     public UserId UserId { get; private set; }
 
-    // ✅ Shadow Property للـ EF Core (مش هتظهر في الـ Domain)
-    // private Guid UserIdGuid { get; set; }
-
+        
     public bool IsOwner { get; private set; }
     public bool IsAdmin { get; private set; }
     public DateTime JoinedAt { get; private set; }
 
     public MessageId? LastReadMessageId { get; private set; }
     public DateTime? LastReadAt { get; private set; }
+    public bool IsDeleted { get; private set; }
+    public DateTime? DeletedAt { get; private set; }
+    public DateTime? ClearedAt { get; private set; }
 
+    public void DeleteForMe()
+    {
+        IsDeleted = true;
+        DeletedAt = DateTime.UtcNow;
+    }
+
+    public void Restore()
+    {
+        IsDeleted = false;
+        DeletedAt = null;
+            }
+
+    public void ClearChat()
+    {
+        ClearedAt = DateTime.UtcNow;
+    }
     private ChatRoomMember() { }
 
     private ChatRoomMember(

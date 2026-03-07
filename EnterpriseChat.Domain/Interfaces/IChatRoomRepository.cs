@@ -8,8 +8,7 @@ public interface IChatRoomRepository
     Task AddAsync(ChatRoom room, CancellationToken cancellationToken = default);
     Task<ChatRoom?> GetByIdReadOnlyAsync(RoomId roomId, CancellationToken ct = default);
 
-    // للتحديث (مع tracking)
-    Task<ChatRoom?> GetByIdForUpdateAsync(RoomId roomId, CancellationToken ct = default);
+        Task<ChatRoom?> GetByIdForUpdateAsync(RoomId roomId, CancellationToken ct = default);
     Task<ChatRoom?> GetByIdAsync(RoomId roomId, CancellationToken cancellationToken = default);
 
     Task<ChatRoom?> GetByIdWithMembersAsync(RoomId roomId, CancellationToken cancellationToken = default);
@@ -24,4 +23,5 @@ public interface IChatRoomRepository
     Task<ChatRoom?> FindPrivateRoomAsync(UserId a, UserId b, CancellationToken ct = default);
     Task<IReadOnlyList<ChatRoom>> GetForUserAsync(UserId userId, CancellationToken cancellationToken = default);
     Task DeleteAsync(ChatRoom room, CancellationToken ct = default);
+    void Update(ChatRoom room);
 }

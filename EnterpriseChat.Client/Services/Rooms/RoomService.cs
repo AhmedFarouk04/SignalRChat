@@ -23,30 +23,34 @@ public sealed class RoomService : IRoomService
             Name = d.Name ?? "Room",
             Type = d.Type ?? "Group",
             OtherUserId = d.OtherUserId,
-            OtherDisplayName = d.OtherDisplayName,
-            IsMuted = d.IsMuted,
+            OtherDisplayName = d.OtherDisplayName ?? GetFallbackName(d.OtherUserId),             IsMuted = d.IsMuted,
             UnreadCount = d.UnreadCount,
             LastMessageAt = d.LastMessageAt,
             LastMessagePreview = d.LastMessagePreview,
             LastMessageId = d.LastMessageId,
             LastMessageSenderId = d.LastMessageSenderId,
             LastMessageStatus = d.LastMessageStatus is null ? null : (MessageStatus?)(int)d.LastMessageStatus.Value,
-            LastSeenAt = d.LastSeenAt ,
+            LastSeenAt = d.LastSeenAt,
             MemberNames = d.MemberNames ?? new()
         }).ToList();
+    }
+
+    private string GetFallbackName(Guid? userId)
+    {
+        if (!userId.HasValue || userId.Value == Guid.Empty)
+            return "User";
+        return $"User...{userId.Value.ToString()[..4]}";
     }
     public async Task<List<UserModel>> GetGroupMembersAsync(Guid groupId)
     {
         try
         {
-            // استخدم HttpClient مباشرة عشان نشوف الاستجابة
-            var httpClient = new HttpClient();
+                        var httpClient = new HttpClient();
             var response = await httpClient.GetAsync($"https://localhost:7188/api/groups/{groupId}/members");
             var json = await response.Content.ReadAsStringAsync();
             Console.WriteLine($"[DEBUG] Raw API response for group {groupId}: {json}");
 
-            // حاول تحولها
-            var members = await _api.GetAsync<List<UserModel>>($"api/groups/{groupId}/members");
+                        var members = await _api.GetAsync<List<UserModel>>($"api/groups/{groupId}/members");
             return members ?? new List<UserModel>();
         }
         catch (Exception ex)

@@ -97,10 +97,11 @@ public sealed class ChatController : BaseController
     public async Task<IActionResult> GetOrCreatePrivateChat(Guid userId, CancellationToken ct)
     {
         var dto = await _mediator.Send(
-            new GetOrCreatePrivateRoomCommand(GetCurrentUserId(), new UserId(userId)),
-            ct);
+            new GetOrCreatePrivateRoomCommand(GetCurrentUserId(), new UserId(userId)), ct);
 
-        return Ok(dto); // ✅ { id, type }
+     
+
+        return Ok(dto);
     }
 
 
@@ -110,11 +111,9 @@ public sealed class ChatController : BaseController
         var me = GetCurrentUserId();
         await _mediator.Send(new BlockUserCommand(me, new UserId(userId)), ct);
 
-        // ✅ تحديث فوري: إخفاء حالة الأونلاين عند الطرفين فوراً
         await _hub.Clients.User(me.Value.ToString()).SendAsync("UserOffline", userId, ct);
         await _hub.Clients.User(userId.ToString()).SendAsync("UserOffline", me.Value, ct);
 
-        // ✅ إرسال Last Seen للمحظور (اختياري)
         var presenceService = HttpContext.RequestServices.GetRequiredService<IPresenceService>();
         var lastSeen = await presenceService.GetLastSeenAsync(new UserId(userId));
         if (lastSeen.HasValue)
@@ -157,8 +156,7 @@ public sealed class ChatController : BaseController
 
 
 
-    // POST /api/chat/messages/{messageId}/delivered
-    [HttpPost("messages/{messageId:guid}/delivered")]
+        [HttpPost("messages/{messageId:guid}/delivered")]
     public async Task<IActionResult> MarkMessageDelivered(Guid messageId, CancellationToken ct)
     {
         if (messageId == Guid.Empty)
@@ -171,8 +169,7 @@ public sealed class ChatController : BaseController
         return NoContent();
     }
 
-    // POST /api/chat/messages/{messageId}/read
-    [HttpPost("messages/{messageId:guid}/read")]
+        [HttpPost("messages/{messageId:guid}/read")]
     public async Task<IActionResult> MarkMessageRead(Guid messageId, CancellationToken ct)
     {
         if (messageId == Guid.Empty)
@@ -185,8 +182,7 @@ public sealed class ChatController : BaseController
         return NoContent();
     }
 
-    // POST /api/chat/rooms/{roomId}/delivered
-    [HttpPost("rooms/{roomId:guid}/delivered")]
+        [HttpPost("rooms/{roomId:guid}/delivered")]
     public async Task<IActionResult> DeliverRoomMessages(Guid roomId, CancellationToken ct)
     {
         if (roomId == Guid.Empty)
@@ -199,8 +195,7 @@ public sealed class ChatController : BaseController
         return NoContent();
     }
 
-    // POST /api/chat/rooms/{roomId}/read
-    [HttpPost("rooms/{roomId:guid}/read")]
+        [HttpPost("rooms/{roomId:guid}/read")]
     public async Task<IActionResult> MarkRoomRead(Guid roomId, [FromBody] MarkRoomReadRequest request, CancellationToken ct)
     {
         if (roomId == Guid.Empty)
@@ -230,10 +225,8 @@ public sealed class ChatController : BaseController
 
         var me = GetCurrentUserId();
 
-        // تنفيذ الأمر في الداتابيز
         await _mediator.Send(new UnblockUserCommand(me, new UserId(userId)), ct);
 
-        // ✅ التحديث اللحظي عبر SignalR
         try
         {
             await _hub.Clients.User(me.Value.ToString()).SendAsync("CheckUserOnline", userId, ct);
@@ -299,7 +292,7 @@ public async Task<IActionResult> UploadAttachment(
         Guid roomId,
         [FromServices] ChatDbContext db,
         [FromServices] IRoomAuthorizationService auth,
-        [FromServices] IUserDirectoryService userDirectory, // هنحتاجها
+        [FromServices] IUserDirectoryService userDirectory, 
         [FromQuery] int skip = 0,
         [FromQuery] int take = 50,
         CancellationToken ct = default)
@@ -311,7 +304,6 @@ public async Task<IActionResult> UploadAttachment(
         var currentUserId = GetCurrentUserId();
         await auth.EnsureUserIsMemberAsync(new RoomId(roomId), currentUserId, ct);
 
-        // جلب معلومات العضو الحالي لمعرفة صلاحياته
         var currentUser = await userDirectory.GetUserAsync(currentUserId, ct);
         var room = await db.ChatRooms
             .Include(r => r.Members)
@@ -334,9 +326,7 @@ public async Task<IActionResult> UploadAttachment(
                 a.Size,
                 $"/api/attachments/{a.Id}",
                 a.CreatedAt,
-                // ✅ منطق الصلاحية:
-                // Owner أو Admin يقدر يحذف أي حاجة
-                // المستخدم العادي يقدر يحذف ملفاته بس
+               
                 isOwner || isAdmin || a.UploaderId == currentUserId.Value
             ))
             .ToListAsync(ct);
@@ -411,7 +401,6 @@ public async Task<IActionResult> UploadAttachment(
                     .ToList();
     }
 
-    // ... الكود الحالي ...
 
     private async Task<List<UserSummaryDto>> GetUserSummaries(
         IEnumerable<UserId> userIds,
@@ -430,7 +419,6 @@ public async Task<IActionResult> UploadAttachment(
                     })
                     .ToList();
     }
-    // في ChatController.cs أضف:
     [HttpPost("messages/{messageId:guid}/react")]
     [ProducesResponseType(typeof(MessageReactionsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> ReactToMessage(
@@ -498,13 +486,11 @@ public async Task<IActionResult> UploadAttachment(
             });
         }
 
-        // ✅ "You" أول واحد
         entries = entries
             .OrderByDescending(e => e.IsMe)
             .ThenByDescending(e => e.CreatedAt)
             .ToList();
 
-        // ✅ بناء الـ Tabs
         var tabs = new List<ReactionTabDto> { new() { Type = null, Count = entries.Count } };
         tabs.AddRange(
             reactions
@@ -548,7 +534,6 @@ public async Task<IActionResult> UploadAttachment(
     [HttpPatch("messages/{messageId:guid}")]
     public async Task<IActionResult> EditMessage(Guid messageId, [FromBody] string newContent, CancellationToken ct)
     {
-        // شيل الـ .Value من GetCurrentUserId()
         await _mediator.Send(new EditMessageCommand(messageId, GetCurrentUserId(), newContent), ct);
         return NoContent();
     }
@@ -563,16 +548,14 @@ public async Task<IActionResult> UploadAttachment(
             ct);
         return NoContent();
     }
-    // EnterpriseChat.API/Controllers/ChatController.cs
-    // EnterpriseChat.API/Controllers/ChatController.cs
-
+        
     [HttpGet("rooms/{roomId}/messages/search")]
     public async Task<ActionResult<IReadOnlyList<MessageReadDto>>> Search(
         [FromRoute] Guid roomId,
         [FromQuery] string query,
         [FromQuery] int take = 50)
     {
-        var userId = User.GetUserId(); // تأكد أنها ترجع Guid
+        var userId = User.GetUserId(); 
         if (userId == null) return Unauthorized();
 
         return Ok(await _mediator.Send(new SearchMessagesQuery(roomId, userId.Value, query, take)));

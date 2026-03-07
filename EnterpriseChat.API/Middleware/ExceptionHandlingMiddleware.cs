@@ -22,16 +22,14 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            // لو الـ response بدأ، ماينفعش نغيّر status/body
             if (context.Response.HasStarted)
             {
                 _logger.LogError(ex, "Exception occurred after response started.");
-                throw; // الأفضل هنا تسيبه يطلع (أو return لو عايز تتجاهله)
+                throw;
             }
 
             var isAuthenticated = context.User?.Identity?.IsAuthenticated == true;
 
-            // Logging مناسب (مش كل حاجة Error)
             if (ex is AuthException)
                 _logger.LogWarning(ex, "Handled auth exception");
             else if (ex is UnauthorizedAccessException)
@@ -45,9 +43,7 @@ public sealed class ExceptionHandlingMiddleware
             {
                 AuthException aex => NormalizeStatusCode(aex.StatusCode),
 
-                // لو مش authenticated فعلاً -> 401
                 UnauthorizedAccessException when !isAuthenticated => (int)HttpStatusCode.Unauthorized,
-                // authenticated بس مش مسموح -> 403
                 UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,
 
                 KeyNotFoundException => (int)HttpStatusCode.NotFound,

@@ -44,11 +44,9 @@ public sealed class ChatUserConfiguration : IEntityTypeConfiguration<ChatUser>
         builder.Property(x => x.EmailOtpLastSentAtUtc)
             .IsRequired(false);
 
-        // ✅ Uniques
-        builder.HasIndex(x => x.Email).IsUnique();
+                builder.HasIndex(x => x.Email).IsUnique();
         builder.HasIndex(x => x.Username).IsUnique();
 
-        // optional: searching by displayname
-        builder.HasIndex(x => x.DisplayName);
+                builder.HasIndex(x => x.DisplayName);
     }
 }

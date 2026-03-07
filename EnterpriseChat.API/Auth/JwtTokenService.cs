@@ -25,7 +25,6 @@ public sealed class JwtTokenService
 
         var claims = new List<Claim>
         {
-            // ✅ لازم sub علشان BaseController + Hub يقروا نفس الحاجة
             new Claim("sub", userId.ToString()),
             new Claim("name", displayName ?? ""),
         };

@@ -38,8 +38,7 @@
         <ul class="rooms-list">
             @foreach (var x in items)
             {
-                var title = roomNames.TryGetValue(x.RoomId, out var n) ? n : x.RoomId.ToString();
-
+                var title = roomNames.TryGetValue(x.RoomId, out var n) ? n : "Deleted Chat";
                 <li class="user-row">
                     <div class="user-left">
                         <div class="user-avatar">🔕</div>
@@ -104,8 +103,7 @@
 
             items.AddRange(await Mod.GetMutedAsync());
 
-            // optional: fetch rooms list to resolve names
-            var rooms = await Rooms.GetRoomsAsync();
+                        var rooms = await Rooms.GetRoomsAsync();
             foreach (var r in rooms)
                 roomNames[r.Id] = string.IsNullOrWhiteSpace(r.OtherDisplayName) ? r.Name : (r.OtherDisplayName ?? r.Name);
         }

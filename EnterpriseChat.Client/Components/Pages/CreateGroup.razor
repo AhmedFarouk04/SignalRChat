@@ -197,8 +197,7 @@
         error = null;
         createModel.Submitted = true;
 
-        // فحص الاسم يدويًا
-        if (string.IsNullOrWhiteSpace(createModel.Name))
+                if (string.IsNullOrWhiteSpace(createModel.Name))
         {
             error = "Group name is required.";
             await InvokeAsync(StateHasChanged);

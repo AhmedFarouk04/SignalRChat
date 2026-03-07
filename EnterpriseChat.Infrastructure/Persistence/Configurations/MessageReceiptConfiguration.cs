@@ -15,8 +15,7 @@ public sealed class MessageReceiptConfiguration : IEntityTypeConfiguration<Messa
 
         builder.HasKey(x => new { x.MessageId, x.UserId });
 
-        // MessageId
-        builder.Property(x => x.MessageId)
+                builder.Property(x => x.MessageId)
             .HasConversion(
                 id => id.Value,
                 value => MessageId.From(value))
@@ -28,8 +27,7 @@ public sealed class MessageReceiptConfiguration : IEntityTypeConfiguration<Messa
 
         builder.Property(x => x.MessageId).IsRequired();
 
-        // ✅ RoomId (الجديد)
-        builder.Property(x => x.RoomId)
+                builder.Property(x => x.RoomId)
             .HasConversion(
                 id => id.Value,
                 value => new RoomId(value))
@@ -41,8 +39,7 @@ public sealed class MessageReceiptConfiguration : IEntityTypeConfiguration<Messa
 
         builder.Property(x => x.RoomId).IsRequired();
 
-        // UserId
-        builder.Property(x => x.UserId)
+                builder.Property(x => x.UserId)
             .HasConversion(
                 id => id.Value,
                 value => new UserId(value))
@@ -54,17 +51,13 @@ public sealed class MessageReceiptConfiguration : IEntityTypeConfiguration<Messa
 
         builder.Property(x => x.UserId).IsRequired();
 
-        // ✅ مهم جدًا: enum conversion
-        builder.Property(x => x.Status)
+                builder.Property(x => x.Status)
             .HasConversion<int>()
             .IsRequired();
 
         builder.Property(x => x.UpdatedAt).IsRequired();
 
-        // Indexes
-        builder.HasIndex(x => x.MessageId);
+                builder.HasIndex(x => x.MessageId);
         builder.HasIndex(x => x.UserId);
-        builder.HasIndex(x => x.RoomId);  // ✅ أضفنا Index للـ RoomId
-        builder.HasIndex(x => new { x.UserId, x.Status, x.RoomId }); // ✅ Index مركب للبحث السريع
-    }
+        builder.HasIndex(x => x.RoomId);          builder.HasIndex(x => new { x.UserId, x.Status, x.RoomId });     }
 }

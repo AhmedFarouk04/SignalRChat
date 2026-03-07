@@ -4,8 +4,7 @@ public sealed class MessageId : IEquatable<MessageId>
 {
     public Guid Value { get; }
 
-    // ✅ غير private إلى public
-    public MessageId(Guid value)
+        public MessageId(Guid value)
     {
         Value = value;
     }
@@ -14,8 +13,7 @@ public sealed class MessageId : IEquatable<MessageId>
     public bool IsEmpty => Value == Guid.Empty;
     public Guid ToGuid() => Value;
 
-    // ✅ إضافة operators للتساوي
-    public static bool operator ==(MessageId? left, MessageId? right)
+        public static bool operator ==(MessageId? left, MessageId? right)
     {
         if (ReferenceEquals(left, right)) return true;
         if (left is null || right is null) return false;

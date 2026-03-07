@@ -1,4 +1,4 @@
-﻿/* Layout & Page Structure */
+﻿
 .chat-page {
     height: 100vh;
     display: flex;
@@ -38,7 +38,7 @@
     min-height: 0;
 }
 
-/* Pinned Message Bar - WhatsApp Web List Style */
+
 .pinned-msg-bar {
     display: flex;
     align-items: center;
@@ -58,7 +58,7 @@
    
     min-width: fit-content;
 }
-
+عفث
 .pin-icon-small {
     font-size: 14px;
     color: var(--accent-main);
@@ -81,7 +81,7 @@
     text-align: left;
 }
 
-/* Pin Duration Modal - Project Theme */
+
 .pin-modal-backdrop {
     position: fixed;
     inset: 0;
@@ -169,16 +169,16 @@
 }
 
 .pinned-presets-container {
-    position: sticky; /* أو fixed حسب تصميمك */
+    position: sticky; 
     top: 0;
     z-index: 1000;
-    display: flex; /* تأكد إنه مش none */
+    display: flex; 
 }
 
-/* الـ container الأساسي لازم يكون له خلفية ووضعية واضحة */
+
 .topbar {
     position: relative;
-    z-index: 1001; /* أعلى من الرسائل */
+    z-index: 1001; 
     background: var(--bg-panel);
     flex-shrink: 0;
 }
@@ -192,10 +192,10 @@
     padding: 8px 16px;
     gap: 15px;
     cursor: pointer;
-    /* شيل sticky لو هي جوه الـ topbar وخليها تظهر بشكل طبيعي تحت العنوان */
+    
     position: relative;
     z-index: 1002;
-    animation: slideDown 0.3s ease; /* حركة خفيفة عشان تحس بظهورها */
+    animation: slideDown 0.3s ease; 
 }
 
 @keyframes slideDown {
@@ -215,11 +215,11 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    position: relative; /* ضيف ده */
+    position: relative; 
 }
 
-/* تأكد إن الـ topbar مش واخد overflow: hidden */
+
 .topbar {
-    flex-shrink: 0; /* عشان ميتكتمش لو الرسائل كتير */
+    flex-shrink: 0; 
     z-index: 10;
 }

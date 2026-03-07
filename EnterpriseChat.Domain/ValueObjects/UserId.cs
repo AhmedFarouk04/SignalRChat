@@ -6,8 +6,7 @@ public sealed class UserId : IEquatable<UserId>
 
     public UserId(Guid value)
     {
-        // ✅ نسمح بـ Guid.Empty خصيصًا للـ System Messages فقط
-        if (value == Guid.Empty)
+                if (value == Guid.Empty)
         {
             Value = Guid.Empty;
             return;
@@ -15,8 +14,7 @@ public sealed class UserId : IEquatable<UserId>
 
         Value = value;
     }
-    // ✅ خاصية ثابتة واضحة وجميلة
-    public static UserId System { get; } = new UserId(Guid.Empty);
+        public static UserId System { get; } = new UserId(Guid.Empty);
 
     public static UserId New() => new(Guid.NewGuid());
 

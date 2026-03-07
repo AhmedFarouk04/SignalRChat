@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Domain/Entities/Reaction.cs
-using EnterpriseChat.Domain.Enums;
+﻿using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.ValueObjects;
 
 namespace EnterpriseChat.Domain.Entities;

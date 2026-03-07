@@ -4,11 +4,9 @@
 
 namespace EnterpriseChat.Infrastructure.Migrations
 {
-    /// <inheritdoc />
-    public partial class AddIsAdminToChatRoomMembers : Migration
+        public partial class AddIsAdminToChatRoomMembers : Migration
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
+                protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<bool>(
                 name: "IsAdmin",
@@ -18,8 +16,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 defaultValue: false);
         }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
+                protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
                 name: "IsAdmin",

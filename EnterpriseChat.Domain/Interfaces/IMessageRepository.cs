@@ -9,8 +9,11 @@ public interface IMessageRepository
     Task<Message?> GetByIdAsync(Guid messageId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Message>> GetByRoomAsync(RoomId roomId, int skip, int take, CancellationToken cancellationToken = default);
+    Task<int> GetMessagesCountInRoomAsync(RoomId roomId, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Message>> GetByRoomForUpdateAsync(RoomId roomId, int skip, int take, CancellationToken cancellationToken = default);
+    Task<Message?> GetLastMessageInRoomAsync(RoomId roomId, CancellationToken cancellationToken = default);
+
+Task<IReadOnlyList<Message>> GetByRoomForUpdateAsync(RoomId roomId, int skip, int take, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Message>> GetUndeliveredForUserAsync(
     RoomId roomId,
     UserId userId,
@@ -30,8 +33,7 @@ public interface IMessageRepository
 
     Task<int> GetUnreadCountAsync(RoomId roomId, UserId userId, CancellationToken ct);
 
-    // ✅ bulk methods على Guid مباشرة
-
+    
     Task<Dictionary<Guid, int>> GetUnreadCountsAsync(
         IEnumerable<Guid> roomIds,
         UserId userId,

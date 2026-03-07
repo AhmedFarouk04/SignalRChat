@@ -8,10 +8,11 @@ public sealed class RoomUpdatedModel
     public string Preview { get; set; } = "";
     public DateTime CreatedAt { get; set; }
     public int UnreadDelta { get; set; }
-
-    // ✅ add these
-    public string? RoomName { get; set; }
+    public string? SenderName { get; set; } 
+    public bool IsClearEvent { get; set; } 
+        public string? RoomName { get; set; }
     public string? RoomType { get; set; }
     public bool IsSystemMessage { get; set; } = false;
-    public string? SystemEventType { get; set; }   // "MemberAdded", "MemberRemoved", "UserJoined", "NameChanged", etc.
+    public string? SystemEventType { get; set; }   
+        public bool IsMuted { get; set; }
 }

@@ -1,5 +1,4 @@
-﻿// EnterpriseChat.Domain/Interfaces/IReactionRepository.cs
-using EnterpriseChat.Domain.Entities;
+﻿using EnterpriseChat.Domain.Entities;
 using EnterpriseChat.Domain.Enums;
 using EnterpriseChat.Domain.ValueObjects;
 

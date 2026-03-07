@@ -27,8 +27,7 @@ public sealed class RedisRoomPresenceService : IRoomPresenceService
         await _db.SetAddAsync(RoomUsersKey(roomId.Value), userId.Value.ToString());
         await _db.SetAddAsync(UserRoomsKey(userId.Value), roomId.Value.ToString());
 
-        // ✅ إضافة TTL للغرفة (اختياري)
-        await _db.KeyExpireAsync(RoomUsersKey(roomId.Value), TimeSpan.FromHours(1));
+                await _db.KeyExpireAsync(RoomUsersKey(roomId.Value), TimeSpan.FromHours(1));
     }
 
     public async Task LeaveRoomAsync(RoomId roomId, UserId userId)

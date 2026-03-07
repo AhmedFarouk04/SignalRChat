@@ -11,13 +11,11 @@ public sealed class ChatRoom
     public RoomType Type { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
-    // Group owner (for Group rooms only)
-    public UserId? OwnerId { get; private set; }
+        public UserId? OwnerId { get; private set; }
     public MessageId? PinnedMessageId { get; private set; }
     public DateTime? PinnedUntilUtc { get; private set; }
 
-    // ✅ Last Message Info
-    public MessageId? LastMessageId { get; private set; }
+        public MessageId? LastMessageId { get; private set; }
     public string? LastMessagePreview { get; private set; }
     public DateTime? LastMessageAt { get; private set; }
     public UserId? LastMessageSenderId { get; private set; }
@@ -29,8 +27,7 @@ public sealed class ChatRoom
     public IReadOnlyCollection<ChatRoomMember> Members => _members.AsReadOnly();
   
 
-    // ✅ الـ list الجديدة
-    private readonly List<PinnedMessage> _pinnedMessages = new();
+        private readonly List<PinnedMessage> _pinnedMessages = new();
     public IReadOnlyCollection<PinnedMessage> PinnedMessages => _pinnedMessages.AsReadOnly();
 
 
@@ -78,7 +75,33 @@ public sealed class ChatRoom
         LastReactionAt = null;
         LastReactionTargetUserId = null;
     }
+    public void DeleteForMember(UserId userId)
+    {
+        var member = _members.FirstOrDefault(m => m.UserId == userId)
+            ?? throw new InvalidOperationException("User is not a member.");
+        member.DeleteForMe();
+    }
 
+    public void RestoreMember(UserId userId)
+    {
+        var member = _members.FirstOrDefault(m => m.UserId == userId);
+        member?.Restore();
+    }
+
+    public void ClearChatForMember(UserId userId)
+    {
+        var member = _members.FirstOrDefault(m => m.UserId == userId)
+            ?? throw new InvalidOperationException("User is not a member.");
+        member.ClearChat();
+    }
+
+    public void ClearChatForAll()
+    {
+        if (Type != RoomType.Group)
+            throw new InvalidOperationException("Clear for all is only for groups.");
+        foreach (var member in _members)
+            member.ClearChat();
+    }
     public static ChatRoom CreateGroup(
       string name,
       UserId creator,
@@ -107,8 +130,7 @@ public sealed class ChatRoom
         return room;
     }
 
-    // ✅ ميثود تحديث آخر رسالة
-    public void UpdateLastMessage(Message message)
+        public void UpdateLastMessage(Message message)
     {
         if (message == null) return;
 
@@ -225,8 +247,7 @@ public sealed class ChatRoom
 
         _pinnedMessages.Add(pinned);
 
-        // ✅ تحديث باستخدام الـ Value Object
-        PinnedMessageId = new MessageId(messageId.Value);
+                PinnedMessageId = new MessageId(messageId.Value);
         PinnedUntilUtc = pinned.PinnedUntilUtc;
     }
     public void UnpinMessage(Guid messageId)
@@ -237,11 +258,16 @@ public sealed class ChatRoom
 
         var last = _pinnedMessages.OrderByDescending(p => p.PinnedAt).FirstOrDefault();
 
-        // ✅ تحديث باستخدام الـ Value Object
-        PinnedMessageId = last?.MessageId;
+                PinnedMessageId = last?.MessageId;
         PinnedUntilUtc = last?.PinnedUntilUtc;
     }
-
+    public void ClearLastMessage()
+    {
+        LastMessageId = null;
+        LastMessagePreview = null;
+        LastMessageAt = null;
+        LastMessageSenderId = null;
+    }
     public void UnpinAll()
     {
         _pinnedMessages.Clear();

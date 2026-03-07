@@ -26,7 +26,7 @@
     gap: 2px;
     flex: 1;
     overflow: hidden;
-    min-width: 0; /* مهم لتفعيل text-overflow */
+    min-width: 0; 
 }
 
 .room-sub {
@@ -84,7 +84,7 @@
         background-color: #4caf50;
     }
 
-/* Pinned Messages Bar */
+
 .pinned-msg-bar {
     display: flex;
     align-items: center;
@@ -130,7 +130,7 @@
     text-overflow: ellipsis;
 }
 
-/* Search Mode */
+
 .search-mode {
     display: flex;
     align-items: center;
@@ -222,7 +222,7 @@
     }
 }
 
-/* Responsive */
+
 @media (max-width: 768px) {
     .room-header {
         padding: 0 12px;
@@ -236,3 +236,194 @@
         padding: 8px 12px;
     }
 }
+.chat-actions-wrapper {
+    position: relative;
+}
+
+.topbar-more-btn.active {
+    background: rgba(56, 189, 248, .15);
+    color: var(--accent-main);
+}
+
+.actions-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 200px;
+    background: rgba(10, 18, 35, 0.97);
+    border: 1px solid rgba(148, 163, 184, .18);
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.55);
+    backdrop-filter: blur(14px);
+    padding: 6px;
+    z-index: 999;
+    animation: dropIn .15s ease;
+}
+
+@@keyframes dropIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13.5px;
+    text-align: left;
+    transition: background .15s;
+}
+
+    .dropdown-item:hover {
+        background: rgba(148,163,184,.10);
+    }
+
+    .dropdown-item.warn {
+        color: #fbbf24;
+    }
+
+        .dropdown-item.warn:hover {
+            background: rgba(251,191,36,.10);
+        }
+
+    .dropdown-item.danger {
+        color: #f87171;
+    }
+
+        .dropdown-item.danger:hover {
+            background: rgba(248,113,113,.12);
+        }
+
+.di-icon {
+    font-size: 16px;
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: rgba(148,163,184,.12);
+    margin: 4px 6px;
+}
+
+
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.60);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn .15s ease;
+}
+
+@@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.confirm-dialog {
+    width: min(380px, 90vw);
+    background: rgba(10, 18, 35, 0.97);
+    border: 1px solid rgba(148,163,184,.18);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.65);
+    padding: 28px 24px 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    animation: popIn .18s ease;
+}
+
+@@keyframes popIn {
+    from {
+        opacity: 0;
+        transform: scale(.93);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.confirm-icon {
+    font-size: 36px;
+    margin-bottom: 4px;
+}
+
+.confirm-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.confirm-body {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+    line-height: 1.5;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+    width: 100%;
+}
+
+.confirm-btn {
+    flex: 1;
+    height: 40px;
+    border-radius: 12px;
+    border: none;
+    font-weight: 700;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: opacity .15s;
+}
+
+    .confirm-btn:hover {
+        opacity: .85;
+    }
+
+    .confirm-btn.cancel {
+        background: rgba(148,163,184,.14);
+        color: var(--text-primary);
+        border: 1px solid rgba(148,163,184,.2);
+    }
+
+    .confirm-btn.clear {
+        background: rgba(56,189,248,.18);
+        color: var(--accent-main);
+        border: 1px solid rgba(56,189,248,.25);
+    }
+
+    .confirm-btn.delete {
+        background: rgba(239,68,68,.18);
+        color: #f87171;
+        border: 1px solid rgba(239,68,68,.28);
+    }

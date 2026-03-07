@@ -1,15 +1,15 @@
-﻿/* استخدمنا المتغيرات بتاعتك هنا عشان نضمن توحيد الألوان */
+﻿
 
-/* Container & Backdrop */
+
 .drawer-backdrop {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.6); /* غمقنا الخلفية شوية للتركيز */
+    background: rgba(0, 0, 0, 0.6); 
     z-index: 1000;
-    backdrop-filter: blur(2px); /* إضافة لطيفة (اختياري) */
+    backdrop-filter: blur(2px); 
 }
 
 .members-drawer {
@@ -18,14 +18,14 @@
     right: 0;
     width: 350px;
     height: 100%;
-    background: var(--bg-sidebar); /* اللون الأساسي للبانل #020617 */
+    background: var(--bg-sidebar); 
     color: var(--text-primary);
     z-index: 1001;
     display: flex;
     flex-direction: column;
     box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
     border-left: 1px solid var(--border-subtle);
-    animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); /* انيميشن أنعم */
+    animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
 }
 
 @keyframes slideIn {
@@ -38,9 +38,9 @@
     }
 }
 
-/* Header */
+
 .drawer-header {
-    background: var(--bg-panel); /* نفس الخلفية او افتح سنة بسيطة */
+    background: var(--bg-panel); 
     padding: 20px;
     display: flex;
     justify-content: space-between;
@@ -77,13 +77,13 @@
         background: var(--bg-message);
     }
 
-/* Body & Sections */
+
 .drawer-body {
     flex: 1;
     overflow-y: auto;
 }
 
-    /* Scrollbar styling for Webkit */
+    
     .drawer-body::-webkit-scrollbar {
         width: 6px;
     }
@@ -95,11 +95,11 @@
 
 .drawer-section {
     padding: 20px;
-    border-bottom: 8px solid var(--bg-app); /* الفاصل الكبير بلون خلفية التطبيق */
+    border-bottom: 8px solid var(--bg-app); 
 }
 
 .section-label {
-    color: var(--accent-main); /* تحويل الأخضر للون السيان بتاعك */
+    color: var(--accent-main); 
     font-size: 0.8rem;
     text-transform: uppercase;
     margin-bottom: 15px;
@@ -107,7 +107,7 @@
     letter-spacing: 0.5px;
 }
 
-/* Rename & Search Boxes */
+
 .rename-box, .search-box {
     display: flex;
     gap: 10px;
@@ -115,7 +115,7 @@
 
     .rename-box input, .search-box input {
         flex: 1;
-        background: var(--bg-message); /* #1e293b عشان يبان جوه الخلفية الغامقة */
+        background: var(--bg-message); 
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
         padding: 10px 12px;
@@ -130,7 +130,7 @@
 
 .save-btn {
     background: var(--accent-main);
-    color: #000; /* الكتابة سوداء عشان السيان فاتح */
+    color: #000; 
     border: none;
     border-radius: var(--radius-md);
     padding: 0 16px;
@@ -143,7 +143,7 @@
         background: var(--accent-hover);
     }
 
-/* Search Results */
+
 .search-results {
     background: var(--bg-message);
     border: 1px solid var(--border-subtle);
@@ -188,10 +188,10 @@
 }
 
     .add-btn:hover {
-        background: rgba(56, 189, 248, 0.1); /* لون السيان بس شفاف */
+        background: rgba(56, 189, 248, 0.1); 
     }
 
-/* Member List Item */
+
 .member-item {
     display: flex;
     align-items: center;
@@ -221,15 +221,15 @@
     font-size: 1.1rem;
 }
 
-/* Online Status - ممكن نسيبه أخضر لإنه ستاندرد، أو نخليه Accent */
+
 .online-status {
     position: absolute;
     bottom: 0px;
     right: 0px;
     width: 12px;
     height: 12px;
-    background: #22c55e; /* أخضر ساطع للحالة */
-    border: 2px solid var(--bg-sidebar); /* عشان يفصل عن الأفاتار */
+    background: #22c55e; 
+    border: 2px solid var(--bg-sidebar); 
     border-radius: 50%;
 }
 
@@ -242,12 +242,12 @@
     color: var(--text-primary);
 }
 
-/* Badge Styling Updated */
+
 .badge.owner {
     font-size: 0.7rem;
     color: var(--accent-main);
     border: 1px solid var(--accent-main);
-    background: rgba(56, 189, 248, 0.1); /* خلفية شفافة من نفس اللون */
+    background: rgba(56, 189, 248, 0.1); 
     padding: 2px 6px;
     border-radius: var(--radius-sm);
     margin-top: 4px;
@@ -257,7 +257,7 @@
 .action-btn-remove {
     background: none;
     border: none;
-    color: #ef4444; /* أحمر للحذف */
+    color: #ef4444; 
     cursor: pointer;
     font-size: 1.1rem;
     padding: 6px;
@@ -271,7 +271,7 @@
         opacity: 1;
     }
 
-/* Footer */
+
 .drawer-footer {
     padding: 20px;
     background: var(--bg-sidebar);
@@ -297,7 +297,7 @@
     .leave-btn:hover {
         background: rgba(239, 68, 68, 0.1);
     }
-/* استخدمنا المتغيرات بتاعتك هنا */
+
 .members-drawer {
     position: fixed;
     top: 0;
@@ -397,7 +397,7 @@
     cursor: pointer;
 }
 .action-icon-btn.transfer:hover {
-    border-color: #facc15; /* لون ذهبي للملكية */
+    border-color: #facc15; 
     color: #facc15;
 }
 

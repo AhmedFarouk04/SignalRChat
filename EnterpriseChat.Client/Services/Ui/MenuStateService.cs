@@ -28,8 +28,7 @@ public class MenuStateService : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
-    // ميثود مساعدة لفتح القائمة وإغلاق أي قائمة تانية تلقائياً
-    public void SetOpenMenu(Guid? messageId)
+        public void SetOpenMenu(Guid? messageId)
     {
         OpenMenuMessageId = messageId;
     }

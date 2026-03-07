@@ -28,17 +28,14 @@ public sealed class ChatDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // ✅ أضف Value Converters هنا
-        ConfigureValueObjects(modelBuilder);
+                ConfigureValueObjects(modelBuilder);
 
-        // ✅ ثم طبق Configurations
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ChatDbContext).Assembly);
+                modelBuilder.ApplyConfigurationsFromAssembly(typeof(ChatDbContext).Assembly);
     }
 
     private void ConfigureValueObjects(ModelBuilder modelBuilder)
     {
-        // ✅ Value Comparers للـ Value Objects
-        var messageIdComparer = new ValueComparer<MessageId>(
+                var messageIdComparer = new ValueComparer<MessageId>(
             (l, r) => l!.Value == r!.Value,
             v => v.Value.GetHashCode(),
             v => new MessageId(v.Value));
@@ -53,8 +50,7 @@ public sealed class ChatDbContext : DbContext
             v => v.Value.GetHashCode(),
             v => new UserId(v.Value));
 
-        // ✅ تكوين Entities مع Value Converters
-        modelBuilder.Entity<Message>(entity =>
+                modelBuilder.Entity<Message>(entity =>
         {
             entity.Property(e => e.Id)
                 .HasConversion(
@@ -83,8 +79,7 @@ public sealed class ChatDbContext : DbContext
 
       
 
-        // ✅ ChatRoomMember - التعديل النهائي مع Shadow Property Nullable
-        modelBuilder.Entity<ChatRoomMember>(entity =>
+                modelBuilder.Entity<ChatRoomMember>(entity =>
         {
             entity.Property(e => e.RoomId)
                 .HasConversion(
@@ -92,21 +87,17 @@ public sealed class ChatDbContext : DbContext
                     v => new RoomId(v))
                 .Metadata.SetValueComparer(roomIdComparer);
 
-            // ✅ UserId Value Object - يقرأ من عامود UserId
-            entity.Property(e => e.UserId)
+                        entity.Property(e => e.UserId)
                 .HasConversion(
                     v => v.Value,
                     v => new UserId(v))
                 .HasColumnName("UserId")
                 .Metadata.SetValueComparer(userIdComparer);
 
-            // ✅ Shadow property للـ FK - Nullable! (مش Required)
-            entity.Property<Guid?>("ChatUserId")
+                        entity.Property<Guid?>("ChatUserId")
                 .HasColumnName("ChatUserId")
-                .IsRequired(false);  // ✅ Nullable
-
-            // ✅ LastReadMessageId
-            entity.Property(e => e.LastReadMessageId)
+                .IsRequired(false);  
+                        entity.Property(e => e.LastReadMessageId)
                 .HasConversion(
                     v => v != null ? v.Value : (Guid?)null,
                     v => v.HasValue ? new MessageId(v.Value) : null)
@@ -115,9 +106,16 @@ public sealed class ChatDbContext : DbContext
 
             entity.Property(e => e.LastReadAt)
                 .IsRequired(false);
+                        entity.Property(e => e.IsDeleted)
+                .HasDefaultValue(false)
+                .IsRequired();
 
-            // ✅ العلاقات
-            entity.HasOne<ChatRoom>()
+            entity.Property(e => e.DeletedAt)
+                .IsRequired(false);
+
+            entity.Property(e => e.ClearedAt)
+                .IsRequired(false);
+                        entity.HasOne<ChatRoom>()
                 .WithMany(r => r.Members)
                 .HasForeignKey(e => e.RoomId)
                 .HasPrincipalKey(r => r.Id)
@@ -127,11 +125,9 @@ public sealed class ChatDbContext : DbContext
                 .WithMany()
                 .HasForeignKey("ChatUserId")
                 .HasPrincipalKey(u => u.Id)
-                .OnDelete(DeleteBehavior.SetNull);  // ✅ SetNull مش Cascade
-        });
+                .OnDelete(DeleteBehavior.SetNull);          });
 
-        // في ConfigureValueObjects method
-        modelBuilder.Entity<MessageReceipt>(entity =>
+                modelBuilder.Entity<MessageReceipt>(entity =>
         {
             entity.Property(e => e.MessageId)
                 .HasConversion(
@@ -139,8 +135,7 @@ public sealed class ChatDbContext : DbContext
                     v => new MessageId(v))
                 .Metadata.SetValueComparer(messageIdComparer);
 
-            // ✅ أضف هذا الجزء (RoomId)
-            entity.Property(e => e.RoomId)
+                        entity.Property(e => e.RoomId)
                 .HasConversion(
                     v => v.Value,
                     v => new RoomId(v))
@@ -153,22 +148,19 @@ public sealed class ChatDbContext : DbContext
                 .Metadata.SetValueComparer(userIdComparer);
         });
 
-        // ✅ Index للبحث في المحتوى
-        modelBuilder.Entity<Message>()
+                modelBuilder.Entity<Message>()
             .HasIndex(m => m.Content)
             .HasDatabaseName("IX_Message_Content");
 
 
-        // ✅ Reaction Configuration - ده اللي ناقص وبيسبب مشكلة الـ Include
-        modelBuilder.Entity<Reaction>(entity =>
+                modelBuilder.Entity<Reaction>(entity =>
         {
             entity.HasKey(e => e.Id);
 
             entity.Property(e => e.Id)
                 .HasConversion(
                     v => v.Value,
-                    v => new ReactionId(v)); // ← دلوقتي هيشتغل بعد ما constructor بقى public
-
+                    v => new ReactionId(v)); 
             entity.Property(e => e.MessageId)
                 .HasConversion(
                     v => v.Value,
@@ -193,8 +185,7 @@ public sealed class ChatDbContext : DbContext
                 .IsUnique();
         });
 
-        // ✅ PinnedMessage Configuration
-        modelBuilder.Entity<PinnedMessage>(entity =>
+                modelBuilder.Entity<PinnedMessage>(entity =>
         {
             entity.HasKey(e => e.Id);
 

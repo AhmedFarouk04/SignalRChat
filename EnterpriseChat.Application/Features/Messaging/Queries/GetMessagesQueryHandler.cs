@@ -24,25 +24,26 @@ public sealed class GetMessagesQueryHandler
     }
 
     public async Task<IReadOnlyList<MessageReadDto>> Handle(
-        GetMessagesQuery query,
-        CancellationToken ct)
+    GetMessagesQuery query,
+    CancellationToken ct)
     {
-        // ✅ Validation بياخد ct العادي — كويس إنه يتكنسل لو الـ client قطع قبل ما نبدأ
         var room = await _roomRepository.GetByIdWithMembersAsync(query.RoomId, ct)
             ?? throw new InvalidOperationException("Room not found.");
 
         if (!room.IsMember(query.UserId))
             throw new UnauthorizedAccessException("Access denied.");
 
-        // ✅ بنمرر ct للـ repository لكن الـ repository نفسه بيستخدم CancellationToken.None
-        // في الـ AsSplitQuery queries — الـ ct بيتجاهل للـ DB operations
-        // وده هو الحل الصح لـ TaskCanceledException
+       
+        var member = room.Members.FirstOrDefault(m => m.UserId == query.UserId);
+        var clearedAt = member?.ClearedAt;
+
         var messages = await _repository.GetMessagesAsync(
             query.RoomId,
             query.UserId,
             query.Skip,
             query.Take,
-            ct);    // ← repository هيستخدم None داخلياً
+            clearedAt,  
+            ct);
 
         if (room.Type == RoomType.Private)
         {
@@ -51,16 +52,13 @@ public sealed class GetMessagesQueryHandler
 
             if (otherUser != null)
             {
-                // ✅ IsBlockedAsync سريع (< 5ms) — ct عادي كويس هنا
                 var isBlockedByMe = await _blockRepository
                     .IsBlockedAsync(query.UserId, otherUser, CancellationToken.None);
 
                 if (isBlockedByMe)
-                {
                     return messages
                         .Where(m => m.SenderId == query.UserId.Value)
                         .ToList();
-                }
             }
         }
 

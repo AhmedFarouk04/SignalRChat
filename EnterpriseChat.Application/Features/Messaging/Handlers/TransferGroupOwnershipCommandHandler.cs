@@ -54,8 +54,7 @@ public sealed class TransferGroupOwnershipCommandHandler
 
         await _broadcaster.OwnerTransferredAsync(room.Id, request.NewOwnerId, recipients);
 
-        // اختياري (لو الواجهة بتتابع AdminPromoted):
-        await _broadcaster.AdminPromotedAsync(room.Id, request.NewOwnerId, recipients);
+                await _broadcaster.AdminPromotedAsync(room.Id, request.NewOwnerId, recipients);
 
         return Unit.Value;
 

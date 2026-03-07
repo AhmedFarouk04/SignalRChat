@@ -15,7 +15,10 @@ public sealed class ChatRoomRepository : IChatRoomRepository
     {
         _context = context;
     }
-
+    public void Update(ChatRoom room)
+    {
+        _context.ChatRooms.Update(room);
+    }
     public async Task UpdateMemberLastReadAsync(
         RoomId roomId,
         UserId userId,
@@ -55,24 +58,20 @@ public sealed class ChatRoomRepository : IChatRoomRepository
     {
         return await _context.ChatRooms
            
-            .Include(r => r.Members)  // ❌ إلغاء AsSplitQuery
-            .Where(r => r.Members.Any(m => m.UserId == userId))
+            .Include(r => r.Members)              .Where(r => r.Members.Any(m => m.UserId == userId))
             .OrderByDescending(r => r.CreatedAt)
-            .ToListAsync(cancellationToken);  // ✅ استخدم cancellationToken
-    }
+            .ToListAsync(cancellationToken);      }
     public async Task<ChatRoom?> GetByIdReadOnlyAsync(RoomId roomId, CancellationToken ct = default)
     {
         return await _context.ChatRooms
-            .AsNoTracking()  // ✅ للقراءة فقط
-            .Include(r => r.Members)
+            .AsNoTracking()              .Include(r => r.Members)
             .FirstOrDefaultAsync(r => r.Id == roomId, ct);
     }
 
     public async Task<ChatRoom?> GetByIdForUpdateAsync(RoomId roomId, CancellationToken ct = default)
     {
         return await _context.ChatRooms
-            .Include(r => r.Members)  // ✅ بدون AsNoTracking - عشان tracking
-            .FirstOrDefaultAsync(r => r.Id == roomId, ct);
+            .Include(r => r.Members)              .FirstOrDefaultAsync(r => r.Id == roomId, ct);
     }
     public Task DeleteAsync(ChatRoom room, CancellationToken ct = default)
     {
@@ -87,19 +86,16 @@ public sealed class ChatRoomRepository : IChatRoomRepository
             .FirstOrDefaultAsync(r => r.Id == roomId, ct);
     }
 
-    // في Infrastructure/Repositories/ChatRoomRepository.cs
-    public async Task<ChatRoom?> GetByIdAsync(RoomId roomId, CancellationToken ct = default)
+        public async Task<ChatRoom?> GetByIdAsync(RoomId roomId, CancellationToken ct = default)
     {
         var room = await _context.ChatRooms
             .Include(r => r.Members)
             .FirstOrDefaultAsync(r => r.Id == roomId, ct);
 
-        // لو عايز تستخدم AsNoTracking للقراءة فقط، استخدم method منفصلة
-
+        
         return room;
     }
-    // أضف method جديدة للتحديث (أو عدل اللي موجودة)
-
+    
 
     public async Task<ChatRoom?> GetByIdWithMembersAsync(
      RoomId roomId,
@@ -107,8 +103,7 @@ public sealed class ChatRoomRepository : IChatRoomRepository
     {
         return await _context.ChatRooms
             .Include(r => r.Members)
-            .FirstOrDefaultAsync(r => r.Id == roomId, cancellationToken);  // شيل AsNoTracking()
-    }
+            .FirstOrDefaultAsync(r => r.Id == roomId, cancellationToken);      }
 
     public async Task<bool> ExistsAsync(RoomId roomId, CancellationToken cancellationToken = default)
     {

@@ -15,13 +15,13 @@ a, .btn-link {
 code {
     color: #c02d76;
 }
-/* Focus polish */
+
 :focus-visible {
     outline: 2px solid var(--accent-main);
     outline-offset: 2px;
 }
 
-/* Scrollbars (nice, subtle) */
+
 * {
     scrollbar-width: thin;
     scrollbar-color: rgba(148,163,184,0.45) transparent;
@@ -54,4 +54,14 @@ code {
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.4;
+}
+.dropdown-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 998; 
+    background: transparent;
+}
+
+.actions-dropdown {
+    z-index: 999; 
 }

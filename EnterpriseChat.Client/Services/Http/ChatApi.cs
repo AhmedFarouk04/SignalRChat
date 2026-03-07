@@ -12,7 +12,6 @@ public sealed class ChatApi
         _api = api;
     }
 
-    // POST api/chat/private/{userId}
-    public Task<PrivateRoomDto?> GetOrCreatePrivateAsync(Guid userId, CancellationToken ct = default)
+        public Task<PrivateRoomDto?> GetOrCreatePrivateAsync(Guid userId, CancellationToken ct = default)
         => _api.PostAsync<object, PrivateRoomDto>(ApiEndpoints.GetOrCreatePrivate(userId), new { }, ct);
 }
