@@ -732,6 +732,12 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
                 Console.WriteLine($"[SignalR] Error in UserOnline handler: {ex.Message}");
             }
         });
+
+        _connection.On<Guid, Guid?>("MessagePinned", (roomId, messageId) =>
+        {
+            Console.WriteLine($"[SignalR] 📌 MessagePinned received: room={roomId}, msg={messageId}");
+            MessagePinned?.Invoke(roomId, messageId);
+        });
         _connection.On<Guid>("UserOffline", (userId) =>
         {
             try

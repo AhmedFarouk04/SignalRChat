@@ -29,9 +29,11 @@ public sealed class GetGroupDetailsQueryHandler
         if (!room.IsMember(request.RequesterId))
             throw new UnauthorizedAccessException("Access denied.");
 
-        var members = new List<GroupMemberDetailsDto>(room.Members.Count);
+        var activeMembers = room.Members.Where(m => !m.IsRemovedFromGroup).ToList();
 
-        foreach (var m in room.Members)
+        var members = new List<GroupMemberDetailsDto>(activeMembers.Count);
+
+        foreach (var m in activeMembers)
         {
             var id = m.UserId.Value;
             var displayName = await _users.GetDisplayNameAsync(id, ct)
@@ -51,7 +53,7 @@ public sealed class GetGroupDetailsQueryHandler
             Name: room.Name,
             OwnerId: room.OwnerId?.Value,
             CreatedAt: room.CreatedAt,
-            Members: members.AsReadOnly()
+            Members: members.AsReadOnly() 
         );
     }
 }

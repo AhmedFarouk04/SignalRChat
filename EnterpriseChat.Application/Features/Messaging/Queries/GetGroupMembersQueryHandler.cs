@@ -10,7 +10,7 @@ public sealed class GetGroupMembersQueryHandler
 {
     private readonly IChatRoomRepository _roomRepository;
     private readonly IRoomAuthorizationService _auth;
-    private readonly IUserLookupService _users; 
+    private readonly IUserLookupService _users;
 
     public GetGroupMembersQueryHandler(
         IChatRoomRepository roomRepository,
@@ -33,16 +33,18 @@ public sealed class GetGroupMembersQueryHandler
         if (room.OwnerId is null)
             throw new InvalidOperationException("Group room owner not set.");
 
-        var members = new List<GroupMemberDto>(room.Members.Count);
+        var activeMembers = room.Members.Where(m => !m.IsRemovedFromGroup).ToList();
 
-        foreach (var m in room.Members)
+        var members = new List<GroupMemberDto>(activeMembers.Count);
+
+        foreach (var m in activeMembers)
         {
             var id = m.UserId.Value;
 
             var displayName = await _users.GetDisplayNameAsync(id, ct)
                 ?? $"User {id.ToString("N")[..6]}";
 
-            var isAdmin = m.IsAdmin; 
+            var isAdmin = m.IsAdmin;
 
             members.Add(new GroupMemberDto(id, displayName, isAdmin));
         }

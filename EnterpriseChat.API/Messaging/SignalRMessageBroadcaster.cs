@@ -17,12 +17,14 @@ public sealed class SignalRMessageBroadcaster : IMessageBroadcaster
     private readonly IHubContext<ChatHub> _hub;
     private readonly IMutedRoomRepository _muteRepo;
     private readonly IMessageRepository _messageRepo;
+    private readonly IChatRoomRepository _roomRepo;
 
-    public SignalRMessageBroadcaster(IHubContext<ChatHub> hub, IMutedRoomRepository muteRepo, IMessageRepository messageRepo)
+    public SignalRMessageBroadcaster(IHubContext<ChatHub> hub, IMutedRoomRepository muteRepo, IMessageRepository messageRepo, IChatRoomRepository roomRepo)
     {
         _hub = hub;
         _muteRepo = muteRepo;
         _messageRepo = messageRepo;
+        _roomRepo = roomRepo;
     }
     public async Task BroadcastToRoomGroupAsync(Guid roomId, MessageDto message)
     {
@@ -290,8 +292,17 @@ public async Task MessageUpdatedAsync(MessageId messageId, string newContent, IE
     {
         await _hub.Clients.Group(roomId.ToString())
             .SendAsync("MessagePinned", roomId, messageId);
-    }
 
+        var room = await _roomRepo.GetByIdAsync(new RoomId(roomId));
+        if (room == null) return;
+
+        var memberIds = room.GetMemberIds();
+        var tasks = memberIds.Select(userId =>
+            _hub.Clients.User(userId.Value.ToString())
+                .SendAsync("MessagePinned", roomId, messageId));
+
+        await Task.WhenAll(tasks);
+    }
     public async Task MessageDeliveredToAllAsync(MessageId messageId, UserId senderId, IEnumerable<UserId> users)
     {
         var list = users?.DistinctBy(u => u.Value).ToList() ?? new();

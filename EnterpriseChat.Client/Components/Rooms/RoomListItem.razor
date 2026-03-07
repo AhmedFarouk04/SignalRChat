@@ -67,8 +67,10 @@
                 {
                     var sender = GetSenderInfo();
 
-                    @* 1. عرض علامة الصح لو أنا المرسل وفقط في الرسايل العادية *@
-                    @if (IsMyLastMessage && Room.LastMessageStatus.HasValue && Room.LastMessageSenderId != Guid.Empty)
+                    @if (IsMyLastMessage
+                                    && Room.LastMessageStatus.HasValue
+                                    && Room.LastMessageSenderId != Guid.Empty
+                                    && Room.LastMessagePreview != "🚫 This message was deleted")
                     {
                         <span class="room-last-status @GetStatusClass(Room.LastMessageStatus.Value)">
                             @StatusIcon(Room.LastMessageStatus.Value)
@@ -76,13 +78,11 @@
                         <span>&nbsp;</span>
                     }
 
-                    @* 2. عرض اسم المرسل (فقط لو موجود ومش رسالة نظام) *@
                     @if (!string.IsNullOrEmpty(sender.name))
                     {
                         <span class="message-sender" style="font-weight: 600; color: #ece5dd; opacity: 0.9;">@sender.name: </span>
                     }
 
-                    @* 3. نص الرسالة *@
                     <span class="@(Room.LastMessageSenderId == Guid.Empty ? "system-message-preview" : "message-text-preview")">
                         @Truncate(Room.LastMessagePreview, 60)
                     </span>

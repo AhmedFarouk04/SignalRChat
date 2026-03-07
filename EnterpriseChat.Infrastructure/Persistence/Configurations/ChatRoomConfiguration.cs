@@ -21,8 +21,8 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
             v => v == null ? null : new UserId(v.Value));
 
         builder.ToTable("ChatRooms");
-
-                builder.HasKey(x => x.Id);
+        builder.Ignore(x => x.ActiveMembers);
+        builder.HasKey(x => x.Id);
         builder.Property(x => x.Id)
             .HasConversion(v => v.Value, v => new RoomId(v))
             .Metadata.SetValueComparer(new ValueComparer<RoomId>(
@@ -64,14 +64,16 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
         builder.HasMany(x => x.Members)
             .WithOne()
             .HasForeignKey(m => m.RoomId)
+            .HasPrincipalKey(r => r.Id)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(x => x.PinnedMessages)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasMany(x => x.PinnedMessages)
-            .WithOne()
-            .HasForeignKey(p => p.RoomId)
-            .OnDelete(DeleteBehavior.Cascade);
+             .WithOne()
+             .HasForeignKey(p => p.RoomId)
+             .HasPrincipalKey(r => r.Id) 
+             .OnDelete(DeleteBehavior.Cascade);
     }
 }

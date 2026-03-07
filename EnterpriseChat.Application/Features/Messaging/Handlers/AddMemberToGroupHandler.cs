@@ -54,7 +54,7 @@ public sealed class AddMemberToGroupHandler : IRequestHandler<AddMemberToGroupCo
         if (await _blocks.IsBlockedAsync(command.RequesterId, command.MemberId, ct))
             throw new InvalidOperationException("Cannot add this user due to blocking.");
 
-        if (room.Members.Any(m => m.UserId.Value == command.MemberId.Value))
+        if (room.ActiveMembers.Any(m => m.UserId.Value == command.MemberId.Value))
             throw new InvalidOperationException("User is already a member of this group.");
 
         room.AddMember(command.MemberId);

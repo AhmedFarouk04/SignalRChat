@@ -57,6 +57,8 @@ public sealed class RoomsViewModel
         _rt.MessageReactionUpdated += OnMessageReactionUpdated;
         _rt.MessageReceiptStatsUpdated += OnMessageReceiptStatsUpdated;
         _rt.RoomMuteChanged += OnRoomMuteChanged;
+        _rt.MessageDeleted += OnMessageDeleted;
+
     }
     private async Task InitializeUserInfoAsync()
     {
@@ -72,6 +74,41 @@ public sealed class RoomsViewModel
 
                         NotifyChanged();
         }
+    }
+    private void OnMessageDeleted(Guid messageId, bool isForEveryone)
+    {
+        var list = Rooms.ToList();
+
+        var idx = list.FindIndex(r => r.LastMessageId == messageId);
+        if (idx < 0) return;
+
+        var room = list[idx];
+
+        if (!isForEveryone && room.LastMessageSenderId != CurrentUserId) return;
+
+        _flags.SetLastNonSystemPreview(room.Id, "🚫 This message was deleted");
+        _flags.SetLastReactionPreview(room.Id, null);
+
+        list[idx] = new RoomListItemModel
+        {
+            Id = room.Id,
+            Name = room.Name,
+            Type = room.Type,
+            OtherUserId = room.OtherUserId,
+            OtherDisplayName = room.OtherDisplayName,
+            IsMuted = room.IsMuted,
+            UnreadCount = room.UnreadCount,
+            LastMessageAt = room.LastMessageAt,
+            LastMessagePreview = "🚫 This message was deleted",
+            LastMessageId = room.LastMessageId,
+            LastMessageSenderId = room.LastMessageSenderId,
+            LastMessageStatus = null,
+            MemberNames = room.MemberNames
+        };
+
+        Rooms = list;
+        ApplyFilter();
+        NotifyChanged();
     }
     private void OnRoomMuteChanged(Guid roomId, bool isMuted)
     {
@@ -117,12 +154,28 @@ public sealed class RoomsViewModel
         var idx = list.FindIndex(r => r.Id == roomId);
         if (idx < 0) return;
 
-        list.RemoveAt(idx);
-        Rooms = list;
+        var room = list[idx];
 
+        list[idx] = new RoomListItemModel
+        {
+            Id = room.Id,
+            Name = room.Name,
+            Type = room.Type,
+            OtherUserId = room.OtherUserId,
+            OtherDisplayName = room.OtherDisplayName,
+            IsMuted = room.IsMuted,
+            UnreadCount = 0, 
+            LastMessageAt = DateTime.UtcNow,
+            LastMessagePreview = "You were removed from this group", 
+            LastMessageId = Guid.NewGuid(),
+            LastMessageSenderId = Guid.Empty, 
+            LastMessageStatus = null,
+            MemberNames = room.MemberNames
+        };
+
+        Rooms = list;
         ApplyFilter();
         NotifyChanged();
-
     }
 
     private void OnMessageReceiptStatsUpdated(Guid messageId, Guid roomId, int total, int delivered, int read)
@@ -941,8 +994,10 @@ public sealed class RoomsViewModel
             }
             return;
         }
+        bool isDeletedMessage = upd.Preview == "🚫 This message was deleted";
 
-                if (_flags.GetBlockedByMe(upd.SenderId) || _flags.GetBlockedMe(upd.SenderId))
+
+        if (_flags.GetBlockedByMe(upd.SenderId) || _flags.GetBlockedMe(upd.SenderId))
         {
             Console.WriteLine($"[RoomsVM] 🚫 Blocked preview ignored for user: {upd.SenderId}");
             return;
@@ -1007,10 +1062,15 @@ public sealed class RoomsViewModel
         }
         else
         {
-            if (isActuallyNewMessage)
+            bool isReactionEvent = !string.IsNullOrEmpty(upd.Preview) && upd.Preview.Contains("reacted");
+            bool isDeleteEvent = !string.IsNullOrEmpty(upd.Preview) && upd.Preview.Contains("deleted");
+
+            if (isActuallyNewMessage && !isReactionEvent && !isDeleteEvent)
                 nextUnread = currentUnread + 1;
+            else if (!isActuallyNewMessage)
+                nextUnread = upd.UnreadDelta < 0 ? 0 : currentUnread;
             else
-                nextUnread = upd.UnreadDelta < 0 ? 0 : currentUnread + upd.UnreadDelta;
+                nextUnread = currentUnread; 
 
             nextUnread = Math.Max(0, nextUnread);
         }
@@ -1068,11 +1128,16 @@ public sealed class RoomsViewModel
             lastMessageStatus = null;         }
         else
         {
-                        messageId = upd.MessageId != Guid.Empty ? upd.MessageId : currentRoom.LastMessageId;
+            messageId = upd.MessageId != Guid.Empty ? upd.MessageId : currentRoom.LastMessageId;
             senderId = upd.SenderId != Guid.Empty ? upd.SenderId : currentRoom.LastMessageSenderId;
             messageTime = upd.CreatedAt != DateTime.MinValue ? upd.CreatedAt : currentRoom.LastMessageAt;
 
-                        if (isActuallyNewMessage)
+            if (isDeletedMessage)
+            {
+                lastMessageStatus = null;
+                _lastMessageStatusCache.Remove(upd.RoomId);
+            }
+            else if (isActuallyNewMessage)
             {
                 lastMessageStatus = iAmSender ? MessageStatus.Sent : (currentRoom.LastMessageStatus ?? MessageStatus.Sent);
                 if (upd.MessageId != Guid.Empty)
@@ -1086,7 +1151,7 @@ public sealed class RoomsViewModel
             }
         }
 
-                var updatedMemberNames = new Dictionary<Guid, string>(currentRoom.MemberNames ?? new());
+        var updatedMemberNames = new Dictionary<Guid, string>(currentRoom.MemberNames ?? new());
 
                 if (upd.SenderId != Guid.Empty && !string.IsNullOrEmpty(upd.SenderName))
         {
@@ -1123,6 +1188,37 @@ public sealed class RoomsViewModel
         {
             list[idx] = updatedRoom;
         }
+
+        Rooms = list;
+        ApplyFilter();
+        NotifyChanged();
+    }
+    public void UpdateDeletedMessagePreview(Guid roomId, Guid messageId)
+    {
+        var list = Rooms.ToList();
+        var idx = list.FindIndex(r => r.Id == roomId && r.LastMessageId == messageId);
+        if (idx < 0) return;
+
+        _flags.SetLastNonSystemPreview(roomId, "🚫 This message was deleted");
+        _flags.SetLastReactionPreview(roomId, null);
+
+        var room = list[idx];
+        list[idx] = new RoomListItemModel
+        {
+            Id = room.Id,
+            Name = room.Name,
+            Type = room.Type,
+            OtherUserId = room.OtherUserId,
+            OtherDisplayName = room.OtherDisplayName,
+            IsMuted = room.IsMuted,
+            UnreadCount = room.UnreadCount,
+            LastMessageAt = room.LastMessageAt,
+            LastMessagePreview = "🚫 This message was deleted",
+            LastMessageId = room.LastMessageId,
+            LastMessageSenderId = room.LastMessageSenderId,
+            LastMessageStatus = null,
+            MemberNames = room.MemberNames
+        };
 
         Rooms = list;
         ApplyFilter();

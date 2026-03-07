@@ -41,9 +41,9 @@ public sealed class ReactionConfiguration : IEntityTypeConfiguration<Reaction>
         builder.HasIndex(x => x.UserId);
         builder.HasIndex(x => new { x.MessageId, x.UserId }).IsUnique();
 
-                builder.HasOne<Message>()
-            .WithMany(m => m.Reactions)
-            .HasForeignKey(r => r.MessageId)
-            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Message>()
+    .WithMany(m => m.Reactions)
+    .HasForeignKey(r => r.MessageId)
+    .OnDelete(DeleteBehavior.NoAction);
     }
 }

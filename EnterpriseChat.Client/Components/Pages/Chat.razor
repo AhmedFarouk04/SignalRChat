@@ -62,13 +62,7 @@
     {
         <div class="chat-error">This room no longer exists.</div>
     }
-    else if (VM.IsRemoved)
-    {
-        <div class="chat-error">
-            You were removed from this group.
-            <button class="mini-btn" @onclick="@(() => Nav.NavigateTo("/rooms"))">Back to rooms</button>
-        </div>
-    }
+    
     else
     {
         <div class="chat-body">
@@ -78,7 +72,6 @@
             }
 
             <div class="chat-messages" id="chat-messages">
-                @* ✅ استخدام Virtualize لتحسين الأداء ومنع إعادة إنشاء كل الرسائل *@
                 <MessageList Messages="@VM.Messages"
                              CurrentUserId="@VM.CurrentUserId"
                              Room="@VM.Room"
@@ -139,7 +132,11 @@
             }
 
             <div class="chat-input" @onclick="CloseAttachMenuIfOpen">
-                @if (VM.IsOtherDeleted)
+                @if (VM.IsRemoved)
+                {
+                    <div class="blocked-banner">You were removed from this group. You can no longer send messages.</div>
+                }
+                else if (VM.IsOtherDeleted)
                 {
                     <div class="blocked-banner">This user is no longer available.</div>
                 }
@@ -203,7 +200,7 @@
                                OnClose="CloseMembers" />
             }
 
-            </div> @* نهاية chat-input *@
+            </div> 
 
         @if (VM.IsSelectionMode)
         {
@@ -407,12 +404,17 @@
 
         await InvokeAsync(async () =>
         {
-            await VM.RefreshRoomStateAsync(roomId);
-            await RoomsVM.RefreshRoomStatusesAsync();
-
-            await Task.Delay(100);
-
-            StateHasChanged();
+            if (userId == VM.CurrentUserId)
+            {
+                StateHasChanged();
+            }
+            else
+            {
+                await VM.RefreshRoomStateAsync(roomId);
+                await RoomsVM.RefreshRoomStatusesAsync();
+                await Task.Delay(100);
+                StateHasChanged();
+            }
         });
     }
 

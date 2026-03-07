@@ -43,12 +43,14 @@ public sealed class AddMembersToGroupBulkHandler : IRequestHandler<AddMembersToG
 
         var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
 
-        var existingMemberIds = room.Members.Select(m => m.UserId.Value).ToHashSet();
-        var addedMembersInfos = new List<(UserId Id, string Name)>();
+        var existingActiveMemberIds = room.ActiveMembers.Select(m => m.UserId.Value).ToHashSet(); var addedMembersInfos = new List<(UserId Id, string Name)>();
 
-                foreach (var memberId in command.MemberIds.Distinct())
+        foreach (var memberId in command.MemberIds.Distinct())
         {
-            if (memberId.Value == Guid.Empty) continue;             if (existingMemberIds.Contains(memberId.Value)) continue;
+            if (memberId.Value == Guid.Empty) continue;
+
+            if (existingActiveMemberIds.Contains(memberId.Value)) continue;
+
             if (await _blocks.IsBlockedAsync(command.RequesterId, memberId, ct)) continue;
 
             var name = await _users.GetDisplayNameAsync(memberId.Value, ct) ?? "Unknown User";

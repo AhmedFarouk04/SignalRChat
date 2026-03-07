@@ -226,7 +226,14 @@ public sealed class ChatHub : Hub
     }
     public async Task PinMessage(Guid roomId, Guid? messageId)
     {
-                await Clients.Group(roomId.ToString()).SendAsync("MessagePinned", roomId, messageId);
+        var userId = GetUserId();
+        var room = await _roomRepository.GetByIdAsync(new RoomId(roomId));
+
+        if (room == null || !room.IsMember(userId))
+            throw new HubException("Not authorized");
+
+       
+        Console.WriteLine($"[Hub] PinMessage called directly - should use HTTP API instead");
     }
     public async Task Heartbeat()
     {

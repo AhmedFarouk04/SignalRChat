@@ -23,13 +23,28 @@ public sealed class ChatRoomMember
         IsDeleted = true;
         DeletedAt = DateTime.UtcNow;
     }
-
+    public void RejoinGroup(bool isOwner = false, bool isAdmin = false)
+    {
+        IsRemovedFromGroup = false;
+        RemovedFromGroupAt = null;
+        IsOwner = isOwner;
+        IsAdmin = isAdmin || isOwner;
+        JoinedAt = DateTime.UtcNow; // بنرستر تاريخ انضمامه
+    }
     public void Restore()
     {
         IsDeleted = false;
         DeletedAt = null;
             }
+    public bool IsRemovedFromGroup { get; private set; }
+    public DateTime? RemovedFromGroupAt { get; private set; }
 
+    public void MarkAsRemovedFromGroup()
+    {
+        IsRemovedFromGroup = true;
+        RemovedFromGroupAt = DateTime.UtcNow;
+        IsAdmin = false; 
+    }
     public void ClearChat()
     {
         ClearedAt = DateTime.UtcNow;

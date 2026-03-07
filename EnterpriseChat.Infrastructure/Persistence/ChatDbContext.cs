@@ -35,7 +35,7 @@ public sealed class ChatDbContext : DbContext
 
     private void ConfigureValueObjects(ModelBuilder modelBuilder)
     {
-                var messageIdComparer = new ValueComparer<MessageId>(
+        var messageIdComparer = new ValueComparer<MessageId>(
             (l, r) => l!.Value == r!.Value,
             v => v.Value.GetHashCode(),
             v => new MessageId(v.Value));
@@ -50,7 +50,7 @@ public sealed class ChatDbContext : DbContext
             v => v.Value.GetHashCode(),
             v => new UserId(v.Value));
 
-                modelBuilder.Entity<Message>(entity =>
+        modelBuilder.Entity<Message>(entity =>
         {
             entity.Property(e => e.Id)
                 .HasConversion(
@@ -77,57 +77,8 @@ public sealed class ChatDbContext : DbContext
                 .Metadata.SetValueComparer(messageIdComparer);
         });
 
-      
 
-                modelBuilder.Entity<ChatRoomMember>(entity =>
-        {
-            entity.Property(e => e.RoomId)
-                .HasConversion(
-                    v => v.Value,
-                    v => new RoomId(v))
-                .Metadata.SetValueComparer(roomIdComparer);
-
-                        entity.Property(e => e.UserId)
-                .HasConversion(
-                    v => v.Value,
-                    v => new UserId(v))
-                .HasColumnName("UserId")
-                .Metadata.SetValueComparer(userIdComparer);
-
-                        entity.Property<Guid?>("ChatUserId")
-                .HasColumnName("ChatUserId")
-                .IsRequired(false);  
-                        entity.Property(e => e.LastReadMessageId)
-                .HasConversion(
-                    v => v != null ? v.Value : (Guid?)null,
-                    v => v.HasValue ? new MessageId(v.Value) : null)
-                .IsRequired(false)
-                .Metadata.SetValueComparer(messageIdComparer);
-
-            entity.Property(e => e.LastReadAt)
-                .IsRequired(false);
-                        entity.Property(e => e.IsDeleted)
-                .HasDefaultValue(false)
-                .IsRequired();
-
-            entity.Property(e => e.DeletedAt)
-                .IsRequired(false);
-
-            entity.Property(e => e.ClearedAt)
-                .IsRequired(false);
-                        entity.HasOne<ChatRoom>()
-                .WithMany(r => r.Members)
-                .HasForeignKey(e => e.RoomId)
-                .HasPrincipalKey(r => r.Id)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne<ChatUser>()
-                .WithMany()
-                .HasForeignKey("ChatUserId")
-                .HasPrincipalKey(u => u.Id)
-                .OnDelete(DeleteBehavior.SetNull);          });
-
-                modelBuilder.Entity<MessageReceipt>(entity =>
+        modelBuilder.Entity<MessageReceipt>(entity =>
         {
             entity.Property(e => e.MessageId)
                 .HasConversion(
@@ -135,7 +86,7 @@ public sealed class ChatDbContext : DbContext
                     v => new MessageId(v))
                 .Metadata.SetValueComparer(messageIdComparer);
 
-                        entity.Property(e => e.RoomId)
+            entity.Property(e => e.RoomId)
                 .HasConversion(
                     v => v.Value,
                     v => new RoomId(v))
@@ -148,19 +99,18 @@ public sealed class ChatDbContext : DbContext
                 .Metadata.SetValueComparer(userIdComparer);
         });
 
-                modelBuilder.Entity<Message>()
+        modelBuilder.Entity<Message>()
             .HasIndex(m => m.Content)
             .HasDatabaseName("IX_Message_Content");
 
-
-                modelBuilder.Entity<Reaction>(entity =>
+        modelBuilder.Entity<Reaction>(entity =>
         {
             entity.HasKey(e => e.Id);
 
             entity.Property(e => e.Id)
                 .HasConversion(
                     v => v.Value,
-                    v => new ReactionId(v)); 
+                    v => new ReactionId(v));
             entity.Property(e => e.MessageId)
                 .HasConversion(
                     v => v.Value,
@@ -185,7 +135,7 @@ public sealed class ChatDbContext : DbContext
                 .IsUnique();
         });
 
-                modelBuilder.Entity<PinnedMessage>(entity =>
+        modelBuilder.Entity<PinnedMessage>(entity =>
         {
             entity.HasKey(e => e.Id);
 
@@ -207,8 +157,6 @@ public sealed class ChatDbContext : DbContext
                     v => new UserId(v))
                 .Metadata.SetValueComparer(userIdComparer);
 
-            
-
             entity.HasOne<Message>()
                 .WithMany()
                 .HasForeignKey(e => e.MessageId)
@@ -218,7 +166,6 @@ public sealed class ChatDbContext : DbContext
             entity.HasIndex(e => new { e.RoomId, e.MessageId }).IsUnique();
             entity.HasIndex(e => e.PinnedAt);
         });
-
 
         modelBuilder.Entity<MessageDeletion>(entity =>
         {

@@ -117,16 +117,6 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         try
         {
             await _chatService.PinMessageAsync(Room!.Id, msgId, duration);
-
-            var msg = Messages.FirstOrDefault(m => m.Id == msgId);
-            if (msg != null && !PinnedMessages.Any(x => x.Id == msgId))
-            {
-                if (PinnedMessages.Count >= 3)
-                    PinnedMessages.RemoveAt(0);
-                PinnedMessages.Add(msg);
-            }
-
-            NotifyChanged();
         }
         catch (Exception ex)
         {
@@ -135,23 +125,14 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
     public async Task UnpinMessageAsync(Guid messageId)
     {
-        var msg = PinnedMessages.FirstOrDefault(m => m.Id == messageId);
-        if (msg != null)
-        {
-            PinnedMessages.Remove(msg);
-            NotifyChanged();
-        }
-
         try
         {
-                        await _chatService.PinMessageAsync(Room!.Id, null, null, messageId);
+            await _chatService.PinMessageAsync(Room!.Id, null, null, messageId);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error unpinning: {ex.Message}");
-            if (msg != null && !PinnedMessages.Any(m => m.Id == messageId))
-                PinnedMessages.Add(msg);
-            NotifyChanged();
+            _toasts.Error("Unpin failed", ex.Message);
         }
     }
     public async Task<bool> ExecuteForwardAsync(List<Guid> targetRoomIds)
@@ -269,9 +250,9 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
-            public async Task InitializeAsync(Guid roomId)
+    public async Task InitializeAsync(Guid roomId)
     {
-                UnregisterRealtimeEvents();
+        UnregisterRealtimeEvents();
         _flags.RoomMuteChanged -= OnRoomMuteChanged;
         _flags.BlockedByMeChanged -= OnBlockedByMeChanged;
         _flags.BlockedMeChanged -= OnBlockedMeChanged;
@@ -283,7 +264,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
         IsRemoved = false;
         IsOtherDeleted = false;
         UiError = null;
-                await _flags.LoadStateAsync(_mod, _currentUser);
+        await _flags.LoadStateAsync(_mod, _currentUser);
 
         Console.WriteLine($"[Flags] Loaded muted rooms from server");
         _currentRoomId = roomId;
@@ -292,10 +273,10 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         try
         {
-                        CurrentUserId = await _currentUser.GetUserIdAsync()
+            CurrentUserId = await _currentUser.GetUserIdAsync()
                 ?? throw new InvalidOperationException("User not authenticated");
 
-                        Room = await _roomService.GetRoomAsync(roomId);
+            Room = await _roomService.GetRoomAsync(roomId);
             if (Room == null)
             {
                 UiError = "This room no longer exists.";
@@ -303,18 +284,18 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 return;
             }
 
-                        IsMuted = _flags.GetMuted(roomId);
+            IsMuted = _flags.GetMuted(roomId);
             _flags.SetMuted(roomId, IsMuted);
 
             Console.WriteLine($"[Init] ✅ IsMuted loaded from FLAGS (SERVER) = {IsMuted}");
-                        var rawMessages = await _chatService.GetMessagesAsync(roomId, CurrentUserId, 0, 200);
+            var rawMessages = await _chatService.GetMessagesAsync(roomId, CurrentUserId, 0, 200);
             var uniqueMessages = rawMessages
                 .GroupBy(m => m.Id)
                 .Select(g => g.First())
                 .OrderBy(m => m.CreatedAt)
                 .ToList();
 
-                        if (Room.Type == "Group")
+            if (Room.Type == "Group")
             {
                 var dto = await _chatService.GetGroupMembersAsync(roomId);
                 GroupMembers = new GroupMembersModel
@@ -327,6 +308,18 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                         IsAdmin = m.IsAdmin
                     }).ToList()
                 };
+
+                bool amIStillMember = GroupMembers.Members.Any(m => m.Id == CurrentUserId);
+                if (!amIStillMember)
+                {
+                    IsRemoved = true;
+                    Console.WriteLine("[Chat] User is not in the active members list. Marking as removed.");
+                }
+                else
+                {
+                    IsRemoved = false;
+                }
+
                 foreach (var member in GroupMembers.Members)
                 {
                     if (!string.IsNullOrEmpty(member.DisplayName))
@@ -348,7 +341,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 }
             }
 
-                        int memberCount = Room.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
+            int memberCount = Room.Type == "Group" ? (GroupMembers?.Members.Count ?? 1) - 1 : 1;
 
             foreach (var msg in uniqueMessages)
             {
@@ -356,7 +349,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Messages.Add(msg);
             }
 
-                        PinnedMessages.Clear();
+            PinnedMessages.Clear();
             try
             {
                 var pinnedIds = await _chatService.GetPinnedMessagesAsync(roomId);
@@ -372,13 +365,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Console.WriteLine($"[Pins] GetPinnedMessagesAsync failed: {ex.Message}");
             }
 
-                        if (!PinnedMessages.Any() && Room.PinnedMessageId != null)
+            if (!PinnedMessages.Any() && Room.PinnedMessageId != null)
             {
                 var pinnedMsg = Messages.FirstOrDefault(m => m.Id == Room.PinnedMessageId);
                 if (pinnedMsg != null) PinnedMessages.Add(pinnedMsg);
             }
 
-                        _flags.RoomMuteChanged += OnRoomMuteChanged;
+            _flags.RoomMuteChanged += OnRoomMuteChanged;
             _flags.BlockedByMeChanged += OnBlockedByMeChanged;
             _flags.BlockedMeChanged += OnBlockedMeChanged;
 
@@ -420,7 +413,6 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             NotifyChanged();
         }
     }
-
     private string _currentPage = "";
     public string CurrentPage
     {
@@ -1144,52 +1136,65 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         if (_currentRoomId != rid || Room == null) return;
 
-        Room.PinnedMessageId = mid;
+        Console.WriteLine($"[VM] OnMessagePinned received: room={rid}, messageId={mid}");
 
-        if (mid != null)
+        try
         {
-                        var msg = Messages.FirstOrDefault(m => m.Id == mid);
-            if (msg != null && !PinnedMessages.Any(m => m.Id == mid))
+            var pinnedIds = await _chatService.GetPinnedMessagesAsync(rid);
+
+            PinnedMessages.Clear();
+            foreach (var pinId in pinnedIds)
             {
-                if (PinnedMessages.Count >= 3)
-                    PinnedMessages.RemoveAt(0);
-                PinnedMessages.Add(msg);
+                var msg = Messages.FirstOrDefault(m => m.Id == pinId);
+                if (msg != null)
+                    PinnedMessages.Add(msg);
             }
-        }
-        else
-        {
-                        PinnedMessages.Clear();
-            try
+
+           
+            if (mid != null && !PinnedMessages.Any(m => m.Id == mid))
             {
-                var pinnedIds = await _chatService.GetPinnedMessagesAsync(rid);
-                foreach (var pinId in pinnedIds)
+                Console.WriteLine($"[VM] Pinned message {mid} not found in loaded messages, reloading...");
+            }
+
+            Room.PinnedMessageId = PinnedMessages.LastOrDefault()?.Id;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OnMessagePinned] Reload pins failed: {ex.Message}");
+
+            if (mid != null)
+            {
+                var msg = Messages.FirstOrDefault(m => m.Id == mid);
+                if (msg != null && !PinnedMessages.Any(m => m.Id == mid))
                 {
-                    var msg = Messages.FirstOrDefault(m => m.Id == pinId);
-                    if (msg != null && !PinnedMessages.Any(p => p.Id == pinId))
-                        PinnedMessages.Add(msg);
+                    if (PinnedMessages.Count >= 3)
+                        PinnedMessages.RemoveAt(0);
+                    PinnedMessages.Add(msg);
+                    Room.PinnedMessageId = mid;
                 }
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine($"[OnMessagePinned] Reload pins failed: {ex.Message}");
+                PinnedMessages.Clear();
+                Room.PinnedMessageId = null;
             }
         }
 
         NotifyChanged("OnMessagePinned");
     }
-   public async Task PinMessageAsync(Guid? messageId)
+    public async Task PinMessageAsync(Guid? messageId)
     {
         try
         {
+           
             await _chatService.PinMessageAsync(_currentRoomId!.Value, messageId);
-            await _realtime.PinMessageAsync(_currentRoomId!.Value, messageId);
         }
         catch (Exception ex)
         {
             _toasts.Error("Pin failed", ex.Message);
         }
     }
-        public async Task SendAsync(Guid roomId, string text)
+    public async Task SendAsync(Guid roomId, string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
 
@@ -1819,9 +1824,25 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
             msg.IsEdited = true;
             msg.UpdatedAt = DateTime.UtcNow;
 
-                        msg.PersonalStatus = ClientMessageStatus.Delivered;
+            msg.PersonalStatus = ClientMessageStatus.Delivered;
             msg.IsConfirmedRead = false;
             msg.ReadCount = 0;
+
+            bool isLastMessage = Messages.LastOrDefault()?.Id == messageId;
+            if (isLastMessage && _currentRoomId.HasValue && _roomsVM != null)
+            {
+                _flags.SetLastNonSystemPreview(_currentRoomId.Value, newContent);
+
+                var status = (EnterpriseChat.Client.Models.MessageStatus)(int)msg.PersonalStatus;
+                _roomsVM.UpdateRoomPreview(
+                    _currentRoomId.Value,
+                    messageId,
+                    newContent,
+                    msg.SenderId,
+                    msg.UpdatedAt ?? msg.CreatedAt,
+                    status
+                );
+            }
 
             NotifyChanged();
         }
@@ -1830,20 +1851,52 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         if (isForEveryone)
         {
-                        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+            var msg = Messages.FirstOrDefault(m => m.Id == messageId);
             if (msg != null)
             {
                 msg.IsDeleted = true;
                 msg.Content = "🚫 This message was deleted";
+
+                if (_currentRoomId.HasValue && _roomsVM != null)
+                {
+                    var lastMsg = Messages.LastOrDefault();
+                    if (lastMsg?.Id == messageId)
+                    {
+                        _roomsVM.UpdateDeletedMessagePreview(_currentRoomId.Value, messageId);
+                    }
+                }
+
                 NotifyChanged();
             }
         }
         else
         {
-                        var msg = Messages.FirstOrDefault(m => m.Id == messageId);
+            var msg = Messages.FirstOrDefault(m => m.Id == messageId);
             if (msg != null)
             {
+                bool wasLast = Messages.LastOrDefault()?.Id == messageId;
+
                 Messages.Remove(msg);
+
+                if (wasLast && _currentRoomId.HasValue && _roomsVM != null)
+                {
+                    var newLastMsg = Messages.LastOrDefault();
+                    if (newLastMsg != null)
+                    {
+                        _flags.SetLastNonSystemPreview(_currentRoomId.Value, newLastMsg.Content);
+                        var status = (EnterpriseChat.Client.Models.MessageStatus)(int)newLastMsg.PersonalStatus;
+
+                        _roomsVM.UpdateRoomPreview(
+                            _currentRoomId.Value,
+                            newLastMsg.Id,
+                            newLastMsg.Content,
+                            newLastMsg.SenderId,
+                            newLastMsg.CreatedAt,
+                            status
+                        );
+                    }
+                }
+
                 NotifyChanged();
             }
         }
@@ -2183,21 +2236,27 @@ public sealed class ChatViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         if (_currentRoomId == null || !Messages.Any()) return;
 
+        
         var lastMessage = Messages
-            .Where(m => m.SenderId != Guid.Empty && !m.IsDeleted)
+            .Where(m => m.SenderId != Guid.Empty)
             .OrderByDescending(m => m.CreatedAt)
             .FirstOrDefault();
 
         if (lastMessage == null) return;
 
-                if (GroupMembers?.Members != null)
+        if (GroupMembers?.Members != null)
+        {
             foreach (var member in GroupMembers.Members)
+            {
                 if (!string.IsNullOrEmpty(member.DisplayName))
                     _roomsVM.CacheMemberName(member.Id, member.DisplayName);
+            }
+        }
 
-                _roomsVM.EnrichRoomMemberNames(_currentRoomId.Value, GroupMembers?.Members);
+        _roomsVM.EnrichRoomMemberNames(_currentRoomId.Value, GroupMembers?.Members);
 
         var status = (EnterpriseChat.Client.Models.MessageStatus)(int)lastMessage.PersonalStatus;
+
         _roomsVM.UpdateRoomPreview(
             _currentRoomId.Value,
             lastMessage.Id,

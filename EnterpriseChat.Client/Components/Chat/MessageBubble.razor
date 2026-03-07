@@ -117,7 +117,6 @@
                     </div>
                 </div>
 
-                @* Reactions logic remains same... *@
                 @if (Message.Reactions?.Counts != null && Message.Reactions.Counts.Any())
                 {
                     <div class="msg-reaction-chip" @onclick:stopPropagation="true"
@@ -130,7 +129,6 @@
                     </div>
                 }
 
-                @* Context Menu remains same... *@
                 @if (IsMenuOpen)
                 {
                     <div class="msg-context-menu" @onclick:stopPropagation="true">

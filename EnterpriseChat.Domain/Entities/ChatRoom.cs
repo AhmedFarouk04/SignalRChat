@@ -25,9 +25,9 @@ public sealed class ChatRoom
     public DateTime? LastReactionAt { get; private set; }
     public UserId? LastReactionTargetUserId { get; private set; }
     public IReadOnlyCollection<ChatRoomMember> Members => _members.AsReadOnly();
-  
 
-        private readonly List<PinnedMessage> _pinnedMessages = new();
+    public IEnumerable<ChatRoomMember> ActiveMembers => _members.Where(m => !m.IsRemovedFromGroup);
+    private readonly List<PinnedMessage> _pinnedMessages = new();
     public IReadOnlyCollection<PinnedMessage> PinnedMessages => _pinnedMessages.AsReadOnly();
 
 
@@ -144,13 +144,20 @@ public sealed class ChatRoom
 
     public void AddMember(UserId userId, bool isOwner = false)
     {
-        if (_members.Any(m => m.UserId.Value == userId.Value))
+        var existingMember = _members.FirstOrDefault(m => m.UserId.Value == userId.Value);
+
+        if (existingMember != null)
+        {
+            if (existingMember.IsRemovedFromGroup)
+            {
+                existingMember.RejoinGroup(isOwner, isOwner);
+            }
             return;
+        }
 
         var isAdmin = isOwner;
         _members.Add(ChatRoomMember.Create(Id, userId, isOwner, isAdmin));
     }
-
     public void Leave(UserId userId)
     {
         if (Type == RoomType.Private)
@@ -171,12 +178,13 @@ public sealed class ChatRoom
     public void RemoveMember(UserId userId)
     {
         if (Type == RoomType.Private)
-            throw new InvalidOperationException(
-                "Cannot remove members from private rooms.");
+            throw new InvalidOperationException("Cannot remove members from private rooms.");
 
         var member = _members.FirstOrDefault(m => m.UserId.Value == userId.Value);
         if (member != null)
-            _members.Remove(member);
+        {
+            member.MarkAsRemovedFromGroup();
+        }
     }
 
     public void SetOwner(UserId newOwnerId)
@@ -196,16 +204,18 @@ public sealed class ChatRoom
     }
 
     public IReadOnlyList<UserId> GetMemberIds()
-        => _members.Select(m => m.UserId).ToList();
+        => _members.Where(m => !m.IsRemovedFromGroup).Select(m => m.UserId).ToList();
 
     public bool IsMember(UserId userId)
         => _members.Any(m => m.UserId.Value == userId.Value);
-
+    public IReadOnlyList<UserId> GetAllMemberIdsIncludingRemoved()
+        => _members.Select(m => m.UserId).ToList();
     public bool IsPrivateWith(UserId a, UserId b)
         => Type == RoomType.Private &&
            IsMember(a) &&
            IsMember(b);
-
+    public bool IsActiveMember(UserId userId)
+        => _members.Any(m => m.UserId.Value == userId.Value && !m.IsRemovedFromGroup);
     public void Rename(string name)
     {
         if (Type != RoomType.Group)

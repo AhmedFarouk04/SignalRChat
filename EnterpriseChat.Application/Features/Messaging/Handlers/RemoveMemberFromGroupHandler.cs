@@ -37,22 +37,27 @@ public sealed class RemoveMemberFromGroupHandler
 
     public async Task<Unit> Handle(RemoveMemberFromGroupCommand command, CancellationToken ct)
     {
-                if (command.RoomId.Value == Guid.Empty)
+        if (command.RoomId.Value == Guid.Empty)
             throw new ArgumentException("RoomId is required.");
         if (command.MemberId.Value == Guid.Empty)
             throw new ArgumentException("MemberId cannot be empty.");
+
         var room = await _repo.GetByIdWithMembersAsync(command.RoomId, ct)
             ?? throw new InvalidOperationException("Room not found.");
         if (room.Type != RoomType.Group)
             throw new InvalidOperationException("Only group rooms allowed.");
+
         await _auth.EnsureUserIsMemberAsync(command.RoomId, command.RequesterId, ct);
+
         if (room.OwnerId == command.MemberId)
             throw new InvalidOperationException("Owner cannot be removed.");
         if (room.Members.Count <= 1)
             throw new InvalidOperationException("Cannot remove the last member of the group.");
+
         var target = room.Members.FirstOrDefault(m => m.UserId == command.MemberId);
         if (target is null)
             throw new InvalidOperationException("Member not found in this group.");
+
         var requesterIsOwner = room.OwnerId == command.RequesterId;
         if (!requesterIsOwner)
         {
@@ -60,15 +65,18 @@ public sealed class RemoveMemberFromGroupHandler
             if (target.IsAdmin)
                 throw new UnauthorizedAccessException("Only owner can remove admins.");
         }
-                var removedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
+
+        var removedName = await _users.GetDisplayNameAsync(command.MemberId.Value, ct) ?? "Someone";
         var requesterName = await _users.GetDisplayNameAsync(command.RequesterId.Value, ct) ?? "Someone";
-        
-                        room.RemoveMember(command.MemberId);
+
+        var allRecipientsIncludingRemoved = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+
+        room.RemoveMember(command.MemberId);
         await _uow.CommitAsync(ct);
 
-                var recipients = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
-        var remainingMembers = recipients;  
-                var systemText = command.MemberId.Value == command.RequesterId.Value
+        var remainingMembers = room.GetMemberIds().DistinctBy(x => x.Value).ToList();
+
+        var systemText = command.MemberId.Value == command.RequesterId.Value
             ? $"{removedName} left the group"
             : $"{removedName} was removed by {requesterName}";
 
@@ -76,11 +84,12 @@ public sealed class RemoveMemberFromGroupHandler
             room.Id,
             systemText,
             SystemMessageType.MemberRemoved,
-            recipients); 
+            allRecipientsIncludingRemoved); 
+
         await _messages.AddAsync(sysMsg, ct);
         await _uow.CommitAsync(ct);
 
-                var msgDto = new MessageDto
+        var msgDto = new MessageDto
         {
             Id = sysMsg.Id.Value,
             RoomId = room.Id.Value,
@@ -89,9 +98,9 @@ public sealed class RemoveMemberFromGroupHandler
             CreatedAt = sysMsg.CreatedAt,
             IsSystemMessage = true
         };
-        await _broadcaster.BroadcastMessageAsync(msgDto, recipients);
+        await _broadcaster.BroadcastMessageAsync(msgDto, allRecipientsIncludingRemoved);
 
-                var listDto = new RoomListItemDto
+        var listDto = new RoomListItemDto
         {
             Id = room.Id.Value,
             Name = room.Name,
@@ -104,15 +113,15 @@ public sealed class RemoveMemberFromGroupHandler
             LastMessageSenderId = UserId.System.Value,
             LastMessageStatus = null
         };
-        await _broadcaster.RoomUpsertedAsync(listDto, recipients);
+        await _broadcaster.RoomUpsertedAsync(listDto, allRecipientsIncludingRemoved);
 
-               
         await _broadcaster.MemberRemovedAsync(
             room.Id,
             command.MemberId,
             command.RequesterId,
             requesterName,
-            recipients);  
+            allRecipientsIncludingRemoved);
+
         return Unit.Value;
     }
 }

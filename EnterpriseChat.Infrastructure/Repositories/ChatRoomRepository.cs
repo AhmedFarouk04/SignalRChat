@@ -31,7 +31,6 @@ public sealed class ChatRoomRepository : IChatRoomRepository
         if (member != null)
         {
             member.UpdateLastReadMessageId(lastReadMessageId);
-            _context.Entry(member).Property<Guid?>("ChatUserId").CurrentValue = userId.Value;
             await _context.SaveChangesAsync(ct);
         }
     }

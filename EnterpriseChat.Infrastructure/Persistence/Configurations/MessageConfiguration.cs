@@ -53,7 +53,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
                 builder.HasOne(x => x.ReplyToMessage)
             .WithMany()
             .HasForeignKey(x => x.ReplyToMessageId)
-            .OnDelete(DeleteBehavior.SetNull)
+            .OnDelete(DeleteBehavior.ClientSetNull)
             .IsRequired(false);
 
 

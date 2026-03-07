@@ -21,7 +21,6 @@
         </div>
 
         <div class="drawer-body">
-            @* المالك والأدمن يقدروا يغيروا اسم الجروب *@
             @if (IsCurrentUserOwner)
             {
                 <div class="drawer-section rename-section">
@@ -52,7 +51,6 @@
                 </div>
             }
 
-            @* المالك والأدمن يقدروا يضيفوا أعضاء *@
             @if (IsCurrentUserOwner || IsCurrentUserAdmin)
             {
                 <div class="drawer-section search-section">
@@ -124,7 +122,6 @@
                                         }
                                     </div>
 
-                                    @* زرار الأدمن يفضل بره الـ wrapper عشان مكانه ميتغيرش *@
                                     <button class="action-icon-btn @(u.IsAdmin ? "admin-active" : "admin-inactive")"
                                             title="@(u.IsAdmin ? "Demote from Admin" : "Promote to Admin")"
                                             @onclick="() => OnToggleAdmin.InvokeAsync(u.Id)">
@@ -132,7 +129,6 @@
                                     </button>
                                 }
 
-                                @* منطق الحذف الجديد *@
                                 @{
                                     bool canRemoveThisUser = false;
                                                                         if (IsCurrentUserOwner && u.Id != OwnerId) { canRemoveThisUser = true; }
@@ -179,7 +175,6 @@
         </div>
     </aside>
 
-    @* ===== Leave Modals (ضعهم هنا بالظبط) ===== *@
     @if (showLeaveModal)
     {
         <div class="leave-modal-overlay" @onclick="CloseLeaveModals">

@@ -145,7 +145,12 @@ public sealed class GetMyRoomsQueryHandler
             }
 
             unreadByRoom.TryGetValue(room.Id.Value, out var unreadCount);
-
+            if (member != null && member.IsRemovedFromGroup)
+            {
+                preview = "You were removed from this group.";
+                lastStatus = null;
+                unreadCount = 0; 
+            }
             result.Add(new RoomListItemDto
             {
                 Id = room.Id.Value,

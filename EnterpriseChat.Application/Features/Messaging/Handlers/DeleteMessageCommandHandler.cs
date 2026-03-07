@@ -57,6 +57,7 @@ public sealed class DeleteMessageCommandHandler : IRequestHandler<DeleteMessageC
                 RoomId = message.RoomId.Value,
                 MessageId = message.Id.Value,
                 Preview = "🚫 This message was deleted",
+                SenderId = message.SenderId.Value, 
                 CreatedAt = DateTime.UtcNow
             }, members);
         }

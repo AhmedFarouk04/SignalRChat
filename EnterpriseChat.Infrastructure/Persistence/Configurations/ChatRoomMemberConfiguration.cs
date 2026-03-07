@@ -1,5 +1,6 @@
 ﻿using EnterpriseChat.Domain.Entities;
-using EnterpriseChat.Domain.ValueObjects;  using Microsoft.EntityFrameworkCore;
+using EnterpriseChat.Domain.ValueObjects;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace EnterpriseChat.Infrastructure.Persistence.Configurations;
@@ -14,16 +15,13 @@ public sealed class ChatRoomMemberConfiguration : IEntityTypeConfiguration<ChatR
 
         builder.Property(x => x.RoomId)
             .HasConversion(v => v.Value, v => new RoomId(v))
+            .HasColumnName("RoomId") 
             .IsRequired();
 
         builder.Property(x => x.UserId)
             .HasConversion(v => v.Value, v => new UserId(v))
             .HasColumnName("UserId")
             .IsRequired();
-
-                builder.Property<Guid?>("ChatUserId")
-            .HasColumnName("ChatUserId")
-            .IsRequired(false);
 
         builder.Property(x => x.LastReadMessageId)
             .HasConversion(
@@ -45,20 +43,15 @@ public sealed class ChatRoomMemberConfiguration : IEntityTypeConfiguration<ChatR
         builder.Property(x => x.JoinedAt)
             .IsRequired();
 
+        builder.Property(x => x.IsRemovedFromGroup)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(x => x.RemovedFromGroupAt)
+            .IsRequired(false);
+
         builder.HasIndex(x => x.UserId);
         builder.HasIndex(x => x.LastReadMessageId);
-        builder.HasIndex(x => new { x.RoomId, x.UserId }).IsUnique();
 
-        builder.HasOne<ChatRoom>()
-            .WithMany(r => r.Members)
-            .HasForeignKey(x => x.RoomId)
-            .HasPrincipalKey(r => r.Id)
-            .OnDelete(DeleteBehavior.Cascade);
-
-                builder.HasOne<ChatUser>()
-            .WithMany()
-            .HasForeignKey("ChatUserId")
-            .HasPrincipalKey(u => u.Id)
-            .OnDelete(DeleteBehavior.SetNull);
     }
 }

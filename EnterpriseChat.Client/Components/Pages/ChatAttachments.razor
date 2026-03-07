@@ -39,12 +39,7 @@
                             </div>
                             <div class="room-preview">
                                 @FormatSize(a.Size) • @a.CreatedAt.ToLocalTime()
-                                @* اختياري: عرض اسم الرافع لو تحب *@
-                                @* @if (a.UploaderId != Guid.Empty && a.UploaderId != CurrentUserId) *@
-                                @* { *@
-                                @*     <span style="opacity:0.6; margin-left:4px;">• by @a.UploaderName</span> *@
-                                @* } *@
-                            </div>
+                                               </div>
                         </div>
                     </div>
 
@@ -53,7 +48,6 @@
                             Download
                         </button>
 
-                        @* ✅ أظهر زر Delete فقط إذا كان CanDelete = true *@
                         @if (a.CanDelete)
                         {
                             <button type="button" class="mini-btn" disabled="@busy" @onclick="@(() => DeleteAsync(a.Id))">

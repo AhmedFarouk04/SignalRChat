@@ -138,15 +138,15 @@ namespace EnterpriseChat.Infrastructure.Migrations
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.ChatRoomMember", b =>
                 {
                     b.Property<Guid>("RoomId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("RoomId");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("UserId");
 
-                    b.Property<Guid?>("ChatUserId")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("ChatUserId");
+                    b.Property<Guid?>("ChatRoomId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime?>("ClearedAt")
                         .HasColumnType("datetime2");
@@ -160,11 +160,14 @@ namespace EnterpriseChat.Infrastructure.Migrations
                         .HasDefaultValue(false);
 
                     b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsOwner")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
-                    b.Property<bool>("IsOwner")
+                    b.Property<bool>("IsRemovedFromGroup")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
@@ -178,16 +181,16 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.Property<Guid?>("LastReadMessageId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("RemovedFromGroupAt")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("RoomId", "UserId");
 
-                    b.HasIndex("ChatUserId");
+                    b.HasIndex("ChatRoomId");
 
                     b.HasIndex("LastReadMessageId");
 
                     b.HasIndex("UserId");
-
-                    b.HasIndex("RoomId", "UserId")
-                        .IsUnique();
 
                     b.ToTable("ChatRoomMembers", (string)null);
                 });
@@ -439,10 +442,9 @@ namespace EnterpriseChat.Infrastructure.Migrations
 
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.ChatRoomMember", b =>
                 {
-                    b.HasOne("EnterpriseChat.Domain.Entities.ChatUser", null)
-                        .WithMany()
-                        .HasForeignKey("ChatUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                    b.HasOne("EnterpriseChat.Domain.Entities.ChatRoom", null)
+                        .WithMany("ActiveMembers")
+                        .HasForeignKey("ChatRoomId");
 
                     b.HasOne("EnterpriseChat.Domain.Entities.ChatRoom", null)
                         .WithMany("Members")
@@ -455,8 +457,7 @@ namespace EnterpriseChat.Infrastructure.Migrations
                 {
                     b.HasOne("EnterpriseChat.Domain.Entities.Message", "ReplyToMessage")
                         .WithMany()
-                        .HasForeignKey("ReplyToMessageId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("ReplyToMessageId");
 
                     b.Navigation("ReplyToMessage");
                 });
@@ -499,12 +500,14 @@ namespace EnterpriseChat.Infrastructure.Migrations
                     b.HasOne("EnterpriseChat.Domain.Entities.Message", null)
                         .WithMany("Reactions")
                         .HasForeignKey("MessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("EnterpriseChat.Domain.Entities.ChatRoom", b =>
                 {
+                    b.Navigation("ActiveMembers");
+
                     b.Navigation("Members");
 
                     b.Navigation("PinnedMessages");
